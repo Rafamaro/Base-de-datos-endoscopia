@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>EndoDB • Subida de informes</title>
+
+  <!-- Tipografía moderna (Inter). Si no carga, cae a system-ui -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg0:#fff7ef;          /* crema */
+      --bg1:#fffdf9;          /* blanco cálido */
+      --card:#ffffff;
+      --ink:#1f2937;          /* slate 800 */
+      --muted:#6b7280;        /* gray 500 */
+      --line:#e7ded4;         /* borde cálido */
+      --shadow: 0 8px 30px rgba(31,41,55,.08);
+
+      --accent:#b45309;       /* ámbar/terracota */
+      --accent2:#c2410c;      /* naranja quemado */
+      --accentSoft:#fde6cf;   /* acento suave */
+      --ok:#059669;
+      --bad:#dc2626;
+
+      --radius:18px;
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      color:var(--ink);
+      background:
+        radial-gradient(1200px 700px at 10% 10%, #ffe8d4 0%, transparent 55%),
+        radial-gradient(900px 600px at 95% 0%, #fff1e4 0%, transparent 55%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+    }
+
+    .wrap{
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    h1{
+      font-size: 20px;
+      line-height: 1.2;
+      margin: 0;
+      letter-spacing: .2px;
+    }
+
+    .subtitle{
+      margin-top: 6px;
+      color:var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 10px;
+      border-radius:999px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.72);
+      box-shadow: 0 4px 18px rgba(31,41,55,.06);
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .dot{
+      width:10px;height:10px;border-radius:50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+    }
+
+    .card{
+      background: rgba(255,255,255,.92);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(6px);
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    label{
+      display:block;
+      font-size:12px;
+      color: var(--muted);
+      margin: 0 0 6px 2px;
+    }
+
+    input, select, textarea{
+      width:100%;
+      padding: 11px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      outline: none;
+      font-size: 14px;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    input:focus, select:focus, textarea:focus{
+      border-color: rgba(180,83,9,.45);
+      box-shadow: 0 0 0 4px rgba(180,83,9,.12);
+    }
+    textarea{ min-height: 88px; resize: vertical; }
+
+    .row{
+      display:flex;
+      gap: 10px;
+      align-items:center;
+      flex-wrap: wrap;
+    }
+
+    .btn{
+      cursor:pointer;
+      padding: 11px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      font-weight: 700;
+      font-size: 14px;
+      transition: transform .03s ease, box-shadow .15s ease, background .15s ease;
+      box-shadow: 0 6px 18px rgba(31,41,55,.06);
+      user-select:none;
+    }
+    .btn:hover{ background: #fffaf4; }
+    .btn:active{ transform: translateY(1px); }
+    .btn:disabled{
+      opacity: .55;
+      cursor:not-allowed;
+      box-shadow:none;
+    }
+
+    .btn.primary{
+      border-color: rgba(180,83,9,.35);
+      background: linear-gradient(135deg, rgba(180,83,9,.92), rgba(194,65,12,.92));
+      color: white;
+    }
+    .btn.primary:hover{
+      filter: brightness(1.02);
+    }
+
+    .hint{
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 8px;
+      line-height: 1.35;
+    }
+
+    .drop{
+      margin-top: 14px;
+      border-radius: var(--radius);
+      border: 2px dashed rgba(180,83,9,.28);
+      padding: 16px;
+      background: linear-gradient(180deg, rgba(253,230,207,.52), rgba(255,255,255,.75));
+    }
+    .drop.dragover{
+      border-color: rgba(180,83,9,.65);
+      box-shadow: 0 0 0 4px rgba(180,83,9,.12);
+    }
+    .dropTitle{
+      font-weight: 800;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+    .dropSub{
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .files{
+      margin-top: 12px;
+      display:grid;
+      gap: 8px;
+    }
+
+    .file{
+      display:flex;
+      justify-content:space-between;
+      gap: 12px;
+      align-items:center;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .fileName{
+      font-weight: 700;
+      font-size: 13px;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+    .fileMeta{
+      margin-top: 2px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .tag{
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(0,0,0,.02);
+      white-space: nowrap;
+    }
+    .tag.ok{ border-color: rgba(5,150,105,.30); color: var(--ok); background: rgba(5,150,105,.08); }
+    .tag.bad{ border-color: rgba(220,38,38,.30); color: var(--bad); background: rgba(220,38,38,.06); }
+
+    .progress{
+      height: 10px;
+      border-radius: 999px;
+      overflow:hidden;
+      background: rgba(31,41,55,.08);
+      margin-top: 12px;
+    }
+    .bar{
+      height:100%;
+      width:0%;
+      background: linear-gradient(135deg, rgba(180,83,9,.92), rgba(194,65,12,.92));
+      transition: width .2s ease;
+    }
+
+    .result{
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.9);
+    }
+    code{
+      background: rgba(180,83,9,.10);
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 12px;
+    }
+    pre{
+      margin: 10px 0 0 0;
+      background: rgba(31,41,55,.06);
+      padding: 10px;
+      border-radius: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 12px;
+      color: #111827;
+    }
+
+    /* Mobile-first ajustes */
+    @media (max-width: 820px){
+      .grid{ grid-template-columns: 1fr; }
+      .header{ flex-direction: column; }
+      .pill{ align-self: flex-start; }
+    }
+    @media (max-width: 480px){
+      .wrap{ padding: 14px; }
+      .card{ padding: 14px; }
+      .btn{ width: 100%; }
+      .row{ gap: 8px; }
+      .file{ flex-direction: column; align-items: flex-start; }
+      .file .row{ width:100%; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div>
+        <h1>EndoDB — Subida de informes</h1>
+        <div class="subtitle">
+          Subí un PDF o fotos del informe endoscópico. El backend guarda el crudo y dispara el flujo en n8n.
+        </div>
+      </div>
+      <div class="pill"><span class="dot"></span> Modo seguro: seudónimos</div>
+    </div>
+
+    <div class="card">
+      <div class="grid">
+        <div>
+          <label for="endpoint">Endpoint del Ingestor</label>
+          <input id="endpoint" placeholder="https://endodb-tuapp.tu-dominio.com" inputmode="url" />
+          <div class="hint">Si estás por Tailscale, podés usar el host interno. Evitá pegar el webhook de n8n acá.</div>
+        </div>
+
+        <div>
+          <label for="patient_mode">Paciente</label>
+          <select id="patient_mode">
+            <option value="existing">Seleccionar existente</option>
+            <option value="new">Crear nuevo (auto)</option>
+          </select>
+
+          <div style="margin-top:10px" id="patient_existing_wrap">
+            <label for="patient_code">Código seudónimo</label>
+            <input id="patient_code" placeholder="Paciente_001" autocapitalize="off" autocomplete="off" />
+            <div class="hint">Formato esperado: <code>Paciente_###</code> (ej: Paciente_001).</div>
+          </div>
+
+          <div style="margin-top:10px; display:none" id="patient_new_wrap">
+            <label>Paciente nuevo</label>
+            <input value="Se asigna automáticamente (Paciente_###)" disabled />
+          </div>
+        </div>
+
+        <div>
+          <label for="notes">Notas internas (opcional)</label>
+          <textarea id="notes" placeholder="Ej: control post polipectomía, anticoagulación, etc."></textarea>
+          <div class="hint">Ideal para pistas clínicas rápidas. No metas datos identificatorios.</div>
+        </div>
+
+        <div>
+          <label>Acciones</label>
+          <div class="row">
+            <input id="filepicker" type="file" multiple accept=".pdf,image/*" style="display:none" />
+            <button class="btn" id="btnPick">Elegir archivos</button>
+            <button class="btn primary" id="btnUpload" disabled>Subir y procesar</button>
+            <button class="btn" id="btnClear" disabled>Limpiar</button>
+          </div>
+
+          <div class="progress" aria-label="progreso" title="Progreso de subida">
+            <div class="bar" id="bar"></div>
+          </div>
+
+          <div class="hint">
+            Recomendación: 25–50 MB por envío. Si son muchas fotos, mandalas en tandas por estudio.
+          </div>
+        </div>
+      </div>
+
+      <div class="drop" id="drop">
+        <div class="dropTitle">Arrastrá y soltá aquí</div>
+        <div class="dropSub">PDF o imágenes (JPG/PNG/WebP). Se suben como <code>multipart/form-data</code>.</div>
+        <div class="files" id="files"></div>
+      </div>
+
+      <div class="result" id="result" style="display:none"></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const DEFAULT_ENDPOINT = "";
+
+  const elEndpoint = document.getElementById("endpoint");
+  const elMode = document.getElementById("patient_mode");
+  const elExistingWrap = document.getElementById("patient_existing_wrap");
+  const elNewWrap = document.getElementById("patient_new_wrap");
+  const elPatient = document.getElementById("patient_code");
+  const elNotes = document.getElementById("notes");
+  const elDrop = document.getElementById("drop");
+  const elFiles = document.getElementById("files");
+  const elPicker = document.getElementById("filepicker");
+  const btnPick = document.getElementById("btnPick");
+  const btnUpload = document.getElementById("btnUpload");
+  const btnClear = document.getElementById("btnClear");
+  const elBar = document.getElementById("bar");
+  const elResult = document.getElementById("result");
+
+  elEndpoint.value = DEFAULT_ENDPOINT;
+
+  /** @type {File[]} */
+  let queue = [];
+
+  const allowed = (file) => {
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    const isImg = file.type && file.type.startsWith("image/");
+    return isPdf || isImg;
+  };
+
+  const fmtSize = (n) => {
+    const u = ["B","KB","MB","GB"];
+    let i = 0, x = n;
+    while (x >= 1024 && i < u.length-1) { x/=1024; i++; }
+    return `${x.toFixed(i===0?0:1)} ${u[i]}`;
+  };
+
+  const setProgress = (p) => {
+    elBar.style.width = `${Math.max(0, Math.min(100, p))}%`;
+  };
+
+  const setResult = (html) => {
+    elResult.style.display = "block";
+    elResult.innerHTML = html;
+  };
+
+  const resetResult = () => {
+    elResult.style.display = "none";
+    elResult.innerHTML = "";
+  };
+
+  const refreshButtons = () => {
+    const hasFiles = queue.length > 0;
+    btnClear.disabled = !hasFiles;
+
+    const mode = elMode.value;
+    const endpointOk = (elEndpoint.value || "").trim().length > 0;
+    const patientOk = (mode === "new") || /^Paciente_\d{3,}$/.test((elPatient.value||"").trim());
+
+    btnUpload.disabled = !(hasFiles && endpointOk && patientOk);
+  };
+
+  const renderQueue = () => {
+    elFiles.innerHTML = "";
+    queue.forEach((f, idx) => {
+      const div = document.createElement("div");
+      div.className = "file";
+
+      const left = document.createElement("div");
+      left.style.flex = "1";
+      left.innerHTML = `
+        <div class="fileName">${escapeHtml(f.name)}</div>
+        <div class="fileMeta">${escapeHtml(fmtSize(f.size))} • ${escapeHtml(f.type || "desconocido")}</div>
+      `;
+
+      const right = document.createElement("div");
+      right.className = "row";
+
+      const tag = document.createElement("span");
+      tag.className = "tag " + (allowed(f) ? "ok" : "bad");
+      tag.textContent = allowed(f) ? "OK" : "Tipo no permitido";
+
+      const rm = document.createElement("button");
+      rm.className = "btn";
+      rm.textContent = "Quitar";
+      rm.onclick = () => { queue.splice(idx, 1); renderQueue(); refreshButtons(); };
+
+      right.appendChild(tag);
+      right.appendChild(rm);
+
+      div.appendChild(left);
+      div.appendChild(right);
+      elFiles.appendChild(div);
+    });
+
+    refreshButtons();
+  };
+
+  const addFiles = (files) => {
+    resetResult();
+    const arr = Array.from(files || []);
+    for (const f of arr) queue.push(f);
+    renderQueue();
+  };
+
+  // Patient mode
+  elMode.addEventListener("change", () => {
+    const mode = elMode.value;
+    if (mode === "new") {
+      elExistingWrap.style.display = "none";
+      elNewWrap.style.display = "block";
+    } else {
+      elExistingWrap.style.display = "block";
+      elNewWrap.style.display = "none";
+    }
+    refreshButtons();
+  });
+
+  elEndpoint.addEventListener("input", refreshButtons);
+  elPatient.addEventListener("input", refreshButtons);
+
+  // Picker
+  btnPick.addEventListener("click", () => elPicker.click());
+  elPicker.addEventListener("change", (e) => addFiles(e.target.files));
+
+  // Drag & Drop
+  ["dragenter","dragover"].forEach(ev => elDrop.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation();
+    elDrop.classList.add("dragover");
+  }));
+  ["dragleave","drop"].forEach(ev => elDrop.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation();
+    elDrop.classList.remove("dragover");
+  }));
+  elDrop.addEventListener("drop", (e) => addFiles(e.dataTransfer.files));
+
+  // Clear
+  btnClear.addEventListener("click", () => {
+    queue = [];
+    renderQueue();
+    setProgress(0);
+    resetResult();
+  });
+
+  // Upload (XHR for real progress)
+  btnUpload.addEventListener("click", async () => {
+    resetResult();
+    setProgress(0);
+
+    const endpoint = (elEndpoint.value || "").trim().replace(/\/+$/, "");
+    const url = endpoint + "/api/ingest";
+
+    const mode = elMode.value;
+    const patient_code = (mode === "new") ? "NEW" : (elPatient.value || "").trim();
+
+    const bad = queue.filter(f => !allowed(f));
+    if (bad.length) {
+      setResult(`<div><b>Hay archivos no permitidos.</b> Revisá los marcados como “Tipo no permitido”.</div>`);
+      return;
+    }
+
+    const form = new FormData();
+    form.append("patient_code", patient_code);
+    form.append("notes", (elNotes.value || "").trim());
+    for (const f of queue) form.append("files", f, f.name);
+
+    btnUpload.disabled = true;
+    btnPick.disabled = true;
+    btnClear.disabled = true;
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url, true);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) setProgress((e.loaded / e.total) * 100);
+    };
+
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState !== 4) return;
+
+      btnPick.disabled = false;
+      btnClear.disabled = queue.length === 0;
+      refreshButtons();
+
+      try {
+        const isOk = xhr.status >= 200 && xhr.status < 300;
+        const ct = xhr.getResponseHeader("content-type") || "";
+        const payload = ct.includes("application/json") ? JSON.parse(xhr.responseText) : { raw: xhr.responseText };
+
+        if (!isOk) {
+          setResult(`<div><b>Error (${xhr.status}).</b><pre>${escapeHtml(JSON.stringify(payload, null, 2))}</pre></div>`);
+          setProgress(0);
+          return;
+        }
+
+        const examId = payload.exam_id || "(sin exam_id)";
+        const pcode = payload.patient_code || patient_code;
+        const n = payload.received_files ?? queue.length;
+
+        setResult(`
+          <div style="display:grid;gap:8px">
+            <div><b>Listo.</b> Material recibido y flujo disparado.</div>
+            <div class="hint">exam_id: <code>${escapeHtml(examId)}</code> • paciente: <code>${escapeHtml(pcode)}</code> • archivos: <code>${n}</code></div>
+            <div class="hint">status: <code>${escapeHtml(payload.status || "ok")}</code> • n8n: <code>${escapeHtml(String(payload.n8n_triggered ?? "unknown"))}</code></div>
+          </div>
+        `);
+
+      } catch (err) {
+        setResult(`<div><b>Respuesta inesperada.</b> No pude parsear JSON.<pre>${escapeHtml(String(err))}</pre></div>`);
+      }
+    };
+
+    xhr.onerror = () => {
+      btnPick.disabled = false;
+      btnClear.disabled = queue.length === 0;
+      refreshButtons();
+      setResult(`<div><b>Falló la conexión.</b> Revisá endpoint / red / CORS.</div>`);
+      setProgress(0);
+    };
+
+    xhr.send(form);
+  });
+
+  function escapeHtml(str) {
+    return (str ?? "").replace(/[&<>"']/g, (m) => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+    }[m]));
+  }
+
+  refreshButtons();
+})();
+</script>
+</body>
+</html>
