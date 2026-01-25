@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>EndoDB — VCC Viewer</title>
+  <style>
+    body { font-family: system-ui, Arial; margin: 16px; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    .card { border:1px solid #ddd; border-radius:12px; padding:12px; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { border-bottom:1px solid #eee; padding:8px; text-align:left; font-size:14px; }
+    tr:hover { background:#fafafa; cursor:pointer; }
+    .muted { color:#666; font-size:13px; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #ddd; font-size:12px; }
+    .ok { border-color:#7fbf7f; }
+    .bad { border-color:#d88; }
+    button { padding:8px 10px; border-radius:10px; border:1px solid #ddd; background:white; cursor:pointer; }
+    button:hover { background:#f5f5f5; }
+    code { font-size: 12px; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    @media (max-width: 900px){ .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h2>EndoDB — VCC Viewer</h2>
+
+  <div class="row">
+    <div class="card">
+      <div class="muted">ADR</div>
+      <div id="adr" style="font-size:24px;font-weight:700">—</div>
+      <div id="adr_meta" class="muted"></div>
+    </div>
+
+    <div class="card" style="flex:1; min-width:260px;">
+      <div class="row">
+        <div>
+          <div class="muted">Filtro</div>
+          <label class="muted"><input id="validOnly" type="checkbox"> Solo VCC válidas (Boston≥6 + ciego)</label>
+        </div>
+        <div style="margin-left:auto">
+          <button id="reloadBtn">Recargar</button>
+        </div>
+      </div>
+      <div class="muted">API: <span id="apiBase"></span></div>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-top:12px;">
+    <div class="card">
+      <div style="font-weight:700;">Lista de VCC</div>
+      <div class="muted">Click en una fila para ver detalle.</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Paciente</th>
+            <th>Boston</th>
+            <th>Pólipos</th>
+            <th>Terapéutica</th>
+            <th>Adenoma</th>
+            <th>VCC válida</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:700;">Detalle</div>
+      <div id="detail" class="muted">Seleccioná un estudio.</div>
+      <div id="detailBody" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+<script>
+  // ✅ API por HTTPS (Tailscale Serve)
+  const API = "https://mini-server.tail577189.ts.net";
+  document.getElementById("apiBase").textContent = API;
+
+  const fmtDate = (iso) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return d.toLocaleString("es-AR");
+  };
+
+  async function fetchJSON(url){
+    const r = await fetch(url, { method: "GET" });
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.json();
+  }
+
+  async function loadADR(){
+    const data = await fetchJSON(`${API}/api/v1/metrics/adr`);
+    document.getElementById("adr").textContent =
+      (data.adr_percent==null) ? "—" : `${data.adr_percent}%`;
+    document.getElementById("adr_meta").textContent =
+      `Numerador: ${data.numerator} | Denominador: ${data.denominator}`;
+  }
+
+  function pill(ok, text){
+    const span = document.createElement("span");
+    span.className = `pill ${ok ? "ok" : "bad"}`;
+    span.textContent = text;
+    return span;
+  }
+
+  async function loadList(){
+    const validOnly = document.getElementById("validOnly").checked;
+    const url = `${API}/api/v1/vcc?limit=100&offset=0&valid_only=${validOnly}`;
+    const data = await fetchJSON(url);
+    const tbody = document.getElementById("tbody");
+    tbody.innerHTML = "";
+
+    for(const it of data.items){
+      const tr = document.createElement("tr");
+      tr.addEventListener("click", () => loadDetail(it.exam_id));
+
+      tr.innerHTML = `
+        <td>${fmtDate(it.performed_at || it.created_at)}</td>
+        <td>${it.patient_code}</td>
+        <td>${it.boston_total ?? "—"}</td>
+        <td>${it.polyp_count ?? "—"}</td>
+        <td>${it.therapeutic_intervention ? "Sí" : "No"}</td>
+        <td>${(it.adenoma_detected && it.pathology_linked) ? "Sí" : "—"}</td>
+        <td></td>
+      `;
+      const tdValid = tr.querySelectorAll("td")[6];
+      tdValid.appendChild(pill(!!it.vcc_valid_for_quality, it.vcc_valid_for_quality ? "Sí" : "No"));
+      tbody.appendChild(tr);
+    }
+  }
+
+  async function loadDetail(exam_id){
+    const detail = document.getElementById("detail");
+    const body = document.getElementById("detailBody");
+    detail.textContent = `Exam: ${exam_id}`;
+    body.innerHTML = "Cargando…";
+
+    const data = await fetchJSON(`${API}/api/v1/vcc/${exam_id}`);
+
+    const s = data.summary;
+    const fields = data.fields || [];
+    const files = data.files || [];
+
+    const pdf = files.find(f => f.kind === "raw_pdf");
+    const pdfUrl = pdf ? `${API}/api/v1/vcc/${exam_id}/files/raw_pdf` : null;
+
+    body.innerHTML = `
+      <div class="muted">Paciente: <b>${s.patient_code}</b></div>
+      <div class="muted">Fecha: <b>${fmtDate(s.performed_at || s.created_at)}</b></div>
+      <div class="row" style="margin-top:8px;">
+        ${pdfUrl ? `<a href="${pdfUrl}" target="_blank"><button>Ver PDF</button></a>` : `<span class="muted">PDF: no cargado</span>`}
+      </div>
+      <hr style="border:none;border-top:1px solid #eee;margin:12px 0;">
+      <div style="font-weight:700;">Campos</div>
+      <table style="margin-top:8px;">
+        <thead><tr><th>Campo</th><th>Valor</th><th>Rev.</th></tr></thead>
+        <tbody>
+          ${fields.map(f => `
+            <tr>
+              <td>${f.field_name}</td>
+              <td><code>${JSON.stringify(f.value_json)}</code></td>
+              <td>${f.reviewed ? "✔" : "—"}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  document.getElementById("reloadBtn").addEventListener("click", async () => {
+    await loadADR();
+    await loadList();
+  });
+
+  (async function init(){
+    await loadADR();
+    await loadList();
+  })();
+</script>
+</body>
+</html>
