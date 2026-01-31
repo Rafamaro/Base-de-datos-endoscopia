@@ -294,7 +294,7 @@
       <div>
         <h1>EndoDB — Subida de informes</h1>
         <div class="subtitle">
-          Subí un PDF o fotos del informe endoscópico. El backend guarda el crudo y dispara el flujo en n8n.
+          Subí un PDF del informe endoscópico. Se envía como <code>multipart/form-data</code> al webhook de n8n.
         </div>
       </div>
       <div class="pill"><span class="dot"></span> Modo seguro: seudónimos</div>
@@ -303,9 +303,15 @@
     <div class="card">
       <div class="grid">
         <div>
-          <label for="endpoint">Endpoint del Ingestor</label>
-          <input id="endpoint" placeholder="https://endodb-tuapp.tu-dominio.com" inputmode="url" />
-          <div class="hint">Si estás por Tailscale, podés usar el host interno. Evitá pegar el webhook de n8n acá.</div>
+          <label for="endpoint">Webhook n8n</label>
+          <input id="endpoint" placeholder="https://n8n.drperez86.com/webhook/endodb/process-exam" inputmode="url" />
+          <div class="hint">Debe aceptar <code>exam_id</code>, <code>patient_code</code>, <code>procedure_type</code> y <code>file</code> (PDF).</div>
+        </div>
+
+        <div>
+          <label for="exam_id">exam_id</label>
+          <input id="exam_id" placeholder="test-001" autocapitalize="off" autocomplete="off" />
+          <div class="hint">Identificador del estudio (requerido por el webhook).</div>
         </div>
 
         <div>
@@ -328,16 +334,24 @@
         </div>
 
         <div>
-          <label for="notes">Notas internas (opcional)</label>
-          <textarea id="notes" placeholder="Ej: control post polipectomía, anticoagulación, etc."></textarea>
-          <div class="hint">Ideal para pistas clínicas rápidas. No metas datos identificatorios.</div>
+          <label for="procedure_type">Tipo de procedimiento</label>
+          <select id="procedure_type" required>
+            <option value="VCC">VCC</option>
+            <option value="VEDA">VEDA</option>
+          </select>
+
+          <div style="margin-top:10px">
+            <label for="notes">Notas internas (opcional)</label>
+            <textarea id="notes" placeholder="Ej: control post polipectomía, anticoagulación, etc."></textarea>
+            <div class="hint">Pistas clínicas rápidas. No metas datos identificatorios.</div>
+          </div>
         </div>
 
         <div>
           <label>Acciones</label>
           <div class="row">
-            <input id="filepicker" type="file" multiple accept=".pdf,image/*" style="display:none" />
-            <button class="btn" id="btnPick">Elegir archivos</button>
+            <input id="filepicker" type="file" accept="application/pdf" style="display:none" />
+            <button class="btn" id="btnPick">Elegir PDF</button>
             <button class="btn primary" id="btnUpload" disabled>Subir y procesar</button>
             <button class="btn" id="btnClear" disabled>Limpiar</button>
           </div>
@@ -347,14 +361,14 @@
           </div>
 
           <div class="hint">
-            Recomendación: 25–50 MB por envío. Si son muchas fotos, mandalas en tandas por estudio.
+            Recomendación: 25–50 MB por envío. Si el PDF pesa mucho, probá comprimirlo.
           </div>
         </div>
       </div>
 
       <div class="drop" id="drop">
         <div class="dropTitle">Arrastrá y soltá aquí</div>
-        <div class="dropSub">PDF o imágenes (JPG/PNG/WebP). Se suben como <code>multipart/form-data</code>.</div>
+        <div class="dropSub">Solo PDF. Se sube como <code>multipart/form-data</code> con nombre de campo <code>file</code>.</div>
         <div class="files" id="files"></div>
       </div>
 
@@ -364,13 +378,15 @@
 
 <script>
 (() => {
-  const DEFAULT_ENDPOINT = "";
+  const DEFAULT_ENDPOINT = "https://n8n.drperez86.com/webhook/endodb/process-exam";
 
   const elEndpoint = document.getElementById("endpoint");
+  const elExam = document.getElementById("exam_id");
   const elMode = document.getElementById("patient_mode");
   const elExistingWrap = document.getElementById("patient_existing_wrap");
   const elNewWrap = document.getElementById("patient_new_wrap");
   const elPatient = document.getElementById("patient_code");
+  const elProc = document.getElementById("procedure_type");
   const elNotes = document.getElementById("notes");
   const elDrop = document.getElementById("drop");
   const elFiles = document.getElementById("files");
@@ -387,9 +403,7 @@
   let queue = [];
 
   const allowed = (file) => {
-    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-    const isImg = file.type && file.type.startsWith("image/");
-    return isPdf || isImg;
+    return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
   };
 
   const fmtSize = (n) => {
@@ -420,8 +434,9 @@
     const mode = elMode.value;
     const endpointOk = (elEndpoint.value || "").trim().length > 0;
     const patientOk = (mode === "new") || /^Paciente_\d{3,}$/.test((elPatient.value||"").trim());
+    const examOk = (elExam.value || "").trim().length > 0;
 
-    btnUpload.disabled = !(hasFiles && endpointOk && patientOk);
+    btnUpload.disabled = !(hasFiles && endpointOk && patientOk && examOk);
   };
 
   const renderQueue = () => {
@@ -442,7 +457,7 @@
 
       const tag = document.createElement("span");
       tag.className = "tag " + (allowed(f) ? "ok" : "bad");
-      tag.textContent = allowed(f) ? "OK" : "Tipo no permitido";
+      tag.textContent = allowed(f) ? "OK" : "Solo PDF";
 
       const rm = document.createElement("button");
       rm.className = "btn";
@@ -463,7 +478,10 @@
   const addFiles = (files) => {
     resetResult();
     const arr = Array.from(files || []);
-    for (const f of arr) queue.push(f);
+    if (!arr.length) return;
+
+    // Solo 1 archivo
+    queue = [arr[0]];
     renderQueue();
   };
 
@@ -482,6 +500,7 @@
 
   elEndpoint.addEventListener("input", refreshButtons);
   elPatient.addEventListener("input", refreshButtons);
+  elExam.addEventListener("input", refreshButtons);
 
   // Picker
   btnPick.addEventListener("click", () => elPicker.click());
@@ -511,22 +530,28 @@
     resetResult();
     setProgress(0);
 
-    const endpoint = (elEndpoint.value || "").trim().replace(/\/+$/, "");
-    const url = endpoint + "/api/ingest";
+    const url = (elEndpoint.value || "").trim();
 
     const mode = elMode.value;
     const patient_code = (mode === "new") ? "NEW" : (elPatient.value || "").trim();
+    const exam_id = (elExam.value || "").trim();
+    const procedure_type = (elProc.value || "VCC");
 
     const bad = queue.filter(f => !allowed(f));
     if (bad.length) {
-      setResult(`<div><b>Hay archivos no permitidos.</b> Revisá los marcados como “Tipo no permitido”.</div>`);
+      setResult(`<div><b>Archivo no permitido.</b> Solo PDF.</div>`);
+      return;
+    }
+    if (!queue.length) {
+      setResult(`<div><b>No hay archivo.</b> Elegí un PDF.</div>`);
       return;
     }
 
     const form = new FormData();
+    form.append("exam_id", exam_id);
     form.append("patient_code", patient_code);
-    form.append("notes", (elNotes.value || "").trim());
-    for (const f of queue) form.append("files", f, f.name);
+    form.append("procedure_type", procedure_type);
+    form.append("file", queue[0], queue[0].name);
 
     btnUpload.disabled = true;
     btnPick.disabled = true;
@@ -557,15 +582,11 @@
           return;
         }
 
-        const examId = payload.exam_id || "(sin exam_id)";
-        const pcode = payload.patient_code || patient_code;
-        const n = payload.received_files ?? queue.length;
-
         setResult(`
           <div style="display:grid;gap:8px">
-            <div><b>Listo.</b> Material recibido y flujo disparado.</div>
-            <div class="hint">exam_id: <code>${escapeHtml(examId)}</code> • paciente: <code>${escapeHtml(pcode)}</code> • archivos: <code>${n}</code></div>
-            <div class="hint">status: <code>${escapeHtml(payload.status || "ok")}</code> • n8n: <code>${escapeHtml(String(payload.n8n_triggered ?? "unknown"))}</code></div>
+            <div><b>Listo.</b> PDF recibido por n8n.</div>
+            <div class="hint">exam_id: <code>${escapeHtml(exam_id)}</code> • paciente: <code>${escapeHtml(patient_code)}</code> • tipo: <code>${escapeHtml(procedure_type)}</code></div>
+            <div class="hint">Respuesta: <pre>${escapeHtml(JSON.stringify(payload, null, 2))}</pre></div>
           </div>
         `);
 
