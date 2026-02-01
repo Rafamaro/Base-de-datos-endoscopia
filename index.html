@@ -22,6 +22,9 @@
 
       --accent:#b45309;
       --accent2:#c2410c;
+      --accentSoft:#fde6cf;
+      --ok:#059669;
+      --bad:#dc2626;
 
       --radius:18px;
     }
@@ -107,7 +110,7 @@
       margin: 0 0 6px 2px;
     }
 
-    input, select{
+    input, select, textarea{
       width:100%;
       padding: 11px 12px;
       border-radius: 14px;
@@ -118,9 +121,16 @@
       font-size: 14px;
       transition: border-color .15s ease, box-shadow .15s ease;
     }
-    input:focus, select:focus{
+    input:focus, select:focus, textarea:focus{
       border-color: rgba(180,83,9,.45);
       box-shadow: 0 0 0 4px rgba(180,83,9,.12);
+    }
+    textarea{ min-height: 88px; resize: vertical; }
+
+    /* 🔒 endpoint bloqueado */
+    input[readonly], input:disabled{
+      background: rgba(31,41,55,.04);
+      color: rgba(31,41,55,.70);
     }
 
     .row{
@@ -145,13 +155,20 @@
     }
     .btn:hover{ background: #fffaf4; }
     .btn:active{ transform: translateY(1px); }
+    .btn:disabled{
+      opacity: .55;
+      cursor:not-allowed;
+      box-shadow:none;
+    }
 
     .btn.primary{
       border-color: rgba(180,83,9,.35);
       background: linear-gradient(135deg, rgba(180,83,9,.92), rgba(194,65,12,.92));
       color: white;
     }
-    .btn.primary:hover{ filter: brightness(1.02); }
+    .btn.primary:hover{
+      filter: brightness(1.02);
+    }
 
     .hint{
       color: var(--muted);
@@ -160,22 +177,104 @@
       line-height: 1.35;
     }
 
+    .drop{
+      margin-top: 14px;
+      border-radius: var(--radius);
+      border: 2px dashed rgba(180,83,9,.28);
+      padding: 16px;
+      background: linear-gradient(180deg, rgba(253,230,207,.52), rgba(255,255,255,.75));
+    }
+    .drop.dragover{
+      border-color: rgba(180,83,9,.65);
+      box-shadow: 0 0 0 4px rgba(180,83,9,.12);
+    }
+    .dropTitle{
+      font-weight: 800;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+    .dropSub{
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .files{
+      margin-top: 12px;
+      display:grid;
+      gap: 8px;
+    }
+
+    .file{
+      display:flex;
+      justify-content:space-between;
+      gap: 12px;
+      align-items:center;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .fileName{
+      font-weight: 700;
+      font-size: 13px;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+    .fileMeta{
+      margin-top: 2px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .tag{
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(0,0,0,.02);
+      white-space: nowrap;
+    }
+    .tag.ok{ border-color: rgba(5,150,105,.30); color: var(--ok); background: rgba(5,150,105,.08); }
+    .tag.bad{ border-color: rgba(220,38,38,.30); color: var(--bad); background: rgba(220,38,38,.06); }
+
+    .progress{
+      height: 10px;
+      border-radius: 999px;
+      overflow:hidden;
+      background: rgba(31,41,55,.08);
+      margin-top: 12px;
+    }
+    .bar{
+      height:100%;
+      width:0%;
+      background: linear-gradient(135deg, rgba(180,83,9,.92), rgba(194,65,12,.92));
+      transition: width .2s ease;
+    }
+
+    .result{
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.9);
+    }
     code{
       background: rgba(180,83,9,.10);
       padding: 2px 6px;
       border-radius: 10px;
       font-size: 12px;
     }
-
-    .endpoint{
-      margin-top: 12px;
-      padding: 12px;
-      border-radius: 16px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,.9);
+    pre{
+      margin: 10px 0 0 0;
+      background: rgba(31,41,55,.06);
+      padding: 10px;
+      border-radius: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
       font-size: 12px;
-      color: var(--muted);
-      line-height: 1.35;
+      color: #111827;
     }
 
     @media (max-width: 820px){
@@ -188,6 +287,8 @@
       .card{ padding: 14px; }
       .btn{ width: 100%; }
       .row{ gap: 8px; }
+      .file{ flex-direction: column; align-items: flex-start; }
+      .file .row{ width:100%; }
     }
   </style>
 </head>
@@ -201,53 +302,321 @@
           Subí un PDF del informe endoscópico. Se envía como <code>multipart/form-data</code> al webhook de n8n.
         </div>
       </div>
-      <div class="pill"><span class="dot"></span> Producción (Cloudflare Tunnel)</div>
+      <div class="pill"><span class="dot"></span> Modo seguro: seudónimos</div>
     </div>
 
     <div class="card">
-      <form
-        method="POST"
-        action="https://n8n.drperez86.com/webhook/endodb/process-exam"
-        enctype="multipart/form-data"
-      >
-        <div class="grid">
-          <div>
-            <label for="exam_id">exam_id</label>
-            <input id="exam_id" name="exam_id" placeholder="test-001" required autocomplete="off" />
-            <div class="hint">Identificador del estudio.</div>
-          </div>
-
-          <div>
-            <label for="patient_code">patient_code</label>
-            <input id="patient_code" name="patient_code" placeholder="Paciente_001" required autocomplete="off" />
-            <div class="hint">Seudónimo (ej: <code>Paciente_001</code>).</div>
-          </div>
-
-          <div>
-            <label for="procedure_type">procedure_type</label>
-            <select id="procedure_type" name="procedure_type" required>
-              <option value="VCC">VCC</option>
-              <option value="VEDA">VEDA</option>
-            </select>
-            <div class="hint">Tipo de procedimiento.</div>
-          </div>
-
-          <div>
-            <label for="file">PDF (campo <code>file</code>)</label>
-            <input id="file" name="file" type="file" accept="application/pdf" required />
-            <div class="hint">Solo PDF. Recomendación: &lt; 50 MB.</div>
+      <div class="grid">
+        <div>
+          <label for="endpoint">Webhook n8n (Production)</label>
+          <input id="endpoint" readonly />
+          <div class="hint">
+            Endpoint fijo. Campos: <code>exam_id</code>, <code>patient_code</code>, <code>procedure_type</code>, <code>notes</code> y <code>file</code> (PDF).
           </div>
         </div>
 
-        <div style="margin-top:14px" class="row">
-          <button class="btn primary" type="submit">Subir PDF</button>
+        <div>
+          <label for="exam_id">exam_id</label>
+          <input id="exam_id" placeholder="test-001" autocapitalize="off" autocomplete="off" />
+          <div class="hint">Identificador del estudio (requerido).</div>
         </div>
 
-        <div class="endpoint">
-          Endpoint: <code>https://n8n.drperez86.com/webhook/endodb/process-exam</code>
+        <div>
+          <label for="patient_mode">Paciente</label>
+          <select id="patient_mode">
+            <option value="existing">Seleccionar existente</option>
+            <option value="new">Crear nuevo (auto)</option>
+          </select>
+
+          <div style="margin-top:10px" id="patient_existing_wrap">
+            <label for="patient_code">Código seudónimo</label>
+            <input id="patient_code" placeholder="Paciente_001" autocapitalize="off" autocomplete="off" />
+            <div class="hint">Formato: <code>Paciente_###</code> (ej: Paciente_001).</div>
+          </div>
+
+          <div style="margin-top:10px; display:none" id="patient_new_wrap">
+            <label>Paciente nuevo</label>
+            <input value="Se asigna automáticamente (Paciente_###)" disabled />
+          </div>
         </div>
-      </form>
+
+        <div>
+          <label for="procedure_type">Tipo de procedimiento</label>
+          <select id="procedure_type" required>
+            <option value="VCC">VCC</option>
+            <option value="VEDA">VEDA</option>
+          </select>
+
+          <div style="margin-top:10px">
+            <label for="notes">Notas internas (opcional)</label>
+            <textarea id="notes" placeholder="Ej: control post polipectomía, anticoagulación, etc."></textarea>
+            <div class="hint">Pistas clínicas rápidas. No metas datos identificatorios.</div>
+          </div>
+        </div>
+
+        <div>
+          <label>Acciones</label>
+          <div class="row">
+            <input id="filepicker" type="file" accept="application/pdf" style="display:none" />
+            <button class="btn" id="btnPick" type="button">Elegir PDF</button>
+            <button class="btn primary" id="btnUpload" type="button" disabled>Subir PDF</button>
+            <button class="btn" id="btnClear" type="button" disabled>Limpiar</button>
+          </div>
+
+          <div class="progress" aria-label="progreso" title="Progreso de subida">
+            <div class="bar" id="bar"></div>
+          </div>
+
+          <div class="hint">
+            Recomendación: 25–50 MB por envío. Si el PDF pesa mucho, probá comprimirlo.
+          </div>
+        </div>
+      </div>
+
+      <div class="drop" id="drop">
+        <div class="dropTitle">Arrastrá y soltá aquí</div>
+        <div class="dropSub">Solo PDF. Se sube como <code>multipart/form-data</code> con nombre de campo <code>file</code>.</div>
+        <div class="files" id="files"></div>
+      </div>
+
+      <div class="result" id="result" style="display:none"></div>
     </div>
   </div>
+
+<script>
+(() => {
+  // ✅ Endpoint FIJO (Cloudflare Tunnel → n8n production webhook)
+  const ENDPOINT = "https://n8n.drperez86.com/webhook/endodb/process-exam";
+
+  const elEndpoint = document.getElementById("endpoint");
+  const elExam = document.getElementById("exam_id");
+  const elMode = document.getElementById("patient_mode");
+  const elExistingWrap = document.getElementById("patient_existing_wrap");
+  const elNewWrap = document.getElementById("patient_new_wrap");
+  const elPatient = document.getElementById("patient_code");
+  const elProc = document.getElementById("procedure_type");
+  const elNotes = document.getElementById("notes");
+  const elDrop = document.getElementById("drop");
+  const elFiles = document.getElementById("files");
+  const elPicker = document.getElementById("filepicker");
+  const btnPick = document.getElementById("btnPick");
+  const btnUpload = document.getElementById("btnUpload");
+  const btnClear = document.getElementById("btnClear");
+  const elBar = document.getElementById("bar");
+  const elResult = document.getElementById("result");
+
+  elEndpoint.value = ENDPOINT;
+
+  /** @type {File[]} */
+  let queue = [];
+
+  const allowed = (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
+  const fmtSize = (n) => {
+    const u = ["B","KB","MB","GB"];
+    let i = 0, x = n;
+    while (x >= 1024 && i < u.length-1) { x/=1024; i++; }
+    return `${x.toFixed(i===0?0:1)} ${u[i]}`;
+  };
+
+  const setProgress = (p) => { elBar.style.width = `${Math.max(0, Math.min(100, p))}%`; };
+
+  const setResult = (html) => {
+    elResult.style.display = "block";
+    elResult.innerHTML = html;
+  };
+
+  const resetResult = () => {
+    elResult.style.display = "none";
+    elResult.innerHTML = "";
+  };
+
+  const refreshButtons = () => {
+    const hasFiles = queue.length > 0;
+    btnClear.disabled = !hasFiles;
+
+    const mode = elMode.value;
+    const patientOk = (mode === "new") || /^Paciente_\d{3,}$/.test((elPatient.value||"").trim());
+    const examOk = (elExam.value || "").trim().length > 0;
+
+    btnUpload.disabled = !(hasFiles && patientOk && examOk);
+  };
+
+  const renderQueue = () => {
+    elFiles.innerHTML = "";
+    queue.forEach((f, idx) => {
+      const div = document.createElement("div");
+      div.className = "file";
+
+      const left = document.createElement("div");
+      left.style.flex = "1";
+      left.innerHTML = `
+        <div class="fileName">${escapeHtml(f.name)}</div>
+        <div class="fileMeta">${escapeHtml(fmtSize(f.size))} • ${escapeHtml(f.type || "desconocido")}</div>
+      `;
+
+      const right = document.createElement("div");
+      right.className = "row";
+
+      const tag = document.createElement("span");
+      tag.className = "tag " + (allowed(f) ? "ok" : "bad");
+      tag.textContent = allowed(f) ? "OK" : "Solo PDF";
+
+      const rm = document.createElement("button");
+      rm.className = "btn";
+      rm.type = "button";
+      rm.textContent = "Quitar";
+      rm.onclick = () => { queue.splice(idx, 1); renderQueue(); refreshButtons(); };
+
+      right.appendChild(tag);
+      right.appendChild(rm);
+
+      div.appendChild(left);
+      div.appendChild(right);
+      elFiles.appendChild(div);
+    });
+
+    refreshButtons();
+  };
+
+  const addFiles = (files) => {
+    resetResult();
+    const arr = Array.from(files || []);
+    if (!arr.length) return;
+
+    // Solo 1 archivo por envío
+    queue = [arr[0]];
+    renderQueue();
+  };
+
+  // Patient mode
+  elMode.addEventListener("change", () => {
+    const mode = elMode.value;
+    if (mode === "new") {
+      elExistingWrap.style.display = "none";
+      elNewWrap.style.display = "block";
+    } else {
+      elExistingWrap.style.display = "block";
+      elNewWrap.style.display = "none";
+    }
+    refreshButtons();
+  });
+
+  elPatient.addEventListener("input", refreshButtons);
+  elExam.addEventListener("input", refreshButtons);
+
+  // Picker
+  btnPick.addEventListener("click", () => elPicker.click());
+  elPicker.addEventListener("change", (e) => addFiles(e.target.files));
+
+  // Drag & Drop
+  ["dragenter","dragover"].forEach(ev => elDrop.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation();
+    elDrop.classList.add("dragover");
+  }));
+  ["dragleave","drop"].forEach(ev => elDrop.addEventListener(ev, (e) => {
+    e.preventDefault(); e.stopPropagation();
+    elDrop.classList.remove("dragover");
+  }));
+  elDrop.addEventListener("drop", (e) => addFiles(e.dataTransfer.files));
+
+  // Clear
+  btnClear.addEventListener("click", () => {
+    queue = [];
+    renderQueue();
+    setProgress(0);
+    resetResult();
+  });
+
+  // Upload (XHR for real progress)
+  btnUpload.addEventListener("click", async () => {
+    resetResult();
+    setProgress(0);
+
+    const mode = elMode.value;
+    const patient_code = (mode === "new") ? "NEW" : (elPatient.value || "").trim();
+    const exam_id = (elExam.value || "").trim();
+    const procedure_type = (elProc.value || "VCC");
+    const notes = (elNotes.value || "").trim();
+
+    const bad = queue.filter(f => !allowed(f));
+    if (bad.length) {
+      setResult(`<div><b>Archivo no permitido.</b> Solo PDF.</div>`);
+      return;
+    }
+    if (!queue.length) {
+      setResult(`<div><b>No hay archivo.</b> Elegí un PDF.</div>`);
+      return;
+    }
+
+    const form = new FormData();
+    form.append("exam_id", exam_id);
+    form.append("patient_code", patient_code);
+    form.append("procedure_type", procedure_type);
+    form.append("notes", notes);
+    form.append("file", queue[0], queue[0].name); // ✅ nombre de campo: file
+
+    btnUpload.disabled = true;
+    btnPick.disabled = true;
+    btnClear.disabled = true;
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", ENDPOINT, true); // ✅ endpoint fijo
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) setProgress((e.loaded / e.total) * 100);
+    };
+
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState !== 4) return;
+
+      btnPick.disabled = false;
+      btnClear.disabled = queue.length === 0;
+      refreshButtons();
+
+      try {
+        const isOk = xhr.status >= 200 && xhr.status < 300;
+        const ct = xhr.getResponseHeader("content-type") || "";
+        const payload = ct.includes("application/json") ? JSON.parse(xhr.responseText) : { raw: xhr.responseText };
+
+        if (!isOk) {
+          setResult(`<div><b>Error (${xhr.status}).</b><pre>${escapeHtml(JSON.stringify(payload, null, 2))}</pre></div>`);
+          setProgress(0);
+          return;
+        }
+
+        setResult(`
+          <div style="display:grid;gap:8px">
+            <div><b>Listo.</b> PDF enviado a n8n.</div>
+            <div class="hint">exam_id: <code>${escapeHtml(exam_id)}</code> • paciente: <code>${escapeHtml(patient_code)}</code> • tipo: <code>${escapeHtml(procedure_type)}</code></div>
+            <div class="hint">Respuesta: <pre>${escapeHtml(JSON.stringify(payload, null, 2))}</pre></div>
+          </div>
+        `);
+
+      } catch (err) {
+        setResult(`<div><b>Respuesta inesperada.</b> No pude parsear JSON.<pre>${escapeHtml(String(err))}</pre></div>`);
+      }
+    };
+
+    xhr.onerror = () => {
+      btnPick.disabled = false;
+      btnClear.disabled = queue.length === 0;
+      refreshButtons();
+      setResult(`<div><b>Falló la conexión.</b> Revisá red / endpoint.</div>`);
+      setProgress(0);
+    };
+
+    xhr.send(form);
+  });
+
+  function escapeHtml(str) {
+    return (str ?? "").replace(/[&<>"']/g, (m) => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+    }[m]));
+  }
+
+  refreshButtons();
+})();
+</script>
 </body>
 </html>
