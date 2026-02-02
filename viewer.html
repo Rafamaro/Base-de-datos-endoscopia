@@ -1,259 +1,172 @@
+cat > /srv/endodb-viewer/index.html <<'HTML'
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>EndoDB • Tabla VCC</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>EndoDB • Viewer (SQLite)</title>
   <style>
-    :root{--bg:#fffdf9;--card:#fff;--line:#e7ded4;--ink:#111827;--muted:#6b7280;--accent:#b45309;--shadow:0 10px 34px rgba(17,24,39,.10);--r:18px;}
-    *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui;background:var(--bg);color:var(--ink)}
-    .wrap{max-width:1180px;margin:0 auto;padding:18px}
-    .top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px}
-    h1{margin:0;font-size:18px}
-    .muted{color:var(--muted);font-size:12px}
-    .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:14px}
-    .grid{display:grid;grid-template-columns:1.2fr .8fr;gap:14px}
-    @media(max-width:1000px){.grid{grid-template-columns:1fr}}
-    label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px 2px}
-    input{width:100%;padding:10px 12px;border-radius:14px;border:1px solid var(--line);outline:none}
-    input:focus{border-color:rgba(180,83,9,.45);box-shadow:0 0 0 4px rgba(180,83,9,.12)}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
-    .btn{height:40px;padding:10px 12px;border-radius:14px;border:1px solid var(--line);background:#fff;cursor:pointer;font-weight:700}
-    .btn.primary{background:linear-gradient(135deg,rgba(180,83,9,.92),rgba(194,65,12,.92));color:#fff;border-color:rgba(180,83,9,.35)}
-    .tableWrap{border-radius:16px;border:1px solid var(--line);overflow:hidden;margin-top:10px}
-    table{width:100%;border-collapse:collapse}
-    thead th{background:rgba(253,230,207,.65);border-bottom:1px solid var(--line);font-size:12px;color:#374151;padding:10px 12px;text-align:left;white-space:nowrap}
-    tbody td{border-bottom:1px solid rgba(231,222,212,.65);padding:10px 12px;font-size:13px}
-    tbody tr{cursor:pointer}
-    tbody tr:hover{background:rgba(180,83,9,.05)}
-    tbody tr.sel{background:rgba(180,83,9,.10)}
-    code{font-size:12px;background:rgba(180,83,9,.10);padding:2px 6px;border-radius:10px}
-    .err{margin-top:10px;padding:10px 12px;border-radius:14px;border:1px solid rgba(220,38,38,.35);background:rgba(220,38,38,.08);color:#7f1d1d;font-size:12px;white-space:pre-wrap;display:none}
+    :root { --bg:#0b1220; --card:#121b2e; --ink:#e7eefc; --mut:#9fb0d1; --line:#253252; --acc:#4aa3ff; }
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; background:linear-gradient(180deg,#0b1220,#070c16); color:var(--ink); }
+    .wrap{ max-width:1100px; margin:0 auto; padding:20px; }
+    h1{ font-size:18px; margin:0 0 14px; color:var(--ink); }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    input, button{ border-radius:10px; border:1px solid var(--line); background:#0f172a; color:var(--ink); padding:10px 12px; }
+    input{ flex:1; min-width:220px; }
+    button{ cursor:pointer; }
+    button:hover{ border-color:var(--acc); }
+    .grid{ display:grid; grid-template-columns: 1.2fr .8fr; gap:14px; margin-top:14px; }
+    .card{ background:rgba(18,27,46,.85); border:1px solid var(--line); border-radius:14px; padding:14px; }
+    .mut{ color:var(--mut); font-size:12px; }
+    table{ width:100%; border-collapse:collapse; margin-top:10px; }
+    th,td{ padding:8px; border-bottom:1px solid var(--line); font-size:13px; }
+    th{ text-align:left; color:var(--mut); font-weight:600; }
+    tr:hover td{ background:rgba(74,163,255,.06); cursor:pointer; }
+    .pill{ display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid var(--line); font-size:12px; color:var(--mut); }
+    .actions a{ color:var(--acc); text-decoration:none; }
+    .actions a:hover{ text-decoration:underline; }
+    @media (max-width:900px){ .grid{ grid-template-columns:1fr; } }
+    pre{ white-space:pre-wrap; word-break:break-word; background:#0f172a; border:1px solid var(--line); padding:10px; border-radius:12px; }
   </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="top">
-    <div>
-      <h1>EndoDB • Tabla VCC</h1>
-      <div class="muted">Lista y detalle desde n8n (vcc_results + fields_text).</div>
+  <div class="wrap">
+    <h1>EndoDB • Viewer (leyendo SQLite)</h1>
+
+    <div class="row">
+      <input id="search" placeholder="Buscar por exam_id o patient_code..." />
+      <button id="btnSearch">Buscar</button>
+      <span class="mut" id="status"></span>
     </div>
-    <div class="muted">Modo lectura</div>
-  </div>
 
-  <div class="grid">
-    <div class="card">
-      <div class="row">
-        <div style="flex:1;min-width:260px">
-          <label>API base (n8n)</label>
-          <input id="api" placeholder="https://n8n.drperez86.com" />
+    <div class="grid">
+      <div class="card">
+        <div class="row" style="justify-content:space-between;">
+          <div>
+            <div class="mut">Exámenes</div>
+          </div>
+          <div class="row">
+            <button id="prev">◀</button>
+            <button id="next">▶</button>
+          </div>
         </div>
-        <div style="flex:1;min-width:220px">
-          <label>Buscar exam_id</label>
-          <input id="q" placeholder="1271879" />
-        </div>
-        <div style="width:120px">
-          <label>Límite</label>
-          <input id="limit" value="100" />
-        </div>
-        <div style="width:120px">
-          <label>Offset</label>
-          <input id="offset" value="0" />
-        </div>
-        <button class="btn primary" id="reload">Recargar</button>
-      </div>
 
-      <div class="tableWrap">
-        <table>
+        <table id="tbl">
           <thead>
             <tr>
-              <th>Fecha</th>
-              <th>Exam ID</th>
-              <th>Boston</th>
-              <th>Ciego</th>
-              <th>Pólipos</th>
-              <th>Terapéutica</th>
+              <th>exam_id</th>
+              <th>patient_code</th>
+              <th>procedure</th>
+              <th>status</th>
+              <th>created</th>
             </tr>
           </thead>
-          <tbody id="tbody"></tbody>
+          <tbody></tbody>
         </table>
       </div>
-      <div class="muted" id="meta" style="margin-top:8px">—</div>
-      <div class="err" id="err"></div>
-    </div>
 
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
-        <div>
-          <div style="font-weight:800">Detalle</div>
-          <div class="muted" id="dsub">—</div>
+      <div class="card">
+        <div class="mut">Detalle</div>
+        <div id="detail">
+          <div class="mut">Seleccioná un examen.</div>
         </div>
-        <button class="btn" id="copy" disabled>Copiar exam_id</button>
       </div>
-
-      <div id="detail" style="margin-top:10px" class="muted">
-        Seleccioná un examen en la tabla.
-      </div>
-      <div class="err" id="derr"></div>
     </div>
   </div>
-</div>
 
 <script>
-(() => {
-  const DEFAULT_API = localStorage.getItem("endodb_n8n_api") || "https://n8n.drperez86.com";
-  const elApi = document.getElementById("api");
-  const elQ = document.getElementById("q");
-  const elLimit = document.getElementById("limit");
-  const elOffset = document.getElementById("offset");
-  const btnReload = document.getElementById("reload");
-  const tbody = document.getElementById("tbody");
-  const meta = document.getElementById("meta");
-  const err = document.getElementById("err");
+let offset = 0;
+let limit = 20;
 
-  const dsub = document.getElementById("dsub");
-  const detail = document.getElementById("detail");
-  const derr = document.getElementById("derr");
-  const btnCopy = document.getElementById("copy");
+const el = (id)=>document.getElementById(id);
+const status = (t)=>el("status").textContent=t;
 
-  let selected = null;
+async function fetchJSON(url){
+  const r = await fetch(url);
+  const j = await r.json();
+  if(!r.ok) throw new Error(j.detail || "Error");
+  return j;
+}
 
-  elApi.value = DEFAULT_API;
+function esc(s){ return (s??"").toString().replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m])); }
 
-  const normApi = s => (s||"").trim().replace(/\/+$/,"");
-  const fmt = iso => iso ? new Date(iso).toLocaleString("es-AR",{dateStyle:"short",timeStyle:"short"}) : "—";
-
-  const showErr = (el, msg) => { el.style.display = msg ? "block" : "none"; el.textContent = msg || ""; };
-
-  async function jget(url){
-    const r = await fetch(url, { headers: { "Accept":"application/json" }});
-    if(!r.ok){
-      const t = await r.text().catch(()=> "");
-      throw new Error(`HTTP ${r.status}\n${t.slice(0,300)}`);
-    }
-    return await r.json();
+async function loadList(){
+  const s = el("search").value.trim();
+  status("cargando...");
+  const data = await fetchJSON(`/api/exams?limit=${limit}&offset=${offset}&search=${encodeURIComponent(s)}`);
+  const tb = el("tbl").querySelector("tbody");
+  tb.innerHTML = "";
+  for(const it of data.items){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${esc(it.exam_id)}</td>
+      <td>${esc(it.patient_code)}</td>
+      <td><span class="pill">${esc(it.procedure_type || "?")}</span></td>
+      <td><span class="pill">${esc(it.status || "?")}</span></td>
+      <td class="mut">${esc(it.created_at || "")}</td>
+    `;
+    tr.addEventListener("click", ()=>loadDetail(it.exam_id));
+    tb.appendChild(tr);
   }
+  status(`mostrando ${data.items.length} (offset ${offset})`);
+}
 
-  function boolTxt(v){
-    if (v === true) return "Sí";
-    if (v === false) return "No";
-    return "—";
-  }
+async function loadDetail(exam_id){
+  status("cargando detalle...");
+  const ex = await fetchJSON(`/api/exams/${encodeURIComponent(exam_id)}`);
+  const fields = await fetchJSON(`/api/exams/${encodeURIComponent(exam_id)}/fields`);
+  const files = await fetchJSON(`/api/exams/${encodeURIComponent(exam_id)}/files`);
 
-  async function loadList(){
-    showErr(err, "");
-    tbody.innerHTML = `<tr><td colspan="6" class="muted">Cargando…</td></tr>`;
+  const rawPdf = (files.items || []).find(x => x.kind === "raw_pdf");
+  const pdfLink = rawPdf ? `<div class="actions"><a target="_blank" href="/api/exams/${encodeURIComponent(exam_id)}/files/raw_pdf">Abrir PDF</a></div>` : `<div class="mut">No hay raw_pdf registrado</div>`;
 
-    const API = normApi(elApi.value);
-    localStorage.setItem("endodb_n8n_api", API);
+  const fHtml = (fields.items||[]).map(x=>{
+    return `<tr>
+      <td>${esc(x.field_name)}</td>
+      <td><pre>${esc(JSON.stringify(x.value_json, null, 2))}</pre></td>
+      <td class="mut">${esc(x.confidence ?? "")}</td>
+    </tr>`;
+  }).join("");
 
-    const q = (elQ.value || "").trim();
-    const limit = Number(elLimit.value || 100);
-    const offset = Number(elOffset.value || 0);
+  const filesHtml = (files.items||[]).slice(0,20).map(x=>{
+    return `<tr>
+      <td>${esc(x.kind)}</td>
+      <td class="mut">${esc(x.path||"")}</td>
+    </tr>`;
+  }).join("");
 
-    const url = `${API}/webhook/endodb/vcc/list?limit=${encodeURIComponent(limit)}&offset=${encodeURIComponent(offset)}&q=${encodeURIComponent(q)}`;
+  el("detail").innerHTML = `
+    <div><b>${esc(ex.exam_id)}</b></div>
+    <div class="mut">${esc(ex.patient_code)} • <span class="pill">${esc(ex.procedure_type || "?")}</span> • <span class="pill">${esc(ex.status || "?")}</span></div>
+    <div class="mut" style="margin-top:8px;">${esc(ex.created_at||"")}</div>
+    <div style="margin-top:10px;">${pdfLink}</div>
 
-    try{
-      const data = await jget(url);
-      const items = data.items || [];
-      meta.textContent = `Total: ${data.total ?? items.length} • Mostrando: ${items.length} • Offset: ${offset}`;
+    <hr style="border:0;border-top:1px solid var(--line); margin:12px 0;">
 
-      tbody.innerHTML = "";
-      if (!items.length){
-        tbody.innerHTML = `<tr><td colspan="6" class="muted">Sin resultados</td></tr>`;
-        return;
-      }
+    <div class="mut">Campos (fields)</div>
+    <table>
+      <thead><tr><th>field</th><th>value_json</th><th>conf</th></tr></thead>
+      <tbody>${fHtml || `<tr><td colspan="3" class="mut">Sin campos</td></tr>`}</tbody>
+    </table>
 
-      for (const it of items){
-        const tr = document.createElement("tr");
-        tr.classList.toggle("sel", selected === it.exam_id);
-        tr.innerHTML = `
-          <td>${fmt(it.updated_at || it.created_at)}</td>
-          <td><code>${it.exam_id}</code></td>
-          <td>${it.boston_total ?? "—"}</td>
-          <td>${boolTxt(it.llego_a_ciego)}</td>
-          <td>${boolTxt(it.polipos)}</td>
-          <td>${boolTxt(it.terapeutica)}</td>
-        `;
-        tr.addEventListener("click", () => loadDetail(it.exam_id));
-        tbody.appendChild(tr);
-      }
+    <hr style="border:0;border-top:1px solid var(--line); margin:12px 0;">
 
-      // auto-select first
-      if (!selected) loadDetail(items[0].exam_id);
+    <div class="mut">Archivos (primeros 20)</div>
+    <table>
+      <thead><tr><th>kind</th><th>path</th></tr></thead>
+      <tbody>${filesHtml || `<tr><td colspan="2" class="mut">Sin archivos</td></tr>`}</tbody>
+    </table>
+  `;
+  status("ok");
+}
 
-    }catch(e){
-      tbody.innerHTML = `<tr><td colspan="6" class="muted">Error</td></tr>`;
-      showErr(err, String(e.message || e));
-    }
-  }
+el("btnSearch").addEventListener("click", ()=>{ offset=0; loadList(); });
+el("search").addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ offset=0; loadList(); }});
+el("prev").addEventListener("click", ()=>{ offset=Math.max(0, offset-limit); loadList(); });
+el("next").addEventListener("click", ()=>{ offset=offset+limit; loadList(); });
 
-  async function loadDetail(exam_id){
-    selected = String(exam_id);
-    showErr(derr, "");
-    dsub.textContent = `Exam ID: ${selected}`;
-    detail.innerHTML = `<div class="muted">Cargando…</div>`;
-
-    btnCopy.disabled = false;
-    btnCopy.onclick = async () => { try{ await navigator.clipboard.writeText(selected); }catch{} };
-
-    const API = normApi(elApi.value);
-    const url = `${API}/webhook/endodb/vcc/detail?exam_id=${encodeURIComponent(selected)}`;
-
-    try{
-      const data = await jget(url);
-      const s = data.summary || {};
-      const fields = data.fields || [];
-
-      const f = (name) => {
-        const x = fields.find(r => r.field_name === name);
-        return x ? x.value_json : null;
-      };
-
-      detail.innerHTML = `
-        <div style="font-weight:800;margin-bottom:6px">Resumen (vcc_results)</div>
-        <div class="muted" style="margin-bottom:10px">
-          Boston: <b>${s.boston_total ?? "—"}</b> • Izq: <b>${s.boston_izquierdo ?? "—"}</b> • Transv: <b>${s.boston_transverso ?? "—"}</b> • Der: <b>${s.boston_derecho ?? "—"}</b><br>
-          Ciego: <b>${boolTxt(s.llego_a_ciego)}</b> • Pólipos: <b>${boolTxt(s.polipos)}</b> • Terapéutica: <b>${boolTxt(s.terapeutica)}</b>
-        </div>
-
-        <div style="font-weight:800;margin-bottom:6px">Campos guardados (fields_text)</div>
-        <div class="tableWrap">
-          <table>
-            <thead><tr><th>field_name</th><th>value_json</th><th>updated_at</th></tr></thead>
-            <tbody>
-              ${fields.map(r => `
-                <tr>
-                  <td><code>${r.field_name}</code></td>
-                  <td><code>${JSON.stringify(r.value_json)}</code></td>
-                  <td class="muted">${fmt(r.updated_at)}</td>
-                </tr>
-              `).join("")}
-            </tbody>
-          </table>
-        </div>
-      `;
-
-      // rehighlight selection
-      document.querySelectorAll("#tbody tr").forEach(tr => {
-        const code = tr.querySelector("code")?.textContent;
-        tr.classList.toggle("sel", code === selected);
-      });
-
-    }catch(e){
-      showErr(derr, String(e.message || e));
-      detail.innerHTML = `<div class="muted">Error cargando detalle</div>`;
-    }
-  }
-
-  btnReload.addEventListener("click", loadList);
-  elQ.addEventListener("keydown", (e) => { if (e.key === "Enter") loadList(); });
-
-  loadList();
-})();
+loadList();
 </script>
 </body>
 </html>
+HTML
