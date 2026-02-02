@@ -550,371 +550,70 @@
     showToast._t = setTimeout(() => toast.classList.remove("show"), 3400);
   }
 
-  async function fetchJSON(url){
-    const r = await fetch(url, { method: "GET" });
-    if(!r.ok){
-      const txt = await r.text().catch(() => "");
-      throw new Error(`HTTP ${r.status}${txt ? " - " + txt.slice(0,120) : ""}`);
-    }
-    return await r.json();
+async function fetchJSON(url){
+  const r = await fetch(url, { method: "GET" });
+  if(!r.ok){
+    const txt = await r.text().catch(() => "");
+    throw new Error(`HTTP ${r.status}${txt ? " - " + txt.slice(0,120) : ""}`);
   }
+  return await r.json();
+}
 
-  function setTabs(tab){
-    activeTab = tab;
-    document.querySelectorAll(".tab").forEach(t => {
-      t.classList.toggle("active", t.dataset.tab === tab);
-    });
-    renderDetail();
-  }
-
-  function filteredList(){
-    const q = (elQ.value || "").trim().toLowerCase();
-    if (!q) return list;
-    return list.filter(it =>
-      String(it.patient_code || "").toLowerCase().includes(q) ||
-      String(it.exam_id || "").toLowerCase().includes(q)
-    );
-  }
-
-  function updateKpis(itemsShown){
-    // ADR viene del endpoint; acá calculo solo lo que depende de la lista cargada
-    const shown = itemsShown.length;
-    const valid = itemsShown.filter(x => !!x.vcc_valid_for_quality).length;
-
-    kpiShown.textContent = shown ? String(shown) : "—";
-    kpiShownMeta.textContent = shown ? `limit=${elLimit.value} • filtro=${elValidOnly.checked ? "valid_only" : "all"}` : "—";
-
-    if (shown) {
-      const p = (valid / shown) * 100;
-      kpiValid.textContent = `${p.toFixed(1)}%`;
-      kpiValidMeta.textContent = `${valid} / ${shown} en la lista`;
-    } else {
-      kpiValid.textContent = "—";
-      kpiValidMeta.textContent = "—";
+// Devuelve el primer valor definido (no null/undefined) de una lista de claves en un objeto
+function pick(obj, ...keys){
+  for (const k of keys){
+    if (obj && Object.prototype.hasOwnProperty.call(obj, k)) {
+      const v = obj[k];
+      if (v !== undefined && v !== null) return v;
     }
   }
+  return undefined;
+}
 
-  // --- Data loaders
-  async function loadADR(){
-    const data = await fetchJSON(`${API}/api/v1/metrics/adr`);
-    kpiAdr.textContent = (data.adr_percent==null) ? "—" : `${data.adr_percent}%`;
-    kpiAdrMeta.textContent = `Numerador: ${data.numerator} • Denominador: ${data.denominator}`;
+// Busca un campo en modelo EAV: [{field_name, value_json, ...}]
+function fieldVal(fields, ...names){
+  if (!Array.isArray(fields)) return undefined;
+  for (const name of names){
+    const f = fields.find(x => x && x.field_name === name);
+    if (f && f.value_json !== undefined && f.value_json !== null) return f.value_json;
   }
+  return undefined;
+}
 
-  async function loadList(){
-    const validOnly = !!elValidOnly.checked;
-    const limit = Number(elLimit.value || 100);
-    const url = `${API}/api/v1/vcc?limit=${limit}&offset=0&valid_only=${validOnly}`;
-
-    elApiMeta.textContent = `${API}`;
-    elListMeta.textContent = "Cargando…";
-
-    const data = await fetchJSON(url);
-    list = data.items || [];
-
-    renderList();
-  }
-
-  function renderList(){
-    const items = filteredList();
-    updateKpis(items);
-
-    elTbody.innerHTML = "";
-
-    if (!items.length){
-      elListMeta.textContent = "Sin resultados.";
-      return;
-    }
-
-    elListMeta.textContent = `Mostrando ${items.length} registros.`;
-
-    for(const it of items){
-      const tr = document.createElement("tr");
-      tr.dataset.examId = it.exam_id;
-
-      tr.innerHTML = `
-        <td>${escapeHtml(fmtDate(it.performed_at || it.created_at))}</td>
-        <td><span class="mono">${escapeHtml(it.patient_code ?? "—")}</span></td>
-        <td>${escapeHtml(it.boston_total ?? "—")}</td>
-        <td>${escapeHtml(it.polyp_count ?? "—")}</td>
-        <td>${it.therapeutic_intervention ? "Sí" : "No"}</td>
-        <td>${(it.adenoma_detected && it.pathology_linked) ? "Sí" : "—"}</td>
-        <td></td>
-      `;
-
-      const tdValid = tr.querySelectorAll("td")[6];
-      tdValid.appendChild(
-        it.vcc_valid_for_quality ? chip("ok", "Sí") : chip("bad", "No")
-      );
-
-      tr.addEventListener("click", () => selectExam(it.exam_id, tr));
-
-      // keep selection highlight after filtering
-      if (selectedExamId && it.exam_id === selectedExamId) {
-        tr.classList.add("selected");
-        selectedRow = tr;
-      }
-
-      elTbody.appendChild(tr);
-    }
-  }
-
-  async function selectExam(exam_id, row){
-    selectedExamId = exam_id;
-    if (selectedRow) selectedRow.classList.remove("selected");
-    selectedRow = row;
-    if (selectedRow) selectedRow.classList.add("selected");
-
-    elDetailSub.textContent = `Exam: ${exam_id}`;
-    elDetailBody.innerHTML = `<div class="empty">Cargando detalle…</div>`;
-
+// Intento en cascada: devuelve el primer JSON que responda OK
+async function tryFetchAny(urls){
+  let lastErr = null;
+  for (const url of urls){
     try {
-      const data = await fetchJSON(`${API}/api/v1/vcc/${exam_id}`);
-      selectedDetail = data;
-
-      // PDF link
-      const files = data.files || [];
-      const pdf = files.find(f => f.kind === "raw_pdf");
-      const pdfUrl = pdf ? `${API}/api/v1/vcc/${exam_id}/files/raw_pdf` : null;
-
-      if (pdfUrl) {
-        elPdfLink.style.display = "inline-block";
-        elPdfLink.href = pdfUrl;
-      } else {
-        elPdfLink.style.display = "none";
-        elPdfLink.href = "#";
-      }
-
-      renderDetail();
-
+      return await fetchJSON(url);
     } catch (e) {
-      selectedDetail = null;
-      elDetailBody.innerHTML = `<div class="empty"><b>Error al cargar.</b> ${escapeHtml(e.message || String(e))}</div>`;
-      showToast("bad", "No se pudo cargar el detalle", e.message || String(e));
+      lastErr = e;
     }
   }
+  throw lastErr || new Error("No se pudo obtener respuesta de ningún endpoint.");
+}
 
-  function renderDetail(){
-    if (!selectedExamId || !selectedDetail){
-      elDetailBody.innerHTML = `<div class="empty">Elegí un registro a la izquierda. Si no aparece nada, revisá el <b>API base</b> y tocá <b>Recargar</b>.</div>`;
-      return;
-    }
-
-    const s = selectedDetail.summary || {};
-    const fields = selectedDetail.fields || [];
-    const files = selectedDetail.files || [];
-
-    const pdf = files.find(f => f.kind === "raw_pdf");
-    const pdfUrl = pdf ? `${API}/api/v1/vcc/${selectedExamId}/files/raw_pdf` : null;
-
-    if (activeTab === "summary") {
-      const valid = !!s.vcc_valid_for_quality;
-      const adenoma = (s.adenoma_detected && s.pathology_linked) ? true : false;
-
-      elDetailBody.innerHTML = `
-        <div style="display:grid; gap:10px;">
-          <div class="row" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-            <span class="chip warn mono">${escapeHtml(selectedExamId)}</span>
-            ${valid ? `<span class="chip ok">VCC válida</span>` : `<span class="chip bad">VCC no válida</span>`}
-            ${adenoma ? `<span class="chip ok">Adenoma</span>` : `<span class="chip">Adenoma —</span>`}
-            ${s.therapeutic_intervention ? `<span class="chip warn">Terapéutica</span>` : `<span class="chip">Sin terapéutica</span>`}
-          </div>
-
-          <div class="tableWrap" style="overflow:hidden;">
-            <table>
-              <tbody>
-                <tr><td class="muted" style="width:160px;">Paciente</td><td><span class="mono"><b>${escapeHtml(s.patient_code ?? "—")}</b></span></td></tr>
-                <tr><td class="muted">Fecha</td><td><b>${escapeHtml(fmtDate(s.performed_at || s.created_at))}</b></td></tr>
-                <tr><td class="muted">Boston total</td><td><b>${escapeHtml(s.boston_total ?? "—")}</b></td></tr>
-                <tr><td class="muted">Pólipos</td><td><b>${escapeHtml(s.polyp_count ?? "—")}</b></td></tr>
-                <tr><td class="muted">Ciego</td><td>${s.cecum_reached ? "Sí" : "No"}</td></tr>
-                <tr><td class="muted">Adenoma detectado</td><td>${adenoma ? "Sí" : "—"}</td></tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div class="muted" style="font-size:12px;">
-            Archivos: ${files.length ? files.map(f => `<span class="chip">${escapeHtml(f.kind)}</span>`).join(" ") : "—"}
-          </div>
-        </div>
-      `;
-      return;
-    }
-
-    if (activeTab === "fields") {
-      elDetailBody.innerHTML = `
-        <div class="tableWrap">
-          <table>
-            <thead><tr><th>Campo</th><th>Valor</th><th>Rev.</th></tr></thead>
-            <tbody>
-              ${fields.length ? fields.map(f => `
-                <tr>
-                  <td class="mono">${escapeHtml(f.field_name)}</td>
-                  <td><code>${escapeHtml(JSON.stringify(f.value_json))}</code></td>
-                  <td>${f.reviewed ? "✔" : "—"}</td>
-                </tr>
-              `).join("") : `<tr><td colspan="3" class="muted">Sin campos.</td></tr>`}
-            </tbody>
-          </table>
-        </div>
-      `;
-      return;
-    }
-
-    if (activeTab === "pdf") {
-      if (!pdfUrl){
-        elDetailBody.innerHTML = `<div class="empty"><b>PDF no disponible.</b> Este estudio no tiene raw_pdf asociado.</div>`;
-        return;
-      }
-
-      // Embed
-      elDetailBody.innerHTML = `
-        <div class="muted" style="font-size:12px; margin-bottom:8px;">
-          Si el PDF no se ve, abrilo con el botón <b>PDF</b> (arriba a la derecha).
-        </div>
-        <div class="tableWrap" style="height: 70vh; overflow:hidden;">
-          <iframe src="${escapeHtml(pdfUrl)}" style="width:100%; height:70vh; border:0;"></iframe>
-        </div>
-      `;
-      return;
-    }
+// Normaliza respuestas heterogéneas del backend a: { summary, fields, files }
+function normalizeDetail(raw){
+  // Caso A: el endpoint ya devuelve el array de fields
+  if (Array.isArray(raw)){
+    return { summary: {}, fields: raw, files: [] };
   }
-
-  // --- CSV Export
-  function exportCSV(){
-    const items = filteredList();
-    if (!items.length){
-      showToast("warn", "Nada para exportar", "La lista está vacía o el filtro no devuelve resultados.");
-      return;
-    }
-
-    const header = [
-      "exam_id","performed_at","created_at","patient_code","boston_total","polyp_count",
-      "therapeutic_intervention","adenoma_detected","pathology_linked","vcc_valid_for_quality"
-    ];
-
-    const rows = items.map(it => header.map(k => {
-      const v = it[k];
-      const s = (v == null) ? "" : String(v);
-      // CSV escaping
-      return /[\n\r\",]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
-    }).join(","));
-
-    const csv = [header.join(","), ...rows].join("\n");
-
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `endodb_vcc_${new Date().toISOString().slice(0,10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-
-    URL.revokeObjectURL(url);
-    showToast("ok", "Exportado", `CSV generado con ${items.length} filas.`);
+  // Caso B: objeto (puede traer summary/fields/files o solo summary)
+  const out = {
+    summary: raw?.summary ?? raw ?? {},
+    fields: raw?.fields ?? [],
+    files: raw?.files ?? []
+  };
+  // Si fields viene envuelto
+  if (!Array.isArray(out.fields)){
+    out.fields = out.fields?.items ?? [];
   }
-
-  // --- Copy exam_id
-  async function copyExamId(){
-    if (!selectedExamId){
-      showToast("warn", "Nada para copiar", "Primero seleccioná un estudio.");
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(selectedExamId);
-      showToast("ok", "Copiado", selectedExamId);
-    } catch {
-      showToast("warn", "No se pudo copiar", "El navegador bloqueó el clipboard.");
-    }
+  if (!Array.isArray(out.files)){
+    out.files = out.files?.items ?? [];
   }
+  return out;
+}
 
-  // --- Events
-  btnReload.addEventListener("click", async () => {
-    API = normApi(elApiBase.value);
-    saveSetting("endodb_api", API);
-    await reloadAll();
-  });
-
-  btnExport.addEventListener("click", exportCSV);
-  btnCopy.addEventListener("click", copyExamId);
-
-  elQ.addEventListener("input", () => {
-    renderList();
-  });
-
-  elValidOnly.addEventListener("change", () => {
-    reloadListOnly();
-  });
-
-  elLimit.addEventListener("change", () => {
-    reloadListOnly();
-  });
-
-  elApiBase.addEventListener("blur", () => {
-    const v = normApi(elApiBase.value);
-    if (v && v !== API){
-      API = v;
-      saveSetting("endodb_api", API);
-      elApiMeta.textContent = API;
-      showToast("warn", "API base actualizado", "Tocá Recargar para aplicar.");
-    }
-  });
-
-  document.querySelectorAll(".tab").forEach(t => {
-    t.addEventListener("click", () => setTabs(t.dataset.tab));
-  });
-
-  async function reloadListOnly(){
-    try {
-      API = normApi(elApiBase.value);
-      saveSetting("endodb_api", API);
-      await loadList();
-      showToast("ok", "Lista actualizada", "Filtro aplicado.");
-    } catch (e) {
-      showToast("bad", "Error al cargar lista", e.message || String(e));
-      elListMeta.textContent = "Error al cargar.";
-    }
-  }
-
-  async function reloadAll(){
-    try {
-      selectedExamId = null;
-      selectedDetail = null;
-      if (selectedRow) selectedRow.classList.remove("selected");
-      selectedRow = null;
-      elPdfLink.style.display = "none";
-      elPdfLink.href = "#";
-      elDetailSub.textContent = "Seleccioná un estudio.";
-      elDetailBody.innerHTML = `<div class="empty">Cargando…</div>`;
-
-      await Promise.all([loadADR(), loadList()]);
-      showToast("ok", "Listo", "Métricas y lista recargadas.");
-
-      // si había un filtro escrito, re-render
-      renderList();
-
-      // detail empty
-      elDetailBody.innerHTML = `<div class="empty">Elegí un registro a la izquierda.</div>`;
-
-    } catch (e) {
-      showToast("bad", "No se pudo recargar", e.message || String(e));
-      elDetailBody.innerHTML = `<div class="empty"><b>Error:</b> ${escapeHtml(e.message || String(e))}</div>`;
-    }
-  }
-
-  // --- Init
-  function init(){
-    elApiBase.value = API;
-    elApiMeta.textContent = API;
-
-    // Primer load
-    reloadAll();
-  }
-
-  init();
-})();
-</script>
-</body>
-</html>
+// Construye un resumen "UI-friendly" usando sinónimos (incluye tus claves en español)
+function buildSummary(summary, fields){
