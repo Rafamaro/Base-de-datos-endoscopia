@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>EndoDB — Viewer</title>
+  <title>EndoDB — Viewer (VCC)</title>
 
   <!-- Inter (si falla, cae a system-ui) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -42,7 +42,6 @@
         linear-gradient(180deg, var(--bg0), var(--bg1));
     }
 
-    /* Layout */
     .wrap{ max-width: 1180px; margin: 0 auto; padding: 18px; }
 
     .topbar{
@@ -97,20 +96,6 @@
     .cardTitle{ font-weight: 800; font-size: 14px; }
     .cardHint{ color: var(--muted); font-size: 12px; line-height: 1.35; margin-top: 4px; }
 
-    .kpis{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
-    .kpi{
-      padding: 12px;
-      border-radius: 16px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,.9);
-      box-shadow: 0 6px 18px rgba(31,41,55,.06);
-      min-height: 74px;
-    }
-    .kpiLabel{ color:var(--muted); font-size: 12px; }
-    .kpiValue{ font-size: 22px; font-weight: 900; margin-top: 4px; letter-spacing:.2px; }
-    .kpiMeta{ color:var(--muted); font-size: 12px; margin-top: 4px; }
-
-    /* Controls */
     .controls{ display:flex; gap: 10px; flex-wrap: wrap; align-items:center; }
 
     label{ display:block; font-size:12px; color: var(--muted); margin: 0 0 6px 2px; }
@@ -157,8 +142,6 @@
       color: #fff;
     }
 
-    .btn.ghost{ background: transparent; box-shadow:none; }
-
     .toggle{
       display:flex;
       align-items:center;
@@ -168,12 +151,10 @@
       border: 1px solid var(--line);
       background: #fff;
     }
-
     .toggle input{ width:auto; margin:0; }
 
     .muted{ color: var(--muted); }
 
-    /* Table */
     .tableWrap{
       border-radius: 16px;
       border: 1px solid var(--line);
@@ -257,8 +238,6 @@
       color: #111827;
     }
 
-    .divider{ border:none; border-top:1px solid rgba(231,222,212,.9); margin: 12px 0; }
-
     .empty{
       padding: 18px;
       border-radius: 16px;
@@ -269,72 +248,41 @@
       line-height:1.4;
     }
 
-    .toast{
-      position: fixed;
-      left: 16px;
-      bottom: 16px;
-      max-width: min(520px, calc(100vw - 32px));
-      padding: 12px 14px;
-      border-radius: 16px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,.95);
-      box-shadow: 0 20px 60px rgba(17,24,39,.18);
-      display:none;
-      gap: 10px;
-      align-items:flex-start;
-      z-index: 50;
-    }
-    .toast.show{ display:flex; }
-    .toastTitle{ font-weight: 900; font-size: 13px; }
-    .toastBody{ color: var(--muted); font-size: 12px; margin-top: 2px; line-height:1.35; }
-
-    .icon{ width: 16px; height:16px; display:inline-block; }
-
     .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
 
-    /* Responsive */
-    @media (max-width: 980px){
-      .grid{ grid-template-columns: 1fr; }
-      .kpis{ grid-template-columns: 1fr; }
+    .errorBox{
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(220,38,38,.35);
+      background: rgba(220,38,38,.08);
+      color: #7f1d1d;
+      font-size: 12px;
+      line-height: 1.35;
+      white-space: pre-wrap;
     }
 
+    @media (max-width: 980px){
+      .grid{ grid-template-columns: 1fr; }
+    }
     @media (max-width: 620px){
       .wrap{ padding: 14px; }
-      .pill{ align-self:flex-start; }
       thead th:nth-child(4), tbody td:nth-child(4),
       thead th:nth-child(5), tbody td:nth-child(5),
       thead th:nth-child(6), tbody td:nth-child(6){ display:none; }
     }
   </style>
 </head>
+
 <body>
   <div class="wrap">
     <div class="topbar">
       <div>
         <h1 class="title">EndoDB — Viewer (VCC)</h1>
         <div class="subtitle">
-          Lista + detalle en una sola pantalla. Cambiá el <span class="mono">API base</span> si movés el backend.
+          Este viewer muestra lo que realmente se guardó: <span class="mono">fields_text</span> (crudo) y el resumen plano.
         </div>
       </div>
       <div class="pill"><span class="dot"></span> Modo lectura • Sin PHI</div>
-    </div>
-
-    <div class="kpis">
-      <div class="kpi">
-        <div class="kpiLabel">ADR</div>
-        <div class="kpiValue" id="kpiAdr">—</div>
-        <div class="kpiMeta" id="kpiAdrMeta">—</div>
-      </div>
-      <div class="kpi">
-        <div class="kpiLabel">VCC válidas (en lista)</div>
-        <div class="kpiValue" id="kpiValid">—</div>
-        <div class="kpiMeta" id="kpiValidMeta">—</div>
-      </div>
-      <div class="kpi">
-        <div class="kpiLabel">Registros mostrados</div>
-        <div class="kpiValue" id="kpiShown">—</div>
-        <div class="kpiMeta" id="kpiShownMeta">—</div>
-      </div>
     </div>
 
     <div class="grid">
@@ -342,37 +290,26 @@
       <div class="card">
         <div class="cardHeader">
           <div>
-            <div class="cardTitle">Lista de VCC</div>
-            <div class="cardHint">Click en una fila para ver el detalle. Búsqueda por paciente o exam_id.</div>
+            <div class="cardTitle">Lista de estudios</div>
+            <div class="cardHint">Click en una fila para ver el detalle (incluye tabla completa de campos guardados).</div>
           </div>
           <div class="controls">
-            <button class="btn" id="btnExport" type="button" title="Exporta la lista mostrada a CSV">
-              <span class="icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3v10m0 0l-3-3m3 3l3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 14v4a3 3 0 003 3h10a3 3 0 003-3v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-              </span>
-              Exportar
-            </button>
-            <button class="btn primary" id="btnReload" type="button">
-              <span class="icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 12a8 8 0 10-2.343 5.657" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M20 7v5h-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </span>
-              Recargar
-            </button>
+            <button class="btn primary" id="btnReload" type="button">Recargar</button>
           </div>
         </div>
 
         <div class="controls" style="margin-bottom: 10px;">
-          <div style="min-width: 240px; flex: 1;">
+          <div style="min-width: 280px; flex: 1;">
             <label for="apiBase">API base</label>
-            <input id="apiBase" placeholder="https://mini-server.tailXXXXX.ts.net" />
+            <input id="apiBase" placeholder="https://tu-api..." />
           </div>
 
-          <div style="min-width: 230px; flex: 1;">
-            <label for="q">Buscar</label>
-            <input id="q" placeholder="Paciente_001 o test-veda-001…" />
+          <div style="min-width: 240px; flex: 1;">
+            <label for="q">Buscar (exam_id)</label>
+            <input id="q" placeholder="1271879…" />
           </div>
 
-          <div style="min-width: 200px;">
+          <div style="min-width: 190px;">
             <label for="limit">Límite</label>
             <select id="limit">
               <option value="50">50</option>
@@ -381,11 +318,11 @@
             </select>
           </div>
 
-          <div class="toggle" style="min-width: 280px;">
+          <div class="toggle" style="min-width: 260px;">
             <input id="validOnly" type="checkbox" />
             <div>
-              <div style="font-weight:800; font-size: 13px;">Solo VCC válidas</div>
-              <div class="muted" style="font-size:12px">Boston ≥ 6 y ciego</div>
+              <div style="font-weight:800; font-size: 13px;">Solo válidas</div>
+              <div class="muted" style="font-size:12px">Filtro del backend si existe</div>
             </div>
           </div>
         </div>
@@ -395,17 +332,14 @@
             <thead>
               <tr>
                 <th>Fecha</th>
-                <th>Paciente</th>
+                <th>Exam ID</th>
                 <th>Boston</th>
+                <th>Ciego</th>
                 <th>Pólipos</th>
                 <th>Terapéutica</th>
-                <th>Adenoma</th>
-                <th>Válida</th>
               </tr>
             </thead>
-            <tbody id="tbody">
-              <!-- rows -->
-            </tbody>
+            <tbody id="tbody"></tbody>
           </table>
         </div>
 
@@ -423,27 +357,16 @@
             <div class="cardHint" id="detailSub">Seleccioná un estudio.</div>
           </div>
           <div class="controls">
-            <button class="btn" id="btnCopy" type="button" title="Copiar exam_id">
-              <span class="icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 9h10v12H9V9z" stroke="currentColor" stroke-width="2"/><path d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1" stroke="currentColor" stroke-width="2"/></svg>
-              </span>
-              Copiar
-            </button>
+            <button class="btn" id="btnCopy" type="button" disabled>Copiar exam_id</button>
             <a id="pdfLink" href="#" target="_blank" style="text-decoration:none; display:none;">
-              <button class="btn" type="button" title="Abrir PDF">
-                <span class="icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 2H7a2 2 0 00-2 2v16a2 2 0 002 2h10a2 2 0 002-2V8l-5-6z" stroke="currentColor" stroke-width="2"/><path d="M14 2v6h6" stroke="currentColor" stroke-width="2"/></svg>
-                </span>
-                PDF
-              </button>
+              <button class="btn" type="button">PDF</button>
             </a>
           </div>
         </div>
 
         <div class="tabs">
           <div class="tab active" data-tab="summary">Resumen</div>
-          <div class="tab" data-tab="fields">Campos</div>
-          <div class="tab" data-tab="pdf">Vista PDF</div>
+          <div class="tab" data-tab="fields">Campos (fields_text)</div>
         </div>
 
         <div id="detailBody">
@@ -453,20 +376,13 @@
     </div>
   </div>
 
-  <div class="toast" id="toast">
-    <div class="chip warn" id="toastBadge">Info</div>
-    <div>
-      <div class="toastTitle" id="toastTitle">—</div>
-      <div class="toastBody" id="toastBody">—</div>
-    </div>
-  </div>
-
 <script>
 (() => {
-  // --- Config
+  // ========= CONFIG =========
+  // Precarga: si tu API final es otra, la cambiás acá.
   const DEFAULT_API = "https://mini-server.tail577189.ts.net";
 
-  // --- Elements
+  // ========= Elements =========
   const elApiBase = document.getElementById("apiBase");
   const elQ = document.getElementById("q");
   const elLimit = document.getElementById("limit");
@@ -475,145 +391,365 @@
   const elListMeta = document.getElementById("listMeta");
   const elApiMeta = document.getElementById("apiMeta");
   const btnReload = document.getElementById("btnReload");
-  const btnExport = document.getElementById("btnExport");
-  const btnCopy = document.getElementById("btnCopy");
-  const elPdfLink = document.getElementById("pdfLink");
-
-  const kpiAdr = document.getElementById("kpiAdr");
-  const kpiAdrMeta = document.getElementById("kpiAdrMeta");
-  const kpiValid = document.getElementById("kpiValid");
-  const kpiValidMeta = document.getElementById("kpiValidMeta");
-  const kpiShown = document.getElementById("kpiShown");
-  const kpiShownMeta = document.getElementById("kpiShownMeta");
 
   const elDetailSub = document.getElementById("detailSub");
   const elDetailBody = document.getElementById("detailBody");
+  const btnCopy = document.getElementById("btnCopy");
+  const pdfLink = document.getElementById("pdfLink");
 
-  const toast = document.getElementById("toast");
-  const toastBadge = document.getElementById("toastBadge");
-  const toastTitle = document.getElementById("toastTitle");
-  const toastBody = document.getElementById("toastBody");
-
-  // --- State
+  // ========= State =========
   let API = loadSetting("endodb_api") || DEFAULT_API;
-  let list = [];          // data.items
+  let listItems = [];
   let selectedExamId = null;
-  let selectedRow = null;
-  let selectedDetail = null; // full detail
   let activeTab = "summary";
+  let selectedDetail = null;
 
-  // --- Helpers
-  function normApi(s){
-    return (s || "").trim().replace(/\/+$/g, "");
-  }
-
-  function loadSetting(k){
-    try { return localStorage.getItem(k); } catch { return null; }
-  }
-
-  function saveSetting(k,v){
-    try { localStorage.setItem(k, v); } catch {}
-  }
+  // ========= Helpers =========
+  function normApi(s){ return (s || "").trim().replace(/\/+$/g, ""); }
+  function loadSetting(k){ try { return localStorage.getItem(k); } catch { return null; } }
+  function saveSetting(k,v){ try { localStorage.setItem(k, v); } catch {} }
 
   function fmtDate(iso){
     if (!iso) return "—";
     const d = new Date(iso);
-    return d.toLocaleString("es-AR");
+    if (isNaN(d.getTime())) return String(iso);
+    return d.toLocaleString("es-AR", { dateStyle:"short", timeStyle:"short" });
   }
 
-  function pct(n){
-    if (n == null || Number.isNaN(n)) return "—";
-    // si ya viene como % (ej: 27.3)
-    return `${Number(n).toFixed(1)}%`;
-  }
-
-  function chip(kind, text){
-    const span = document.createElement("span");
-    span.className = `chip ${kind || ""}`;
-    span.textContent = text;
-    return span;
+  async function fetchJSON(url){
+    const r = await fetch(url, { headers: { "Accept":"application/json" } });
+    if (!r.ok){
+      const txt = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status} - ${url}\n${txt.slice(0,400)}`);
+    }
+    return await r.json();
   }
 
   function escapeHtml(str){
-    return (str ?? "").toString().replace(/[&<>"']/g, (m) => ({
+    return (str ?? "").toString().replace(/[&<>"']/g, m => ({
       "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
     }[m]));
   }
 
-  function showToast(level, title, body){
-    toastBadge.className = `chip ${level === "ok" ? "ok" : level === "bad" ? "bad" : "warn"}`;
-    toastBadge.textContent = level === "ok" ? "OK" : level === "bad" ? "Error" : "Info";
-    toastTitle.textContent = title;
-    toastBody.textContent = body;
-    toast.classList.add("show");
-    clearTimeout(showToast._t);
-    showToast._t = setTimeout(() => toast.classList.remove("show"), 3400);
-  }
-
-async function fetchJSON(url){
-  const r = await fetch(url, { method: "GET" });
-  if(!r.ok){
-    const txt = await r.text().catch(() => "");
-    throw new Error(`HTTP ${r.status}${txt ? " - " + txt.slice(0,120) : ""}`);
-  }
-  return await r.json();
-}
-
-// Devuelve el primer valor definido (no null/undefined) de una lista de claves en un objeto
-function pick(obj, ...keys){
-  for (const k of keys){
-    if (obj && Object.prototype.hasOwnProperty.call(obj, k)) {
-      const v = obj[k];
-      if (v !== undefined && v !== null) return v;
-    }
-  }
-  return undefined;
-}
-
-// Busca un campo en modelo EAV: [{field_name, value_json, ...}]
-function fieldVal(fields, ...names){
-  if (!Array.isArray(fields)) return undefined;
-  for (const name of names){
+  function fieldVal(fields, name){
+    if (!Array.isArray(fields)) return null;
     const f = fields.find(x => x && x.field_name === name);
-    if (f && f.value_json !== undefined && f.value_json !== null) return f.value_json;
+    return f ? f.value_json : null;
   }
-  return undefined;
-}
 
-// Intento en cascada: devuelve el primer JSON que responda OK
-async function tryFetchAny(urls){
-  let lastErr = null;
-  for (const url of urls){
-    try {
-      return await fetchJSON(url);
-    } catch (e) {
-      lastErr = e;
+  function toBool(v){
+    if (v === true) return true;
+    if (v === false) return false;
+    if (typeof v === "string"){
+      const s = v.toLowerCase().trim();
+      return (s === "true" || s === "t" || s === "1" || s === "si" || s === "sí");
+    }
+    return null;
+  }
+
+  function toInt(v){
+    if (v == null) return null;
+    if (typeof v === "number") return v;
+    if (typeof v === "string"){
+      const n = parseInt(v, 10);
+      return Number.isFinite(n) ? n : null;
+    }
+    return null;
+  }
+
+  function chip(kind, text){
+    const cls = kind === "ok" ? "chip ok" : kind === "bad" ? "chip bad" : "chip warn";
+    return `<span class="${cls}">${escapeHtml(text)}</span>`;
+  }
+
+  async function mapLimit(arr, limit, fn){
+    const out = new Array(arr.length);
+    let i = 0;
+    const workers = new Array(limit).fill(0).map(async () => {
+      while (i < arr.length){
+        const idx = i++;
+        out[idx] = await fn(arr[idx], idx);
+      }
+    });
+    await Promise.all(workers);
+    return out;
+  }
+
+  function setActiveTab(tab){
+    activeTab = tab;
+    document.querySelectorAll(".tab").forEach(t => {
+      t.classList.toggle("active", t.dataset.tab === tab);
+    });
+    renderDetail();
+  }
+
+  // ========= API Normalization =========
+  function normalizeListResponse(raw){
+    // esperamos {items:[...]} pero toleramos [{...}]
+    if (Array.isArray(raw)) return { items: raw };
+    if (raw && Array.isArray(raw.items)) return raw;
+    return { items: [] };
+  }
+
+  function normalizeDetail(raw){
+    // esperado: {summary, fields, files} o {fields:[]} o {summary:...}
+    const out = {
+      summary: raw?.summary ?? raw ?? {},
+      fields: Array.isArray(raw?.fields) ? raw.fields : [],
+      files: Array.isArray(raw?.files) ? raw.files : []
+    };
+    return out;
+  }
+
+  // ========= Data loaders =========
+  async function fetchList(){
+    const limit = parseInt(elLimit.value || "100", 10) || 100;
+    const validOnly = !!elValidOnly.checked;
+    const url = `${API}/api/v1/vcc?limit=${limit}&offset=0&valid_only=${validOnly}`;
+    const raw = await fetchJSON(url);
+    const data = normalizeListResponse(raw);
+    return data.items || [];
+  }
+
+  async function fetchDetail(exam_id){
+    const raw = await fetchJSON(`${API}/api/v1/vcc/${encodeURIComponent(exam_id)}`);
+    return normalizeDetail(raw);
+  }
+
+  async function enrichRowFromDetail(item){
+    const exam_id = item.exam_id ?? item.id ?? item.examId;
+    if (!exam_id) return null;
+
+    const detail = await fetchDetail(exam_id);
+    const s = detail.summary || {};
+    const fields = detail.fields || [];
+
+    const created_at = s.performed_at || s.created_at || item.created_at || item.performed_at || null;
+
+    const b_total = toInt(fieldVal(fields, "boston_total"));
+    const ciego = toBool(fieldVal(fields, "llego_a_ciego"));
+    const polipos = toBool(fieldVal(fields, "polipos"));
+    const terapeutica = toBool(fieldVal(fields, "terapeutica"));
+
+    return {
+      exam_id: String(exam_id),
+      created_at,
+      boston_total: b_total,
+      llego_a_ciego: ciego,
+      polipos,
+      terapeutica
+    };
+  }
+
+  function applySearch(rows){
+    const q = (elQ.value || "").trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(r => (r.exam_id || "").toLowerCase().includes(q));
+  }
+
+  function renderList(rows){
+    elTbody.innerHTML = "";
+
+    if (!rows.length){
+      elTbody.innerHTML = `<tr><td colspan="6" class="muted">Sin resultados</td></tr>`;
+      return;
+    }
+
+    for (const r of rows){
+      const tr = document.createElement("tr");
+      tr.dataset.examId = r.exam_id;
+      tr.classList.toggle("selected", r.exam_id === selectedExamId);
+
+      tr.innerHTML = `
+        <td>${fmtDate(r.created_at)}</td>
+        <td><code>${escapeHtml(r.exam_id)}</code></td>
+        <td>${r.boston_total == null ? chip("warn","—") : chip("ok", String(r.boston_total))}</td>
+        <td>${r.llego_a_ciego == null ? chip("warn","—") : (r.llego_a_ciego ? chip("ok","Sí") : chip("bad","No"))}</td>
+        <td>${r.polipos == null ? chip("warn","—") : (r.polipos ? chip("ok","Sí") : chip("bad","No"))}</td>
+        <td>${r.terapeutica == null ? chip("warn","—") : (r.terapeutica ? chip("ok","Sí") : chip("bad","No"))}</td>
+      `;
+
+      tr.addEventListener("click", () => selectExam(r.exam_id));
+      elTbody.appendChild(tr);
     }
   }
-  throw lastErr || new Error("No se pudo obtener respuesta de ningún endpoint.");
-}
 
-// Normaliza respuestas heterogéneas del backend a: { summary, fields, files }
-function normalizeDetail(raw){
-  // Caso A: el endpoint ya devuelve el array de fields
-  if (Array.isArray(raw)){
-    return { summary: {}, fields: raw, files: [] };
-  }
-  // Caso B: objeto (puede traer summary/fields/files o solo summary)
-  const out = {
-    summary: raw?.summary ?? raw ?? {},
-    fields: raw?.fields ?? [],
-    files: raw?.files ?? []
-  };
-  // Si fields viene envuelto
-  if (!Array.isArray(out.fields)){
-    out.fields = out.fields?.items ?? [];
-  }
-  if (!Array.isArray(out.files)){
-    out.files = out.files?.items ?? [];
-  }
-  return out;
-}
+  async function loadAndRender(){
+    API = normApi(elApiBase.value);
+    saveSetting("endodb_api", API);
 
-// Construye un resumen "UI-friendly" usando sinónimos (incluye tus claves en español)
-function buildSummary(summary, fields){
+    elApiMeta.textContent = API ? `API: ${API}` : "API: —";
+    elListMeta.textContent = "Cargando…";
+    elTbody.innerHTML = `<tr><td colspan="6" class="muted">Cargando…</td></tr>`;
+
+    try{
+      const items = await fetchList();
+      listItems = items;
+
+      // Convertimos lista → exam_ids
+      const examIds = items.map(x => x.exam_id ?? x.id ?? x.examId).filter(Boolean).map(String);
+
+      // Enriquecemos con detalles (lo real guardado). Concurrencia 8.
+      const enriched = await mapLimit(examIds, 8, async (id) => {
+        try { return await enrichRowFromDetail({ exam_id: id }); }
+        catch { return { exam_id: id, created_at: null, boston_total: null, llego_a_ciego:null, polipos:null, terapeutica:null }; }
+      });
+
+      const filtered = applySearch(enriched);
+      renderList(filtered);
+
+      elListMeta.textContent = `Mostrando: ${filtered.length} (de ${enriched.length})`;
+      if (filtered.length && !selectedExamId){
+        selectExam(filtered[0].exam_id);
+      } else {
+        // si hay seleccionado, re-render detalle
+        renderDetail();
+      }
+    }catch(e){
+      elTbody.innerHTML = `<tr><td colspan="6"><div class="errorBox">${escapeHtml(e.message || String(e))}</div></td></tr>`;
+      elListMeta.textContent = "Error cargando lista";
+    }
+  }
+
+  async function selectExam(exam_id){
+    selectedExamId = String(exam_id);
+
+    // marcar seleccionado en tabla
+    document.querySelectorAll("tbody tr").forEach(tr => {
+      tr.classList.toggle("selected", tr.dataset.examId === selectedExamId);
+    });
+
+    btnCopy.disabled = false;
+    btnCopy.onclick = async () => {
+      try{
+        await navigator.clipboard.writeText(selectedExamId);
+      }catch{}
+    };
+
+    elDetailSub.textContent = `Exam ID: ${selectedExamId}`;
+    elDetailBody.innerHTML = `<div class="muted">Cargando detalle…</div>`;
+    pdfLink.style.display = "none";
+
+    try{
+      selectedDetail = await fetchDetail(selectedExamId);
+      renderDetail();
+    }catch(e){
+      selectedDetail = null;
+      elDetailBody.innerHTML = `<div class="errorBox">${escapeHtml(e.message || String(e))}</div>`;
+    }
+  }
+
+  function renderDetail(){
+    if (!selectedExamId || !selectedDetail){
+      elDetailBody.innerHTML = `<div class="empty">Elegí un registro a la izquierda.</div>`;
+      return;
+    }
+
+    const s = selectedDetail.summary || {};
+    const fields = selectedDetail.fields || [];
+    const files = selectedDetail.files || [];
+
+    const b_total = toInt(fieldVal(fields, "boston_total"));
+    const b_izq   = toInt(fieldVal(fields, "boston_izquierdo"));
+    const b_tr    = toInt(fieldVal(fields, "boston_transverso"));
+    const b_der   = toInt(fieldVal(fields, "boston_derecho"));
+    const ciego   = toBool(fieldVal(fields, "llego_a_ciego"));
+    const pol     = toBool(fieldVal(fields, "polipos"));
+    const terap   = toBool(fieldVal(fields, "terapeutica"));
+
+    const performed = s.performed_at || s.created_at || null;
+
+    // PDF link
+    const pdf = files.find(f => f.kind === "raw_pdf") || files.find(f => String(f.path || "").toLowerCase().endsWith(".pdf"));
+    if (pdf){
+      pdfLink.href = `${API}/api/v1/vcc/${encodeURIComponent(selectedExamId)}/files/raw_pdf`;
+      pdfLink.style.display = "";
+    } else {
+      pdfLink.style.display = "none";
+    }
+
+    if (activeTab === "summary"){
+      elDetailBody.innerHTML = `
+        <div style="display:grid; gap:10px;">
+          <div><span class="muted">Fecha:</span> <b>${escapeHtml(fmtDate(performed))}</b></div>
+
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            ${b_total == null ? chip("warn","Boston —") : chip("ok", `Boston ${b_total}`)}
+            ${ciego == null ? chip("warn","Ciego —") : (ciego ? chip("ok","Llegó a ciego") : chip("bad","No llegó a ciego"))}
+            ${pol == null ? chip("warn","Pólipos —") : (pol ? chip("ok","Pólipos: Sí") : chip("bad","Pólipos: No"))}
+            ${terap == null ? chip("warn","Terapéutica —") : (terap ? chip("ok","Terapéutica: Sí") : chip("bad","Terapéutica: No"))}
+          </div>
+
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Boston izq</th>
+                  <th>Boston transv</th>
+                  <th>Boston der</th>
+                  <th>Boston total</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>${b_izq ?? "—"}</td>
+                  <td>${b_tr ?? "—"}</td>
+                  <td>${b_der ?? "—"}</td>
+                  <td><b>${b_total ?? "—"}</b></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="muted" style="font-size:12px;">
+            Nota: este resumen se arma leyendo directamente <span class="mono">fields_text</span> (vía tu API).
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // activeTab === "fields"
+    const rows = fields.slice().sort((a,b) => String(a.field_name).localeCompare(String(b.field_name)));
+
+    elDetailBody.innerHTML = `
+      <div class="cardHint" style="margin-bottom:10px;">
+        Esto es lo guardado literalmente (cada fila equivale a una variable).
+      </div>
+      <div class="tableWrap">
+        <table>
+          <thead><tr><th>field_name</th><th>value_json</th><th>updated_at</th></tr></thead>
+          <tbody>
+            ${rows.map(f => `
+              <tr>
+                <td><code>${escapeHtml(String(f.field_name))}</code></td>
+                <td><code>${escapeHtml(JSON.stringify(f.value_json))}</code></td>
+                <td class="muted">${escapeHtml(fmtDate(f.updated_at))}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // ========= Events =========
+  elApiBase.value = API;
+  elApiMeta.textContent = `API: ${API}`;
+
+  btnReload.addEventListener("click", loadAndRender);
+  elQ.addEventListener("input", () => loadAndRender());
+  elValidOnly.addEventListener("change", loadAndRender);
+  elLimit.addEventListener("change", loadAndRender);
+
+  document.querySelectorAll(".tab").forEach(t => {
+    t.addEventListener("click", () => setActiveTab(t.dataset.tab));
+  });
+
+  // ========= Init =========
+  loadAndRender();
+
+})();
+</script>
+</body>
+</html>
