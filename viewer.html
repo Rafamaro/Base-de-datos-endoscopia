@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>EndoDB — Viewer (VCC)</title>
 
-  <!-- Inter (si falla, cae a system-ui) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -22,7 +21,6 @@
 
       --accent:#b45309;
       --accent2:#c2410c;
-      --accentSoft:#fde6cf;
       --ok:#059669;
       --bad:#dc2626;
       --warn:#b45309;
@@ -96,7 +94,7 @@
     .cardTitle{ font-weight: 800; font-size: 14px; }
     .cardHint{ color: var(--muted); font-size: 12px; line-height: 1.35; margin-top: 4px; }
 
-    .controls{ display:flex; gap: 10px; flex-wrap: wrap; align-items:center; }
+    .controls{ display:flex; gap: 10px; flex-wrap: wrap; align-items:flex-end; }
 
     label{ display:block; font-size:12px; color: var(--muted); margin: 0 0 6px 2px; }
 
@@ -131,6 +129,7 @@
       display:inline-flex;
       align-items:center;
       gap: 8px;
+      height: 40px;
     }
     .btn:hover{ background: #fffaf4; }
     .btn:active{ transform: translateY(1px); }
@@ -150,6 +149,7 @@
       border-radius: 14px;
       border: 1px solid var(--line);
       background: #fff;
+      height: 40px;
     }
     .toggle input{ width:auto; margin:0; }
 
@@ -259,6 +259,7 @@
       font-size: 12px;
       line-height: 1.35;
       white-space: pre-wrap;
+      margin-top: 10px;
     }
 
     @media (max-width: 980px){
@@ -279,7 +280,7 @@
       <div>
         <h1 class="title">EndoDB — Viewer (VCC)</h1>
         <div class="subtitle">
-          Este viewer muestra lo que realmente se guardó: <span class="mono">fields_text</span> (crudo) y el resumen plano.
+          Viewer de lectura. Usa tu API para mostrar lo guardado en <span class="mono">fields_text</span> y el resumen (Boston/ceco/pólipos/terapéutica).
         </div>
       </div>
       <div class="pill"><span class="dot"></span> Modo lectura • Sin PHI</div>
@@ -291,7 +292,7 @@
         <div class="cardHeader">
           <div>
             <div class="cardTitle">Lista de estudios</div>
-            <div class="cardHint">Click en una fila para ver el detalle (incluye tabla completa de campos guardados).</div>
+            <div class="cardHint">Recargar trae la lista. “Ir” carga un exam_id específico (ej: 1271879) aunque no esté en la lista.</div>
           </div>
           <div class="controls">
             <button class="btn primary" id="btnReload" type="button">Recargar</button>
@@ -305,8 +306,13 @@
           </div>
 
           <div style="min-width: 240px; flex: 1;">
-            <label for="q">Buscar (exam_id)</label>
-            <input id="q" placeholder="1271879…" />
+            <label for="q">Ir a exam_id (carga directo)</label>
+            <input id="q" placeholder="1271879" />
+          </div>
+
+          <div style="min-width: 90px;">
+            <label>&nbsp;</label>
+            <button class="btn" id="btnGo" type="button">Ir</button>
           </div>
 
           <div style="min-width: 190px;">
@@ -318,11 +324,11 @@
             </select>
           </div>
 
-          <div class="toggle" style="min-width: 260px;">
+          <div class="toggle" style="min-width: 220px;">
             <input id="validOnly" type="checkbox" />
             <div>
               <div style="font-weight:800; font-size: 13px;">Solo válidas</div>
-              <div class="muted" style="font-size:12px">Filtro del backend si existe</div>
+              <div class="muted" style="font-size:12px">si el backend lo soporta</div>
             </div>
           </div>
         </div>
@@ -347,6 +353,8 @@
           <div id="listMeta">—</div>
           <div class="mono" id="apiMeta">—</div>
         </div>
+
+        <div id="listErr" class="errorBox" style="display:none;"></div>
       </div>
 
       <!-- RIGHT: DETAIL -->
@@ -370,19 +378,19 @@
         </div>
 
         <div id="detailBody">
-          <div class="empty">Elegí un registro a la izquierda. Si no aparece nada, revisá el <b>API base</b> y tocá <b>Recargar</b>.</div>
+          <div class="empty">Elegí un registro de la lista o escribí un exam_id y tocá <b>Ir</b>.</div>
         </div>
+
+        <div id="detailErr" class="errorBox" style="display:none;"></div>
       </div>
     </div>
   </div>
 
 <script>
 (() => {
-  // ========= CONFIG =========
-  // Precarga: si tu API final es otra, la cambiás acá.
+  // Precargado. Si tu API final cambia, podés editar esto o escribirlo en el campo “API base”.
   const DEFAULT_API = "https://mini-server.tail577189.ts.net";
 
-  // ========= Elements =========
   const elApiBase = document.getElementById("apiBase");
   const elQ = document.getElementById("q");
   const elLimit = document.getElementById("limit");
@@ -391,20 +399,20 @@
   const elListMeta = document.getElementById("listMeta");
   const elApiMeta = document.getElementById("apiMeta");
   const btnReload = document.getElementById("btnReload");
+  const btnGo = document.getElementById("btnGo");
+  const listErr = document.getElementById("listErr");
 
   const elDetailSub = document.getElementById("detailSub");
   const elDetailBody = document.getElementById("detailBody");
+  const detailErr = document.getElementById("detailErr");
   const btnCopy = document.getElementById("btnCopy");
   const pdfLink = document.getElementById("pdfLink");
 
-  // ========= State =========
   let API = loadSetting("endodb_api") || DEFAULT_API;
-  let listItems = [];
   let selectedExamId = null;
   let activeTab = "summary";
   let selectedDetail = null;
 
-  // ========= Helpers =========
   function normApi(s){ return (s || "").trim().replace(/\/+$/g, ""); }
   function loadSetting(k){ try { return localStorage.getItem(k); } catch { return null; } }
   function saveSetting(k,v){ try { localStorage.setItem(k, v); } catch {} }
@@ -420,7 +428,7 @@
     const r = await fetch(url, { headers: { "Accept":"application/json" } });
     if (!r.ok){
       const txt = await r.text().catch(() => "");
-      throw new Error(`HTTP ${r.status} - ${url}\n${txt.slice(0,400)}`);
+      throw new Error(`HTTP ${r.status} - ${url}\n${txt.slice(0,300)}`);
     }
     return await r.json();
   }
@@ -477,31 +485,24 @@
 
   function setActiveTab(tab){
     activeTab = tab;
-    document.querySelectorAll(".tab").forEach(t => {
-      t.classList.toggle("active", t.dataset.tab === tab);
-    });
+    document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
     renderDetail();
   }
 
-  // ========= API Normalization =========
   function normalizeListResponse(raw){
-    // esperamos {items:[...]} pero toleramos [{...}]
     if (Array.isArray(raw)) return { items: raw };
     if (raw && Array.isArray(raw.items)) return raw;
     return { items: [] };
   }
 
   function normalizeDetail(raw){
-    // esperado: {summary, fields, files} o {fields:[]} o {summary:...}
-    const out = {
+    return {
       summary: raw?.summary ?? raw ?? {},
       fields: Array.isArray(raw?.fields) ? raw.fields : [],
       files: Array.isArray(raw?.files) ? raw.files : []
     };
-    return out;
   }
 
-  // ========= Data loaders =========
   async function fetchList(){
     const limit = parseInt(elLimit.value || "100", 10) || 100;
     const validOnly = !!elValidOnly.checked;
@@ -516,15 +517,12 @@
     return normalizeDetail(raw);
   }
 
-  async function enrichRowFromDetail(item){
-    const exam_id = item.exam_id ?? item.id ?? item.examId;
-    if (!exam_id) return null;
-
+  async function enrichRowFromDetail(exam_id){
     const detail = await fetchDetail(exam_id);
     const s = detail.summary || {};
     const fields = detail.fields || [];
 
-    const created_at = s.performed_at || s.created_at || item.created_at || item.performed_at || null;
+    const created_at = s.performed_at || s.created_at || null;
 
     const b_total = toInt(fieldVal(fields, "boston_total"));
     const ciego = toBool(fieldVal(fields, "llego_a_ciego"));
@@ -541,15 +539,8 @@
     };
   }
 
-  function applySearch(rows){
-    const q = (elQ.value || "").trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(r => (r.exam_id || "").toLowerCase().includes(q));
-  }
-
   function renderList(rows){
     elTbody.innerHTML = "";
-
     if (!rows.length){
       elTbody.innerHTML = `<tr><td colspan="6" class="muted">Sin resultados</td></tr>`;
       return;
@@ -568,62 +559,53 @@
         <td>${r.polipos == null ? chip("warn","—") : (r.polipos ? chip("ok","Sí") : chip("bad","No"))}</td>
         <td>${r.terapeutica == null ? chip("warn","—") : (r.terapeutica ? chip("ok","Sí") : chip("bad","No"))}</td>
       `;
-
       tr.addEventListener("click", () => selectExam(r.exam_id));
       elTbody.appendChild(tr);
     }
   }
 
-  async function loadAndRender(){
+  async function loadAndRenderList(){
+    listErr.style.display = "none";
+    listErr.textContent = "";
     API = normApi(elApiBase.value);
     saveSetting("endodb_api", API);
-
     elApiMeta.textContent = API ? `API: ${API}` : "API: —";
-    elListMeta.textContent = "Cargando…";
+    elListMeta.textContent = "Cargando lista…";
     elTbody.innerHTML = `<tr><td colspan="6" class="muted">Cargando…</td></tr>`;
 
     try{
       const items = await fetchList();
-      listItems = items;
-
-      // Convertimos lista → exam_ids
       const examIds = items.map(x => x.exam_id ?? x.id ?? x.examId).filter(Boolean).map(String);
 
-      // Enriquecemos con detalles (lo real guardado). Concurrencia 8.
       const enriched = await mapLimit(examIds, 8, async (id) => {
-        try { return await enrichRowFromDetail({ exam_id: id }); }
+        try { return await enrichRowFromDetail(id); }
         catch { return { exam_id: id, created_at: null, boston_total: null, llego_a_ciego:null, polipos:null, terapeutica:null }; }
       });
 
-      const filtered = applySearch(enriched);
-      renderList(filtered);
-
-      elListMeta.textContent = `Mostrando: ${filtered.length} (de ${enriched.length})`;
-      if (filtered.length && !selectedExamId){
-        selectExam(filtered[0].exam_id);
-      } else {
-        // si hay seleccionado, re-render detalle
-        renderDetail();
-      }
+      renderList(enriched);
+      elListMeta.textContent = `Mostrando: ${enriched.length}`;
+      if (enriched.length && !selectedExamId) selectExam(enriched[0].exam_id);
     }catch(e){
-      elTbody.innerHTML = `<tr><td colspan="6"><div class="errorBox">${escapeHtml(e.message || String(e))}</div></td></tr>`;
       elListMeta.textContent = "Error cargando lista";
+      listErr.style.display = "block";
+      listErr.textContent = String(e.message || e);
+      elTbody.innerHTML = `<tr><td colspan="6" class="muted">Error</td></tr>`;
     }
   }
 
   async function selectExam(exam_id){
+    detailErr.style.display = "none";
+    detailErr.textContent = "";
     selectedExamId = String(exam_id);
 
-    // marcar seleccionado en tabla
+    // marcar seleccionado
     document.querySelectorAll("tbody tr").forEach(tr => {
       tr.classList.toggle("selected", tr.dataset.examId === selectedExamId);
     });
 
     btnCopy.disabled = false;
     btnCopy.onclick = async () => {
-      try{
-        await navigator.clipboard.writeText(selectedExamId);
-      }catch{}
+      try{ await navigator.clipboard.writeText(selectedExamId); } catch {}
     };
 
     elDetailSub.textContent = `Exam ID: ${selectedExamId}`;
@@ -635,13 +617,15 @@
       renderDetail();
     }catch(e){
       selectedDetail = null;
-      elDetailBody.innerHTML = `<div class="errorBox">${escapeHtml(e.message || String(e))}</div>`;
+      detailErr.style.display = "block";
+      detailErr.textContent = String(e.message || e);
+      elDetailBody.innerHTML = `<div class="empty">No se pudo cargar el detalle. Revisá el API base y el exam_id.</div>`;
     }
   }
 
   function renderDetail(){
     if (!selectedExamId || !selectedDetail){
-      elDetailBody.innerHTML = `<div class="empty">Elegí un registro a la izquierda.</div>`;
+      elDetailBody.innerHTML = `<div class="empty">Elegí un registro a la izquierda o escribí un exam_id y tocá Ir.</div>`;
       return;
     }
 
@@ -656,10 +640,9 @@
     const ciego   = toBool(fieldVal(fields, "llego_a_ciego"));
     const pol     = toBool(fieldVal(fields, "polipos"));
     const terap   = toBool(fieldVal(fields, "terapeutica"));
-
     const performed = s.performed_at || s.created_at || null;
 
-    // PDF link
+    // PDF
     const pdf = files.find(f => f.kind === "raw_pdf") || files.find(f => String(f.path || "").toLowerCase().endsWith(".pdf"));
     if (pdf){
       pdfLink.href = `${API}/api/v1/vcc/${encodeURIComponent(selectedExamId)}/files/raw_pdf`;
@@ -702,19 +685,18 @@
           </div>
 
           <div class="muted" style="font-size:12px;">
-            Nota: este resumen se arma leyendo directamente <span class="mono">fields_text</span> (vía tu API).
+            Resumen armado leyendo directamente los campos guardados (fields_text) vía tu API.
           </div>
         </div>
       `;
       return;
     }
 
-    // activeTab === "fields"
+    // fields tab
     const rows = fields.slice().sort((a,b) => String(a.field_name).localeCompare(String(b.field_name)));
-
     elDetailBody.innerHTML = `
       <div class="cardHint" style="margin-bottom:10px;">
-        Esto es lo guardado literalmente (cada fila equivale a una variable).
+        Campos guardados (cada fila = una variable).
       </div>
       <div class="tableWrap">
         <table>
@@ -733,21 +715,33 @@
     `;
   }
 
-  // ========= Events =========
+  function goToExam(){
+    API = normApi(elApiBase.value);
+    saveSetting("endodb_api", API);
+    elApiMeta.textContent = API ? `API: ${API}` : "API: —";
+    const id = (elQ.value || "").trim();
+    if (!id) return;
+    selectExam(id);
+  }
+
+  // init UI
   elApiBase.value = API;
   elApiMeta.textContent = `API: ${API}`;
 
-  btnReload.addEventListener("click", loadAndRender);
-  elQ.addEventListener("input", () => loadAndRender());
-  elValidOnly.addEventListener("change", loadAndRender);
-  elLimit.addEventListener("change", loadAndRender);
+  // events
+  btnReload.addEventListener("click", loadAndRenderList);
+  btnGo.addEventListener("click", goToExam);
+  elQ.addEventListener("keydown", (ev) => { if (ev.key === "Enter") goToExam(); });
+
+  elValidOnly.addEventListener("change", loadAndRenderList);
+  elLimit.addEventListener("change", loadAndRenderList);
 
   document.querySelectorAll(".tab").forEach(t => {
     t.addEventListener("click", () => setActiveTab(t.dataset.tab));
   });
 
-  // ========= Init =========
-  loadAndRender();
+  // first load
+  loadAndRenderList();
 
 })();
 </script>
