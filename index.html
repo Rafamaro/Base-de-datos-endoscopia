@@ -25,6 +25,7 @@
       --accentSoft:#fde6cf;
       --ok:#059669;
       --bad:#dc2626;
+      --warn:#b45309;
 
       --radius:18px;
     }
@@ -110,7 +111,7 @@
       margin: 0 0 6px 2px;
     }
 
-    input, select, textarea{
+    input, textarea{
       width:100%;
       padding: 11px 12px;
       border-radius: 14px;
@@ -121,17 +122,11 @@
       font-size: 14px;
       transition: border-color .15s ease, box-shadow .15s ease;
     }
-    input:focus, select:focus, textarea:focus{
+    input:focus, textarea:focus{
       border-color: rgba(180,83,9,.45);
       box-shadow: 0 0 0 4px rgba(180,83,9,.12);
     }
     textarea{ min-height: 88px; resize: vertical; }
-
-    /* 🔒 endpoint bloqueado */
-    input[readonly], input:disabled{
-      background: rgba(31,41,55,.04);
-      color: rgba(31,41,55,.70);
-    }
 
     .row{
       display:flex;
@@ -166,9 +161,7 @@
       background: linear-gradient(135deg, rgba(180,83,9,.92), rgba(194,65,12,.92));
       color: white;
     }
-    .btn.primary:hover{
-      filter: brightness(1.02);
-    }
+    .btn.primary:hover{ filter: brightness(1.02); }
 
     .hint{
       color: var(--muted);
@@ -229,7 +222,7 @@
 
     .tag{
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 800;
       padding: 4px 10px;
       border-radius: 999px;
       border: 1px solid var(--line);
@@ -238,6 +231,7 @@
     }
     .tag.ok{ border-color: rgba(5,150,105,.30); color: var(--ok); background: rgba(5,150,105,.08); }
     .tag.bad{ border-color: rgba(220,38,38,.30); color: var(--bad); background: rgba(220,38,38,.06); }
+    .tag.warn{ border-color: rgba(180,83,9,.35); color: var(--warn); background: rgba(180,83,9,.08); }
 
     .progress{
       height: 10px;
@@ -250,7 +244,7 @@
       height:100%;
       width:0%;
       background: linear-gradient(135deg, rgba(180,83,9,.92), rgba(194,65,12,.92));
-      transition: width .2s ease;
+      transition: width .12s ease;
     }
 
     .result{
@@ -297,9 +291,9 @@
   <div class="wrap">
     <div class="header">
       <div>
-        <h1>EndoDB — Subida de informes</h1>
+        <h1>EndoDB — Subida de informes (múltiples)</h1>
         <div class="subtitle">
-          Subí un PDF del informe endoscópico. Se envía como <code>multipart/form-data</code> al webhook de n8n.
+          Subí uno o varios PDFs. El sistema enviará <b>1 request por PDF</b> al webhook de n8n (1 ejecución por estudio).
         </div>
       </div>
       <div class="pill"><span class="dot"></span> Modo seguro: seudónimos</div>
@@ -309,73 +303,56 @@
       <div class="grid">
         <div>
           <label for="endpoint">Webhook n8n (Production)</label>
-          <input id="endpoint" readonly />
+          <input id="endpoint" placeholder="https://n8n.drperez86.com/webhook/endodb/process-exam" inputmode="url" />
           <div class="hint">
-            Endpoint fijo. Campos: <code>exam_id</code>, <code>patient_code</code>, <code>procedure_type</code>, <code>notes</code> y <code>file</code> (PDF).
+            Se envía <code>multipart/form-data</code> con el campo <code>file</code> (PDF).
+            <br/>
+            <span class="hint">Tip: si esto se abre desde un dominio distinto al de n8n, tu n8n/proxy debe permitir CORS para requests AJAX.</span>
           </div>
         </div>
 
         <div>
-          <label for="exam_id">exam_id</label>
-          <input id="exam_id" placeholder="test-001" autocapitalize="off" autocomplete="off" />
-          <div class="hint">Identificador del estudio (requerido).</div>
-        </div>
-
-        <div>
-          <label for="patient_mode">Paciente</label>
-          <select id="patient_mode">
-            <option value="existing">Seleccionar existente</option>
-            <option value="new">Crear nuevo (auto)</option>
-          </select>
-
-          <div style="margin-top:10px" id="patient_existing_wrap">
-            <label for="patient_code">Código seudónimo</label>
-            <input id="patient_code" placeholder="Paciente_001" autocapitalize="off" autocomplete="off" />
-            <div class="hint">Formato: <code>Paciente_###</code> (ej: Paciente_001).</div>
-          </div>
-
-          <div style="margin-top:10px; display:none" id="patient_new_wrap">
-            <label>Paciente nuevo</label>
-            <input value="Se asigna automáticamente (Paciente_###)" disabled />
-          </div>
-        </div>
-
-        <div>
-          <label for="procedure_type">Tipo de procedimiento</label>
-          <select id="procedure_type" required>
-            <option value="VCC">VCC</option>
-            <option value="VEDA">VEDA</option>
-          </select>
-
-          <div style="margin-top:10px">
-            <label for="notes">Notas internas (opcional)</label>
-            <textarea id="notes" placeholder="Ej: control post polipectomía, anticoagulación, etc."></textarea>
-            <div class="hint">Pistas clínicas rápidas. No metas datos identificatorios.</div>
-          </div>
+          <label for="notes">Notas internas (opcional)</label>
+          <textarea id="notes" placeholder="Ej: control post polipectomía, anticoagulación, etc. (sin datos identificatorios)"></textarea>
+          <div class="hint">Se envían las mismas notas para todos los PDFs del lote.</div>
         </div>
 
         <div>
           <label>Acciones</label>
           <div class="row">
-            <input id="filepicker" type="file" accept="application/pdf" style="display:none" />
-            <button class="btn" id="btnPick" type="button">Elegir PDF</button>
-            <button class="btn primary" id="btnUpload" type="button" disabled>Subir PDF</button>
+            <input id="filepicker" type="file" accept="application/pdf" multiple style="display:none" />
+            <button class="btn" id="btnPick" type="button">Elegir PDFs</button>
+            <button class="btn primary" id="btnUpload" type="button" disabled>Subir y procesar</button>
             <button class="btn" id="btnClear" type="button" disabled>Limpiar</button>
           </div>
 
-          <div class="progress" aria-label="progreso" title="Progreso de subida">
+          <div class="progress" aria-label="progreso" title="Progreso total del lote">
             <div class="bar" id="bar"></div>
           </div>
 
           <div class="hint">
-            Recomendación: 25–50 MB por envío. Si el PDF pesa mucho, probá comprimirlo.
+            Se suben en serie (uno tras otro) para que n8n dispare el flujo por archivo.
+          </div>
+        </div>
+
+        <div>
+          <label>Estado</label>
+          <div class="hint" id="statusLine">—</div>
+          <div class="hint" style="margin-top:10px">
+            Campo enviado por cada PDF:
+            <br/>
+            • <code>file</code> (binario PDF)
+            <br/>
+            • <code>client_filename</code> (texto, opcional)
+            <br/>
+            • <code>notes</code> (texto, opcional)
           </div>
         </div>
       </div>
 
       <div class="drop" id="drop">
         <div class="dropTitle">Arrastrá y soltá aquí</div>
-        <div class="dropSub">Solo PDF. Se sube como <code>multipart/form-data</code> con nombre de campo <code>file</code>.</div>
+        <div class="dropSub">Podés soltar varios PDFs. Se enviarán uno por uno.</div>
         <div class="files" id="files"></div>
       </div>
 
@@ -385,16 +362,9 @@
 
 <script>
 (() => {
-  // ✅ Endpoint FIJO (Cloudflare Tunnel → n8n production webhook)
-  const ENDPOINT = "https://n8n.drperez86.com/webhook/endodb/process-exam";
+  const DEFAULT_ENDPOINT = "https://n8n.drperez86.com/webhook/endodb/process-exam";
 
   const elEndpoint = document.getElementById("endpoint");
-  const elExam = document.getElementById("exam_id");
-  const elMode = document.getElementById("patient_mode");
-  const elExistingWrap = document.getElementById("patient_existing_wrap");
-  const elNewWrap = document.getElementById("patient_new_wrap");
-  const elPatient = document.getElementById("patient_code");
-  const elProc = document.getElementById("procedure_type");
   const elNotes = document.getElementById("notes");
   const elDrop = document.getElementById("drop");
   const elFiles = document.getElementById("files");
@@ -404,11 +374,14 @@
   const btnClear = document.getElementById("btnClear");
   const elBar = document.getElementById("bar");
   const elResult = document.getElementById("result");
+  const elStatusLine = document.getElementById("statusLine");
 
-  elEndpoint.value = ENDPOINT;
+  elEndpoint.value = DEFAULT_ENDPOINT;
 
-  /** @type {File[]} */
+  // queue items: { id, file, status: "pending|uploading|ok|error", response, error }
+  /** @type {{id:string,file:File,status:string,response?:any,error?:any}[]} */
   let queue = [];
+  let uploading = false;
 
   const allowed = (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 
@@ -419,7 +392,9 @@
     return `${x.toFixed(i===0?0:1)} ${u[i]}`;
   };
 
-  const setProgress = (p) => { elBar.style.width = `${Math.max(0, Math.min(100, p))}%`; };
+  const setProgress = (p) => {
+    elBar.style.width = `${Math.max(0, Math.min(100, p))}%`;
+  };
 
   const setResult = (html) => {
     elResult.style.display = "block";
@@ -433,42 +408,65 @@
 
   const refreshButtons = () => {
     const hasFiles = queue.length > 0;
-    btnClear.disabled = !hasFiles;
+    btnClear.disabled = !hasFiles || uploading;
+    btnPick.disabled = uploading;
+    const endpointOk = (elEndpoint.value || "").trim().length > 0;
 
-    const mode = elMode.value;
-    const patientOk = (mode === "new") || /^Paciente_\d{3,}$/.test((elPatient.value||"").trim());
-    const examOk = (elExam.value || "").trim().length > 0;
+    const bad = queue.some(x => !allowed(x.file));
+    btnUpload.disabled = !(hasFiles && endpointOk && !bad && !uploading);
+  };
 
-    btnUpload.disabled = !(hasFiles && patientOk && examOk);
+  const statusPill = (status) => {
+    const span = document.createElement("span");
+    span.className = "tag " + (
+      status === "ok" ? "ok" :
+      status === "error" ? "bad" :
+      status === "uploading" ? "warn" : ""
+    );
+    span.textContent =
+      status === "ok" ? "OK" :
+      status === "error" ? "Error" :
+      status === "uploading" ? "Subiendo" : "Pendiente";
+    return span;
   };
 
   const renderQueue = () => {
     elFiles.innerHTML = "";
-    queue.forEach((f, idx) => {
+    queue.forEach((it, idx) => {
       const div = document.createElement("div");
       div.className = "file";
 
       const left = document.createElement("div");
       left.style.flex = "1";
       left.innerHTML = `
-        <div class="fileName">${escapeHtml(f.name)}</div>
-        <div class="fileMeta">${escapeHtml(fmtSize(f.size))} • ${escapeHtml(f.type || "desconocido")}</div>
+        <div class="fileName">${escapeHtml(it.file.name)}</div>
+        <div class="fileMeta">${escapeHtml(fmtSize(it.file.size))} • ${escapeHtml(it.file.type || "desconocido")}</div>
       `;
 
       const right = document.createElement("div");
       right.className = "row";
 
-      const tag = document.createElement("span");
-      tag.className = "tag " + (allowed(f) ? "ok" : "bad");
-      tag.textContent = allowed(f) ? "OK" : "Solo PDF";
+      const tagType = document.createElement("span");
+      tagType.className = "tag " + (allowed(it.file) ? "ok" : "bad");
+      tagType.textContent = allowed(it.file) ? "PDF" : "Solo PDF";
+
+      const tagStatus = statusPill(it.status);
 
       const rm = document.createElement("button");
       rm.className = "btn";
       rm.type = "button";
       rm.textContent = "Quitar";
-      rm.onclick = () => { queue.splice(idx, 1); renderQueue(); refreshButtons(); };
+      rm.disabled = uploading && it.status === "uploading";
+      rm.onclick = () => {
+        if (uploading && it.status === "uploading") return;
+        queue.splice(idx, 1);
+        renderQueue();
+        refreshButtons();
+        refreshStatusLine();
+      };
 
-      right.appendChild(tag);
+      right.appendChild(tagType);
+      right.appendChild(tagStatus);
       right.appendChild(rm);
 
       div.appendChild(left);
@@ -479,31 +477,40 @@
     refreshButtons();
   };
 
+  const refreshStatusLine = () => {
+    const total = queue.length;
+    const ok = queue.filter(x => x.status === "ok").length;
+    const err = queue.filter(x => x.status === "error").length;
+    const up = queue.filter(x => x.status === "uploading").length;
+    const pend = queue.filter(x => x.status === "pending").length;
+
+    if (!total) {
+      elStatusLine.textContent = "—";
+      return;
+    }
+
+    elStatusLine.textContent = `Total: ${total} • Pendientes: ${pend} • Subiendo: ${up} • OK: ${ok} • Errores: ${err}`;
+  };
+
   const addFiles = (files) => {
     resetResult();
     const arr = Array.from(files || []);
     if (!arr.length) return;
 
-    // Solo 1 archivo por envío
-    queue = [arr[0]];
+    // Evitar duplicados por nombre+size (simple)
+    const exists = new Set(queue.map(x => `${x.file.name}::${x.file.size}`));
+    const toAdd = arr.filter(f => !exists.has(`${f.name}::${f.size}`));
+
+    const mapped = toAdd.map(f => ({
+      id: cryptoRandomId(),
+      file: f,
+      status: "pending",
+    }));
+
+    queue = queue.concat(mapped);
     renderQueue();
+    refreshStatusLine();
   };
-
-  // Patient mode
-  elMode.addEventListener("change", () => {
-    const mode = elMode.value;
-    if (mode === "new") {
-      elExistingWrap.style.display = "none";
-      elNewWrap.style.display = "block";
-    } else {
-      elExistingWrap.style.display = "block";
-      elNewWrap.style.display = "none";
-    }
-    refreshButtons();
-  });
-
-  elPatient.addEventListener("input", refreshButtons);
-  elExam.addEventListener("input", refreshButtons);
 
   // Picker
   btnPick.addEventListener("click", () => elPicker.click());
@@ -522,92 +529,159 @@
 
   // Clear
   btnClear.addEventListener("click", () => {
+    if (uploading) return;
     queue = [];
     renderQueue();
     setProgress(0);
     resetResult();
+    refreshStatusLine();
   });
 
-  // Upload (XHR for real progress)
+  elEndpoint.addEventListener("input", refreshButtons);
+
+  // Upload sequentially (1 request por archivo)
   btnUpload.addEventListener("click", async () => {
     resetResult();
     setProgress(0);
 
-    const mode = elMode.value;
-    const patient_code = (mode === "new") ? "NEW" : (elPatient.value || "").trim();
-    const exam_id = (elExam.value || "").trim();
-    const procedure_type = (elProc.value || "VCC");
+    const url = (elEndpoint.value || "").trim();
     const notes = (elNotes.value || "").trim();
 
-    const bad = queue.filter(f => !allowed(f));
+    const bad = queue.filter(it => !allowed(it.file));
     if (bad.length) {
-      setResult(`<div><b>Archivo no permitido.</b> Solo PDF.</div>`);
+      setResult(`<div><b>Hay archivos no permitidos.</b> Solo PDF.</div>`);
       return;
     }
     if (!queue.length) {
-      setResult(`<div><b>No hay archivo.</b> Elegí un PDF.</div>`);
+      setResult(`<div><b>No hay archivos.</b> Elegí uno o varios PDFs.</div>`);
       return;
     }
 
-    const form = new FormData();
-    form.append("exam_id", exam_id);
-    form.append("patient_code", patient_code);
-    form.append("procedure_type", procedure_type);
-    form.append("notes", notes);
-    form.append("file", queue[0], queue[0].name); // ✅ nombre de campo: file
+    uploading = true;
+    refreshButtons();
 
-    btnUpload.disabled = true;
-    btnPick.disabled = true;
-    btnClear.disabled = true;
+    // Reset statuses for a fresh run (solo los que no están OK)
+    queue = queue.map(it => (it.status === "ok" ? it : ({...it, status:"pending", response: undefined, error: undefined})));
+    renderQueue();
+    refreshStatusLine();
 
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", ENDPOINT, true); // ✅ endpoint fijo
+    // total size for global progress
+    const totalBytes = queue.reduce((acc, it) => acc + (it.file?.size || 0), 0);
+    let doneBytes = 0;
 
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) setProgress((e.loaded / e.total) * 100);
-    };
+    const responses = [];
 
-    xhr.onreadystatechange = () => {
-      if (xhr.readyState !== 4) return;
+    for (let i = 0; i < queue.length; i++) {
+      const it = queue[i];
+      if (it.status === "ok") {
+        doneBytes += it.file.size;
+        setProgress(totalBytes ? (doneBytes / totalBytes) * 100 : 0);
+        continue;
+      }
 
-      btnPick.disabled = false;
-      btnClear.disabled = queue.length === 0;
-      refreshButtons();
+      // mark uploading
+      it.status = "uploading";
+      renderQueue();
+      refreshStatusLine();
 
       try {
+        const payload = await uploadOne(url, it.file, notes, (loaded) => {
+          const p = totalBytes ? ((doneBytes + loaded) / totalBytes) * 100 : 0;
+          setProgress(p);
+        });
+
+        it.status = "ok";
+        it.response = payload;
+        responses.push({ file: it.file.name, ok: true, response: payload });
+
+        doneBytes += it.file.size;
+        setProgress(totalBytes ? (doneBytes / totalBytes) * 100 : 100);
+
+      } catch (err) {
+        it.status = "error";
+        it.error = err;
+        responses.push({ file: it.file.name, ok: false, error: String(err && err.message ? err.message : err) });
+
+        // aun si falla, consideramos ese tamaño como "hecho" para no clavar la barra
+        doneBytes += it.file.size;
+        setProgress(totalBytes ? (doneBytes / totalBytes) * 100 : 100);
+      }
+
+      renderQueue();
+      refreshStatusLine();
+    }
+
+    uploading = false;
+    refreshButtons();
+    refreshStatusLine();
+
+    // Summary
+    const okCount = responses.filter(r => r.ok).length;
+    const errCount = responses.length - okCount;
+
+    setResult(`
+      <div style="display:grid;gap:10px">
+        <div><b>Listo.</b> Enviados: <code>${responses.length}</code> • OK: <code>${okCount}</code> • Errores: <code>${errCount}</code></div>
+        <div class="hint">Se disparó el workflow 1 vez por PDF (1 estudio = 1 request).</div>
+        <details>
+          <summary style="cursor:pointer;font-weight:700">Ver respuestas</summary>
+          <pre>${escapeHtml(JSON.stringify(responses, null, 2))}</pre>
+        </details>
+      </div>
+    `);
+  });
+
+  function uploadOne(url, file, notes, onProgress){
+    return new Promise((resolve, reject) => {
+      const form = new FormData();
+      form.append("file", file, file.name);
+      form.append("client_filename", file.name);
+      if (notes) form.append("notes", notes);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url, true);
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && typeof onProgress === "function") {
+          onProgress(e.loaded);
+        }
+      };
+
+      xhr.onreadystatechange = () => {
+        if (xhr.readyState !== 4) return;
+
         const isOk = xhr.status >= 200 && xhr.status < 300;
         const ct = xhr.getResponseHeader("content-type") || "";
-        const payload = ct.includes("application/json") ? JSON.parse(xhr.responseText) : { raw: xhr.responseText };
+
+        let payload;
+        try {
+          payload = ct.includes("application/json") ? JSON.parse(xhr.responseText) : { raw: xhr.responseText };
+        } catch (e) {
+          payload = { raw: xhr.responseText };
+        }
 
         if (!isOk) {
-          setResult(`<div><b>Error (${xhr.status}).</b><pre>${escapeHtml(JSON.stringify(payload, null, 2))}</pre></div>`);
-          setProgress(0);
+          const msg = `HTTP ${xhr.status} - ${safeShort(payload)}`;
+          reject(new Error(msg));
           return;
         }
 
-        setResult(`
-          <div style="display:grid;gap:8px">
-            <div><b>Listo.</b> PDF enviado a n8n.</div>
-            <div class="hint">exam_id: <code>${escapeHtml(exam_id)}</code> • paciente: <code>${escapeHtml(patient_code)}</code> • tipo: <code>${escapeHtml(procedure_type)}</code></div>
-            <div class="hint">Respuesta: <pre>${escapeHtml(JSON.stringify(payload, null, 2))}</pre></div>
-          </div>
-        `);
+        resolve(payload);
+      };
 
-      } catch (err) {
-        setResult(`<div><b>Respuesta inesperada.</b> No pude parsear JSON.<pre>${escapeHtml(String(err))}</pre></div>`);
-      }
-    };
+      xhr.onerror = () => reject(new Error("Falló la conexión (network error)."));
+      xhr.send(form);
+    });
+  }
 
-    xhr.onerror = () => {
-      btnPick.disabled = false;
-      btnClear.disabled = queue.length === 0;
-      refreshButtons();
-      setResult(`<div><b>Falló la conexión.</b> Revisá red / endpoint.</div>`);
-      setProgress(0);
-    };
-
-    xhr.send(form);
-  });
+  function safeShort(obj){
+    try {
+      const s = JSON.stringify(obj);
+      return s.length > 220 ? s.slice(0,220) + "…" : s;
+    } catch {
+      return String(obj);
+    }
+  }
 
   function escapeHtml(str) {
     return (str ?? "").replace(/[&<>"']/g, (m) => ({
@@ -615,6 +689,20 @@
     }[m]));
   }
 
+  function cryptoRandomId(){
+    // Simple ID (sin depender de UUID libs)
+    try {
+      const a = new Uint8Array(8);
+      crypto.getRandomValues(a);
+      return Array.from(a).map(x=>x.toString(16).padStart(2,"0")).join("");
+    } catch {
+      return String(Date.now()) + "_" + Math.random().toString(16).slice(2);
+    }
+  }
+
+  // init
+  renderQueue();
+  refreshStatusLine();
   refreshButtons();
 })();
 </script>
