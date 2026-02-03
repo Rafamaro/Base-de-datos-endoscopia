@@ -10,7 +10,6 @@
       --bg0:#0b1220;
       --bg1:#0f1a2e;
       --card:#101c33;
-      --card2:#0d1730;
       --ink:#e7eefc;
       --muted:#a9b7d6;
       --line:rgba(255,255,255,.10);
@@ -18,7 +17,6 @@
       --warn:#fbbf24;
       --bad:#fb7185;
       --accent:#60a5fa;
-      --accent2:#a78bfa;
       --shadow: 0 10px 30px rgba(0,0,0,.35);
       --radius: 18px;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -90,12 +88,8 @@
       cursor:pointer;
       font-weight:600;
     }
-    .btn.secondary{
-      background: linear-gradient(180deg, rgba(167,139,250,.18), rgba(167,139,250,.08));
-    }
-    .btn.ghost{
-      background: transparent;
-    }
+    .btn.secondary{ background: linear-gradient(180deg, rgba(167,139,250,.18), rgba(167,139,250,.08)); }
+    .btn.ghost{ background: transparent; }
     .btn:disabled{opacity:.55;cursor:not-allowed}
     .pill{
       display:inline-flex;align-items:center;gap:8px;
@@ -109,25 +103,21 @@
     .dot.ok{background:var(--ok)}
     .dot.bad{background:var(--bad)}
     .dot.warn{background:var(--warn)}
+    .mono{font-family:var(--mono)}
+    .muted{color:var(--muted)}
 
-    .tabs{
-      display:flex;gap:10px;flex-wrap:wrap;
-      margin:16px 0 10px;
-    }
+    .tabs{ display:flex;gap:10px;flex-wrap:wrap; margin:16px 0 10px; }
     .tab{
       padding:10px 12px;border-radius: 999px;
       border:1px solid rgba(255,255,255,.14);
       background: rgba(0,0,0,.15);
-      cursor:pointer;
-      color: var(--muted);
-      user-select:none;
+      cursor:pointer;color: var(--muted);user-select:none;
     }
     .tab.active{
       background: linear-gradient(180deg, rgba(96,165,250,.25), rgba(96,165,250,.10));
       color: var(--ink);
       border-color: rgba(96,165,250,.35);
     }
-
     .panel{
       background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
       border:1px solid var(--line);
@@ -140,20 +130,12 @@
       margin-bottom:10px;
     }
     .panel-head h2{margin:0;font-size:14px}
-    .tools{
-      display:flex;gap:10px;align-items:center;flex-wrap:wrap;
-    }
-    .tools input{
-      width:260px;
-      max-width: 100%;
-    }
-
+    .tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .tools input{width:260px;max-width:100%}
     table{
       width:100%;
-      border-collapse:separate;
-      border-spacing:0;
-      overflow:hidden;
-      border-radius: 14px;
+      border-collapse:separate;border-spacing:0;
+      overflow:hidden;border-radius: 14px;
       border:1px solid rgba(255,255,255,.10);
     }
     thead th{
@@ -164,9 +146,7 @@
       padding:10px 10px;
       border-bottom:1px solid rgba(255,255,255,.10);
       position:sticky; top:0;
-      cursor:pointer;
-      user-select:none;
-      white-space:nowrap;
+      cursor:pointer; user-select:none; white-space:nowrap;
     }
     tbody td{
       padding:10px 10px;
@@ -176,8 +156,6 @@
       background: rgba(0,0,0,.10);
     }
     tbody tr:hover td{background: rgba(96,165,250,.10)}
-    .muted{color:var(--muted)}
-    .mono{font-family:var(--mono)}
     .footer{
       display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;
       margin-top:10px;color:var(--muted);font-size:12px;
@@ -207,6 +185,16 @@
       font-size:12px;
       line-height:1.35;
     }
+    .tiny{font-size:12px}
+    .inline{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .check{
+      display:flex;align-items:center;gap:8px;
+      padding:8px 10px;border-radius:12px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.12);
+      color:var(--muted);
+    }
+    .check input{width:auto}
   </style>
 </head>
 
@@ -216,8 +204,8 @@
       <div class="brand">
         <h1>Viewer • Nextcloud Tables</h1>
         <p>
-          Lee tus tablas (IDs <b>2</b> y <b>3</b>) desde <span class="mono">nextcloud.drperez86.com</span>.
-          Autenticación sugerida: <b>App Password</b> + header <span class="mono">OCS-APIRequest</span>.
+          Modo cómodo: recuerda URL/usuario/tablas y puede recordar la App Password (sesión o persistente).
+          Si algo falla, abrí <b>Debug</b> abajo para ver la respuesta cruda.
         </p>
       </div>
 
@@ -225,7 +213,7 @@
         <div class="grid">
           <div style="grid-column: 1 / -1">
             <label>Base URL (sin barra final)</label>
-            <input id="baseUrl" placeholder="https://nextcloud.drperez86.com" value="https://nextcloud.drperez86.com" />
+            <input id="baseUrl" placeholder="https://nextcloud.drperez86.com" />
           </div>
           <div>
             <label>Usuario</label>
@@ -237,11 +225,30 @@
           </div>
           <div>
             <label>Table ID #1</label>
-            <input id="t1" value="2" />
+            <input id="t1" />
           </div>
           <div>
             <label>Table ID #2</label>
-            <input id="t2" value="3" />
+            <input id="t2" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="inline tiny">
+            <span class="check" title="Se borra al cerrar el navegador (recomendado).">
+              <input type="radio" name="saveMode" id="saveSess" value="session" checked />
+              <label for="saveSess" style="margin:0;">Guardar clave: sesión</label>
+            </span>
+
+            <span class="check" title="Queda guardada (más cómodo, menos seguro).">
+              <input type="radio" name="saveMode" id="saveLocal" value="local" />
+              <label for="saveLocal" style="margin:0;">Guardar clave: permanente</label>
+            </span>
+
+            <span class="check" title="No guarda la App Password, solo URL/usuario/tablas.">
+              <input type="checkbox" id="dontSavePass" />
+              <label for="dontSavePass" style="margin:0;">No guardar clave</label>
+            </span>
           </div>
         </div>
 
@@ -249,6 +256,7 @@
           <button class="btn" id="btnLoad">Cargar</button>
           <button class="btn secondary" id="btnReload" disabled>Recargar</button>
           <button class="btn ghost" id="btnExport" disabled>Export CSV</button>
+          <button class="btn ghost" id="btnForget">Olvidar credenciales</button>
 
           <span class="pill" id="statusPill">
             <span class="dot warn"></span>
@@ -261,13 +269,13 @@
     </div>
 
     <div class="tabs">
-      <div class="tab active" id="tab1">Tabla 2</div>
-      <div class="tab" id="tab2">Tabla 3</div>
+      <div class="tab active" id="tab1">Tabla 1</div>
+      <div class="tab" id="tab2">Tabla 2</div>
     </div>
 
     <div class="panel">
       <div class="panel-head">
-        <h2 id="tableTitle">Tabla 2</h2>
+        <h2 id="tableTitle">—</h2>
         <div class="tools">
           <input id="q" placeholder="Buscar…" />
           <select id="pageSize">
@@ -303,6 +311,20 @@
   </div>
 
   <script>
+    // =========================
+    // Storage keys
+    // =========================
+    const KEY = {
+      baseUrl: "nc_viewer_baseUrl",
+      user: "nc_viewer_user",
+      t1: "nc_viewer_t1",
+      t2: "nc_viewer_t2",
+      saveMode: "nc_viewer_saveMode",        // "session" | "local"
+      dontSavePass: "nc_viewer_dontSavePass",// "1" | "0"
+      passLocal: "nc_viewer_pass_local",
+      passSession: "nc_viewer_pass_session",
+    };
+
     // =========================
     // Helpers
     // =========================
@@ -360,48 +382,32 @@
     }
 
     // =========================
-    // Nextcloud Tables API v1 parsing
+    // Nextcloud Tables parsing
     // =========================
-    // Plan:
-    // 1) GET /apps/tables/api/1/tables/{id}/columns
-    // 2) GET /apps/tables/api/1/tables/{id}/rows
-    //
-    // Nota: el header OCS-APIRequest se usa en APIs OCS/Nextcloud. :contentReference[oaicite:1]{index=1}
-    // Y en ejemplos de Tables API se usa también. :contentReference[oaicite:2]{index=2}
-
     function normalizeColumns(colsJson){
-      // Esperado: array de columnas con {id, title, ...}
       if (Array.isArray(colsJson)) return colsJson.map(c => ({
         id: c.id ?? c.columnId ?? c._id ?? c,
         title: c.title ?? c.name ?? c.label ?? String(c.id ?? c.columnId ?? c),
       }));
-
-      // Algunas APIs devuelven {data:[...]}
       if (colsJson && Array.isArray(colsJson.data)) return colsJson.data.map(c => ({
         id: c.id ?? c.columnId ?? c._id ?? c,
         title: c.title ?? c.name ?? c.label ?? String(c.id ?? c.columnId ?? c),
       }));
-
       return [];
     }
 
     function normalizeRows(rowsJson, cols){
-      // Caso típico v1: array de rows con {id, data:[{columnId,value}, ...]}
       const colById = new Map(cols.map(c => [String(c.id), c.title]));
-
       const unwrap = (x) => {
         if (Array.isArray(x)) return x;
         if (x && Array.isArray(x.data)) return x.data;
         return [];
       };
-
       const rowsArr = unwrap(rowsJson);
       const out = [];
-
       for (const r of rowsArr){
         const obj = {};
         obj["_row_id"] = r.id ?? r.rowId ?? r._id ?? "";
-
         const cells = r.data ?? r.values ?? r.cells ?? [];
         if (Array.isArray(cells)){
           for (const cell of cells){
@@ -419,10 +425,10 @@
     // UI state
     // =========================
     const state = {
-      activeIdx: 0,          // 0 -> t1, 1 -> t2
+      activeIdx: 0,
       tables: [
-        { id: 2, name: "Tabla 2", cols: [], rows: [], raw: {} },
-        { id: 3, name: "Tabla 3", cols: [], rows: [], raw: {} },
+        { id: 2, name: "Tabla 1", cols: [], rows: [], raw: {} },
+        { id: 3, name: "Tabla 2", cols: [], rows: [], raw: {} },
       ],
       sortKey: null,
       sortDir: "asc",
@@ -446,11 +452,8 @@
       const t = state.tables[state.activeIdx];
       const rows0 = t.rows || [];
       const cols0 = t.cols || [];
-
-      // Column names: prefer explicit columns + _row_id
       const colNames = ["_row_id", ...cols0.map(c => c.title)].filter((v, i, a) => a.indexOf(v) === i);
 
-      // Filter
       const q = (state.q || "").trim().toLowerCase();
       let rows = rows0;
       if (q){
@@ -464,14 +467,12 @@
         });
       }
 
-      // Sort
       if (state.sortKey){
         const k = state.sortKey;
         const dir = state.sortDir === "asc" ? 1 : -1;
         rows = [...rows].sort((a,b) => {
           const av = a[k] ?? "";
           const bv = b[k] ?? "";
-          // numeric-ish sort when possible
           const an = Number(av), bn = Number(bv);
           const aNum = !Number.isNaN(an) && String(av).trim() !== "";
           const bNum = !Number.isNaN(bn) && String(bv).trim() !== "";
@@ -480,7 +481,6 @@
         });
       }
 
-      // Pagination
       const ps = state.pageSize;
       const total = rows.length;
       const maxPage = Math.max(1, Math.ceil(total / ps));
@@ -488,7 +488,6 @@
       const start = (state.page - 1) * ps;
       const pageRows = rows.slice(start, start + ps);
 
-      // Header
       const thead = $("thead");
       thead.innerHTML = "";
       const trh = document.createElement("tr");
@@ -509,7 +508,6 @@
       }
       thead.appendChild(trh);
 
-      // Body
       const tbody = $("tbody");
       tbody.innerHTML = "";
       for (const r of pageRows){
@@ -523,7 +521,6 @@
         tbody.appendChild(tr);
       }
 
-      // Meta
       $("meta").textContent =
         `${total.toLocaleString()} filas` +
         (q ? ` (filtradas por "${state.q}")` : "") +
@@ -534,14 +531,113 @@
       $("prev").disabled = state.page <= 1;
       $("next").disabled = state.page >= maxPage;
 
-      // Debug
       $("debug").textContent = JSON.stringify(t.raw, null, 2);
+    }
+
+    // =========================
+    // Save/Load settings
+    // =========================
+    function getSaveMode(){
+      return localStorage.getItem(KEY.saveMode) || "session";
+    }
+
+    function getDontSavePass(){
+      return (localStorage.getItem(KEY.dontSavePass) || "0") === "1";
+    }
+
+    function setSaveMode(mode){
+      localStorage.setItem(KEY.saveMode, mode);
+      $("saveSess").checked = mode === "session";
+      $("saveLocal").checked = mode === "local";
+    }
+
+    function setDontSavePass(flag){
+      localStorage.setItem(KEY.dontSavePass, flag ? "1" : "0");
+      $("dontSavePass").checked = flag;
+      // si activa "no guardar", borramos lo guardado para que sea coherente
+      if (flag){
+        localStorage.removeItem(KEY.passLocal);
+        sessionStorage.removeItem(KEY.passSession);
+      }
+    }
+
+    function saveSettings(){
+      const baseUrl = $("baseUrl").value.trim();
+      const user = $("user").value.trim();
+      const t1 = $("t1").value.trim();
+      const t2 = $("t2").value.trim();
+
+      localStorage.setItem(KEY.baseUrl, baseUrl);
+      localStorage.setItem(KEY.user, user);
+      localStorage.setItem(KEY.t1, t1);
+      localStorage.setItem(KEY.t2, t2);
+
+      const mode = $("saveLocal").checked ? "local" : "session";
+      setSaveMode(mode);
+
+      const dontSave = $("dontSavePass").checked;
+      setDontSavePass(dontSave);
+
+      if (!dontSave){
+        const pass = $("pass").value;
+        if (mode === "local"){
+          localStorage.setItem(KEY.passLocal, pass);
+          sessionStorage.removeItem(KEY.passSession);
+        } else {
+          sessionStorage.setItem(KEY.passSession, pass);
+          localStorage.removeItem(KEY.passLocal);
+        }
+      }
+    }
+
+    function loadSettings(){
+      const baseUrl = localStorage.getItem(KEY.baseUrl) || "https://nextcloud.drperez86.com";
+      const user = localStorage.getItem(KEY.user) || "";
+      const t1 = localStorage.getItem(KEY.t1) || "2";
+      const t2 = localStorage.getItem(KEY.t2) || "3";
+
+      $("baseUrl").value = baseUrl;
+      $("user").value = user;
+      $("t1").value = t1;
+      $("t2").value = t2;
+
+      const mode = getSaveMode();
+      setSaveMode(mode);
+
+      const dontSave = getDontSavePass();
+      setDontSavePass(dontSave);
+
+      if (!dontSave){
+        const pass = (mode === "local")
+          ? (localStorage.getItem(KEY.passLocal) || "")
+          : (sessionStorage.getItem(KEY.passSession) || "");
+        $("pass").value = pass;
+      } else {
+        $("pass").value = "";
+      }
+    }
+
+    function forgetAll(){
+      localStorage.removeItem(KEY.baseUrl);
+      localStorage.removeItem(KEY.user);
+      localStorage.removeItem(KEY.t1);
+      localStorage.removeItem(KEY.t2);
+      localStorage.removeItem(KEY.saveMode);
+      localStorage.removeItem(KEY.dontSavePass);
+      localStorage.removeItem(KEY.passLocal);
+      sessionStorage.removeItem(KEY.passSession);
+
+      $("pass").value = "";
+      loadSettings();
+      setStatus("warn", "Credenciales olvidadas");
     }
 
     // =========================
     // Load tables
     // =========================
     async function loadAll(){
+      saveSettings(); // guardamos lo que está en pantalla (modo cómodo)
+
       const baseUrl = $("baseUrl").value.trim().replace(/\/+$/,"");
       const user = $("user").value.trim();
       const pass = $("pass").value;
@@ -556,31 +652,30 @@
       $("btnReload").disabled = true;
       $("btnExport").disabled = true;
 
-      // read IDs from inputs
       state.tables[0].id = Number($("t1").value.trim()) || 2;
       state.tables[1].id = Number($("t2").value.trim()) || 3;
-      state.tables[0].name = `Tabla ${state.tables[0].id}`;
-      state.tables[1].name = `Tabla ${state.tables[1].id}`;
+      state.tables[0].name = `Tabla 1`;
+      state.tables[1].name = `Tabla 2`;
+
+      // Tabs titles
+      $("tab1").textContent = `Tabla ${state.tables[0].id}`;
+      $("tab2").textContent = `Tabla ${state.tables[1].id}`;
 
       try{
         for (let i=0;i<2;i++){
           const tid = state.tables[i].id;
 
-          // 1) columns
           const urlCols = `${baseUrl}/apps/tables/api/1/tables/${tid}/columns`;
-          const rCols = await fetchJson(urlCols, user, pass);
-
-          // 2) rows
           const urlRows = `${baseUrl}/apps/tables/api/1/tables/${tid}/rows`;
+
+          const rCols = await fetchJson(urlCols, user, pass);
           const rRows = await fetchJson(urlRows, user, pass);
 
-          // store raw
           state.tables[i].raw = {
             columns: { url: urlCols, ok: rCols.ok, status: rCols.status, json: rCols.json ?? rCols.text },
             rows:    { url: urlRows, ok: rRows.ok, status: rRows.status, json: rRows.json ?? rRows.text },
           };
 
-          // normalize if ok
           const cols = rCols.ok ? normalizeColumns(rCols.json) : [];
           const rows = rRows.ok ? normalizeRows(rRows.json, cols) : [];
 
@@ -588,19 +683,16 @@
           state.tables[i].rows = rows;
         }
 
-        // At least one loaded?
         const okAny = state.tables.some(t => (t.rows?.length || 0) > 0);
         if (okAny){
           setStatus("ok", "Conectado");
         } else {
-          // Could be format mismatch or permissions
           setStatus("warn", "Conectó pero sin filas (mirá Debug)");
         }
 
         $("btnReload").disabled = false;
         $("btnExport").disabled = false;
 
-        // refresh active title + table
         $("tableTitle").textContent = state.tables[state.activeIdx].name + " (ID " + state.tables[state.activeIdx].id + ")";
         render();
 
@@ -620,6 +712,17 @@
 
     $("btnLoad").onclick = loadAll;
     $("btnReload").onclick = loadAll;
+    $("btnForget").onclick = forgetAll;
+
+    // Persist on changes (sin cargar)
+    ["baseUrl","user","pass","t1","t2"].forEach(id => {
+      $(id).addEventListener("change", () => saveSettings());
+      $(id).addEventListener("blur", () => saveSettings());
+    });
+
+    $("saveSess").addEventListener("change", () => saveSettings());
+    $("saveLocal").addEventListener("change", () => saveSettings());
+    $("dontSavePass").addEventListener("change", (e) => setDontSavePass(e.target.checked));
 
     $("q").addEventListener("input", (e) => {
       state.q = e.target.value || "";
@@ -643,8 +746,16 @@
       downloadText(`table_${t.id}.csv`, csv, "text/csv;charset=utf-8");
     };
 
-    // Initial render
-    render();
+    // =========================
+    // Init
+    // =========================
+    loadSettings();
+    setActive(0);
+
+    // Si ya hay pass guardada, habilitamos recargar directo
+    if ($("pass").value && $("user").value && $("baseUrl").value){
+      $("btnReload").disabled = false;
+    }
   </script>
 </body>
 </html>
