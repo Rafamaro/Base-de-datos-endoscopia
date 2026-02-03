@@ -1,172 +1,650 @@
-cat > /srv/endodb-viewer/index.html <<'HTML'
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>EndoDB • Viewer (SQLite)</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Nextcloud Tables Viewer • EndoDB</title>
+
   <style>
-    :root { --bg:#0b1220; --card:#121b2e; --ink:#e7eefc; --mut:#9fb0d1; --line:#253252; --acc:#4aa3ff; }
-    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; background:linear-gradient(180deg,#0b1220,#070c16); color:var(--ink); }
-    .wrap{ max-width:1100px; margin:0 auto; padding:20px; }
-    h1{ font-size:18px; margin:0 0 14px; color:var(--ink); }
-    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-    input, button{ border-radius:10px; border:1px solid var(--line); background:#0f172a; color:var(--ink); padding:10px 12px; }
-    input{ flex:1; min-width:220px; }
-    button{ cursor:pointer; }
-    button:hover{ border-color:var(--acc); }
-    .grid{ display:grid; grid-template-columns: 1.2fr .8fr; gap:14px; margin-top:14px; }
-    .card{ background:rgba(18,27,46,.85); border:1px solid var(--line); border-radius:14px; padding:14px; }
-    .mut{ color:var(--mut); font-size:12px; }
-    table{ width:100%; border-collapse:collapse; margin-top:10px; }
-    th,td{ padding:8px; border-bottom:1px solid var(--line); font-size:13px; }
-    th{ text-align:left; color:var(--mut); font-weight:600; }
-    tr:hover td{ background:rgba(74,163,255,.06); cursor:pointer; }
-    .pill{ display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid var(--line); font-size:12px; color:var(--mut); }
-    .actions a{ color:var(--acc); text-decoration:none; }
-    .actions a:hover{ text-decoration:underline; }
-    @media (max-width:900px){ .grid{ grid-template-columns:1fr; } }
-    pre{ white-space:pre-wrap; word-break:break-word; background:#0f172a; border:1px solid var(--line); padding:10px; border-radius:12px; }
+    :root{
+      --bg0:#0b1220;
+      --bg1:#0f1a2e;
+      --card:#101c33;
+      --card2:#0d1730;
+      --ink:#e7eefc;
+      --muted:#a9b7d6;
+      --line:rgba(255,255,255,.10);
+      --ok:#36d399;
+      --warn:#fbbf24;
+      --bad:#fb7185;
+      --accent:#60a5fa;
+      --accent2:#a78bfa;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 18px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: var(--sans);
+      background: radial-gradient(1200px 600px at 20% 0%, rgba(96,165,250,.25), transparent 60%),
+                  radial-gradient(900px 500px at 80% 10%, rgba(167,139,250,.18), transparent 65%),
+                  linear-gradient(180deg, var(--bg0), var(--bg1));
+      color:var(--ink);
+    }
+    .wrap{max-width:1200px;margin:0 auto;padding:22px}
+    .top{
+      display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;
+      margin-bottom:16px;
+    }
+    .brand{
+      flex:1 1 320px;
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      padding:16px 16px;
+      box-shadow: var(--shadow);
+      min-width: 280px;
+    }
+    .brand h1{margin:0 0 6px;font-size:18px;letter-spacing:.2px}
+    .brand p{margin:0;color:var(--muted);font-size:13px;line-height:1.35}
+    .card{
+      flex:2 1 520px;
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      padding:14px;
+      box-shadow: var(--shadow);
+      min-width: 320px;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1.2fr 1fr 1fr 0.7fr 0.7fr;
+      gap:10px;
+    }
+    @media (max-width: 980px){
+      .grid{grid-template-columns: 1fr 1fr}
+    }
+    label{display:block;font-size:12px;color:var(--muted);margin:2px 0 6px}
+    input, select{
+      width:100%;
+      border-radius: 12px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(10,18,34,.65);
+      color:var(--ink);
+      padding:10px 10px;
+      outline:none;
+    }
+    input::placeholder{color:rgba(233,238,252,.45)}
+    .row{
+      display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px
+    }
+    .btn{
+      border:1px solid rgba(255,255,255,.14);
+      background: linear-gradient(180deg, rgba(96,165,250,.25), rgba(96,165,250,.12));
+      color:var(--ink);
+      padding:10px 12px;
+      border-radius: 12px;
+      cursor:pointer;
+      font-weight:600;
+    }
+    .btn.secondary{
+      background: linear-gradient(180deg, rgba(167,139,250,.18), rgba(167,139,250,.08));
+    }
+    .btn.ghost{
+      background: transparent;
+    }
+    .btn:disabled{opacity:.55;cursor:not-allowed}
+    .pill{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:7px 10px;border-radius:999px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.18);
+      color:var(--muted);
+      font-size:12px;
+    }
+    .dot{width:8px;height:8px;border-radius:50%}
+    .dot.ok{background:var(--ok)}
+    .dot.bad{background:var(--bad)}
+    .dot.warn{background:var(--warn)}
+
+    .tabs{
+      display:flex;gap:10px;flex-wrap:wrap;
+      margin:16px 0 10px;
+    }
+    .tab{
+      padding:10px 12px;border-radius: 999px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.15);
+      cursor:pointer;
+      color: var(--muted);
+      user-select:none;
+    }
+    .tab.active{
+      background: linear-gradient(180deg, rgba(96,165,250,.25), rgba(96,165,250,.10));
+      color: var(--ink);
+      border-color: rgba(96,165,250,.35);
+    }
+
+    .panel{
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      padding:14px;
+      box-shadow: var(--shadow);
+    }
+    .panel-head{
+      display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between;
+      margin-bottom:10px;
+    }
+    .panel-head h2{margin:0;font-size:14px}
+    .tools{
+      display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+    }
+    .tools input{
+      width:260px;
+      max-width: 100%;
+    }
+
+    table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      overflow:hidden;
+      border-radius: 14px;
+      border:1px solid rgba(255,255,255,.10);
+    }
+    thead th{
+      background: rgba(0,0,0,.22);
+      color: var(--muted);
+      font-size:12px;
+      text-align:left;
+      padding:10px 10px;
+      border-bottom:1px solid rgba(255,255,255,.10);
+      position:sticky; top:0;
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    tbody td{
+      padding:10px 10px;
+      border-bottom:1px solid rgba(255,255,255,.07);
+      font-size:13px;
+      vertical-align:top;
+      background: rgba(0,0,0,.10);
+    }
+    tbody tr:hover td{background: rgba(96,165,250,.10)}
+    .muted{color:var(--muted)}
+    .mono{font-family:var(--mono)}
+    .footer{
+      display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;
+      margin-top:10px;color:var(--muted);font-size:12px;
+    }
+    .pager{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .pager button{
+      padding:7px 10px;border-radius: 10px;border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.15); color:var(--ink); cursor:pointer;
+    }
+    .pager button:disabled{opacity:.55;cursor:not-allowed}
+    details{
+      margin-top:12px;
+      border:1px solid rgba(255,255,255,.12);
+      border-radius: 14px;
+      background: rgba(0,0,0,.12);
+      padding:10px 12px;
+    }
+    summary{cursor:pointer;color:var(--muted);font-weight:600}
+    pre{
+      margin:10px 0 0;
+      background: rgba(0,0,0,.30);
+      padding:10px;
+      border-radius: 12px;
+      border:1px solid rgba(255,255,255,.08);
+      overflow:auto;
+      max-height: 320px;
+      font-size:12px;
+      line-height:1.35;
+    }
   </style>
 </head>
+
 <body>
   <div class="wrap">
-    <h1>EndoDB • Viewer (leyendo SQLite)</h1>
+    <div class="top">
+      <div class="brand">
+        <h1>Viewer • Nextcloud Tables</h1>
+        <p>
+          Lee tus tablas (IDs <b>2</b> y <b>3</b>) desde <span class="mono">nextcloud.drperez86.com</span>.
+          Autenticación sugerida: <b>App Password</b> + header <span class="mono">OCS-APIRequest</span>.
+        </p>
+      </div>
 
-    <div class="row">
-      <input id="search" placeholder="Buscar por exam_id o patient_code..." />
-      <button id="btnSearch">Buscar</button>
-      <span class="mut" id="status"></span>
-    </div>
-
-    <div class="grid">
       <div class="card">
-        <div class="row" style="justify-content:space-between;">
-          <div>
-            <div class="mut">Exámenes</div>
+        <div class="grid">
+          <div style="grid-column: 1 / -1">
+            <label>Base URL (sin barra final)</label>
+            <input id="baseUrl" placeholder="https://nextcloud.drperez86.com" value="https://nextcloud.drperez86.com" />
           </div>
-          <div class="row">
-            <button id="prev">◀</button>
-            <button id="next">▶</button>
+          <div>
+            <label>Usuario</label>
+            <input id="user" placeholder="tu_usuario" autocomplete="username" />
+          </div>
+          <div>
+            <label>App Password</label>
+            <input id="pass" placeholder="**** (App password)" type="password" autocomplete="current-password" />
+          </div>
+          <div>
+            <label>Table ID #1</label>
+            <input id="t1" value="2" />
+          </div>
+          <div>
+            <label>Table ID #2</label>
+            <input id="t2" value="3" />
           </div>
         </div>
 
-        <table id="tbl">
-          <thead>
-            <tr>
-              <th>exam_id</th>
-              <th>patient_code</th>
-              <th>procedure</th>
-              <th>status</th>
-              <th>created</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
+        <div class="row">
+          <button class="btn" id="btnLoad">Cargar</button>
+          <button class="btn secondary" id="btnReload" disabled>Recargar</button>
+          <button class="btn ghost" id="btnExport" disabled>Export CSV</button>
+
+          <span class="pill" id="statusPill">
+            <span class="dot warn"></span>
+            <span id="statusText">Sin conectar</span>
+          </span>
+
+          <span class="pill mono" id="apiHint">API: /apps/tables/api/1</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" id="tab1">Tabla 2</div>
+      <div class="tab" id="tab2">Tabla 3</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2 id="tableTitle">Tabla 2</h2>
+        <div class="tools">
+          <input id="q" placeholder="Buscar…" />
+          <select id="pageSize">
+            <option value="10">10 / pág</option>
+            <option value="25" selected>25 / pág</option>
+            <option value="50">50 / pág</option>
+            <option value="100">100 / pág</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow:auto; max-height: 62vh; border-radius:14px;">
+        <table>
+          <thead id="thead"></thead>
+          <tbody id="tbody"></tbody>
         </table>
       </div>
 
-      <div class="card">
-        <div class="mut">Detalle</div>
-        <div id="detail">
-          <div class="mut">Seleccioná un examen.</div>
+      <div class="footer">
+        <div id="meta" class="muted">—</div>
+        <div class="pager">
+          <button id="prev">◀</button>
+          <span class="muted">Pág <span id="pageN">1</span> / <span id="pageMax">1</span></span>
+          <button id="next">▶</button>
         </div>
       </div>
+
+      <details>
+        <summary>Debug (respuesta cruda de la API)</summary>
+        <pre id="debug">(vacío)</pre>
+      </details>
     </div>
   </div>
 
-<script>
-let offset = 0;
-let limit = 20;
+  <script>
+    // =========================
+    // Helpers
+    // =========================
+    const $ = (id) => document.getElementById(id);
 
-const el = (id)=>document.getElementById(id);
-const status = (t)=>el("status").textContent=t;
+    function setStatus(kind, text){
+      const pill = $("statusPill");
+      const dot = pill.querySelector(".dot");
+      dot.className = "dot " + (kind || "warn");
+      $("statusText").textContent = text;
+    }
 
-async function fetchJSON(url){
-  const r = await fetch(url);
-  const j = await r.json();
-  if(!r.ok) throw new Error(j.detail || "Error");
-  return j;
-}
+    function b64Basic(user, pass){
+      return "Basic " + btoa(`${user}:${pass}`);
+    }
 
-function esc(s){ return (s??"").toString().replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m])); }
+    async function fetchJson(url, user, pass){
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
+          "OCS-APIRequest": "true",
+          "Authorization": b64Basic(user, pass),
+        },
+        credentials: "omit",
+      });
 
-async function loadList(){
-  const s = el("search").value.trim();
-  status("cargando...");
-  const data = await fetchJSON(`/api/exams?limit=${limit}&offset=${offset}&search=${encodeURIComponent(s)}`);
-  const tb = el("tbl").querySelector("tbody");
-  tb.innerHTML = "";
-  for(const it of data.items){
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${esc(it.exam_id)}</td>
-      <td>${esc(it.patient_code)}</td>
-      <td><span class="pill">${esc(it.procedure_type || "?")}</span></td>
-      <td><span class="pill">${esc(it.status || "?")}</span></td>
-      <td class="mut">${esc(it.created_at || "")}</td>
-    `;
-    tr.addEventListener("click", ()=>loadDetail(it.exam_id));
-    tb.appendChild(tr);
-  }
-  status(`mostrando ${data.items.length} (offset ${offset})`);
-}
+      const text = await res.text();
+      let json = null;
+      try { json = JSON.parse(text); } catch(e){ /* no-op */ }
 
-async function loadDetail(exam_id){
-  status("cargando detalle...");
-  const ex = await fetchJSON(`/api/exams/${encodeURIComponent(exam_id)}`);
-  const fields = await fetchJSON(`/api/exams/${encodeURIComponent(exam_id)}/fields`);
-  const files = await fetchJSON(`/api/exams/${encodeURIComponent(exam_id)}/files`);
+      return { ok: res.ok, status: res.status, text, json };
+    }
 
-  const rawPdf = (files.items || []).find(x => x.kind === "raw_pdf");
-  const pdfLink = rawPdf ? `<div class="actions"><a target="_blank" href="/api/exams/${encodeURIComponent(exam_id)}/files/raw_pdf">Abrir PDF</a></div>` : `<div class="mut">No hay raw_pdf registrado</div>`;
+    function toCsv(rows, columns){
+      const esc = (v) => {
+        if (v === null || v === undefined) return "";
+        const s = String(v).replaceAll('"','""');
+        return `"${s}"`;
+      };
+      const header = columns.map(c => esc(c)).join(",");
+      const lines = rows.map(r => columns.map(c => esc(r[c])).join(","));
+      return [header, ...lines].join("\n");
+    }
 
-  const fHtml = (fields.items||[]).map(x=>{
-    return `<tr>
-      <td>${esc(x.field_name)}</td>
-      <td><pre>${esc(JSON.stringify(x.value_json, null, 2))}</pre></td>
-      <td class="mut">${esc(x.confidence ?? "")}</td>
-    </tr>`;
-  }).join("");
+    function downloadText(filename, content, mime="text/plain"){
+      const blob = new Blob([content], {type:mime});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
 
-  const filesHtml = (files.items||[]).slice(0,20).map(x=>{
-    return `<tr>
-      <td>${esc(x.kind)}</td>
-      <td class="mut">${esc(x.path||"")}</td>
-    </tr>`;
-  }).join("");
+    // =========================
+    // Nextcloud Tables API v1 parsing
+    // =========================
+    // Plan:
+    // 1) GET /apps/tables/api/1/tables/{id}/columns
+    // 2) GET /apps/tables/api/1/tables/{id}/rows
+    //
+    // Nota: el header OCS-APIRequest se usa en APIs OCS/Nextcloud. :contentReference[oaicite:1]{index=1}
+    // Y en ejemplos de Tables API se usa también. :contentReference[oaicite:2]{index=2}
 
-  el("detail").innerHTML = `
-    <div><b>${esc(ex.exam_id)}</b></div>
-    <div class="mut">${esc(ex.patient_code)} • <span class="pill">${esc(ex.procedure_type || "?")}</span> • <span class="pill">${esc(ex.status || "?")}</span></div>
-    <div class="mut" style="margin-top:8px;">${esc(ex.created_at||"")}</div>
-    <div style="margin-top:10px;">${pdfLink}</div>
+    function normalizeColumns(colsJson){
+      // Esperado: array de columnas con {id, title, ...}
+      if (Array.isArray(colsJson)) return colsJson.map(c => ({
+        id: c.id ?? c.columnId ?? c._id ?? c,
+        title: c.title ?? c.name ?? c.label ?? String(c.id ?? c.columnId ?? c),
+      }));
 
-    <hr style="border:0;border-top:1px solid var(--line); margin:12px 0;">
+      // Algunas APIs devuelven {data:[...]}
+      if (colsJson && Array.isArray(colsJson.data)) return colsJson.data.map(c => ({
+        id: c.id ?? c.columnId ?? c._id ?? c,
+        title: c.title ?? c.name ?? c.label ?? String(c.id ?? c.columnId ?? c),
+      }));
 
-    <div class="mut">Campos (fields)</div>
-    <table>
-      <thead><tr><th>field</th><th>value_json</th><th>conf</th></tr></thead>
-      <tbody>${fHtml || `<tr><td colspan="3" class="mut">Sin campos</td></tr>`}</tbody>
-    </table>
+      return [];
+    }
 
-    <hr style="border:0;border-top:1px solid var(--line); margin:12px 0;">
+    function normalizeRows(rowsJson, cols){
+      // Caso típico v1: array de rows con {id, data:[{columnId,value}, ...]}
+      const colById = new Map(cols.map(c => [String(c.id), c.title]));
 
-    <div class="mut">Archivos (primeros 20)</div>
-    <table>
-      <thead><tr><th>kind</th><th>path</th></tr></thead>
-      <tbody>${filesHtml || `<tr><td colspan="2" class="mut">Sin archivos</td></tr>`}</tbody>
-    </table>
-  `;
-  status("ok");
-}
+      const unwrap = (x) => {
+        if (Array.isArray(x)) return x;
+        if (x && Array.isArray(x.data)) return x.data;
+        return [];
+      };
 
-el("btnSearch").addEventListener("click", ()=>{ offset=0; loadList(); });
-el("search").addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ offset=0; loadList(); }});
-el("prev").addEventListener("click", ()=>{ offset=Math.max(0, offset-limit); loadList(); });
-el("next").addEventListener("click", ()=>{ offset=offset+limit; loadList(); });
+      const rowsArr = unwrap(rowsJson);
+      const out = [];
 
-loadList();
-</script>
+      for (const r of rowsArr){
+        const obj = {};
+        obj["_row_id"] = r.id ?? r.rowId ?? r._id ?? "";
+
+        const cells = r.data ?? r.values ?? r.cells ?? [];
+        if (Array.isArray(cells)){
+          for (const cell of cells){
+            const cid = String(cell.columnId ?? cell.id ?? "");
+            const key = colById.get(cid) || (cid ? `col_${cid}` : "col");
+            obj[key] = cell.value ?? cell.value_json ?? cell.displayValue ?? cell.text ?? "";
+          }
+        }
+        out.push(obj);
+      }
+      return out;
+    }
+
+    // =========================
+    // UI state
+    // =========================
+    const state = {
+      activeIdx: 0,          // 0 -> t1, 1 -> t2
+      tables: [
+        { id: 2, name: "Tabla 2", cols: [], rows: [], raw: {} },
+        { id: 3, name: "Tabla 3", cols: [], rows: [], raw: {} },
+      ],
+      sortKey: null,
+      sortDir: "asc",
+      q: "",
+      page: 1,
+      pageSize: 25,
+    };
+
+    function setActive(idx){
+      state.activeIdx = idx;
+      state.sortKey = null;
+      state.sortDir = "asc";
+      state.page = 1;
+      $("tab1").classList.toggle("active", idx===0);
+      $("tab2").classList.toggle("active", idx===1);
+      $("tableTitle").textContent = state.tables[idx].name + " (ID " + state.tables[idx].id + ")";
+      render();
+    }
+
+    function render(){
+      const t = state.tables[state.activeIdx];
+      const rows0 = t.rows || [];
+      const cols0 = t.cols || [];
+
+      // Column names: prefer explicit columns + _row_id
+      const colNames = ["_row_id", ...cols0.map(c => c.title)].filter((v, i, a) => a.indexOf(v) === i);
+
+      // Filter
+      const q = (state.q || "").trim().toLowerCase();
+      let rows = rows0;
+      if (q){
+        rows = rows0.filter(r => {
+          for (const k of Object.keys(r)){
+            const v = r[k];
+            if (v === null || v === undefined) continue;
+            if (String(v).toLowerCase().includes(q)) return true;
+          }
+          return false;
+        });
+      }
+
+      // Sort
+      if (state.sortKey){
+        const k = state.sortKey;
+        const dir = state.sortDir === "asc" ? 1 : -1;
+        rows = [...rows].sort((a,b) => {
+          const av = a[k] ?? "";
+          const bv = b[k] ?? "";
+          // numeric-ish sort when possible
+          const an = Number(av), bn = Number(bv);
+          const aNum = !Number.isNaN(an) && String(av).trim() !== "";
+          const bNum = !Number.isNaN(bn) && String(bv).trim() !== "";
+          if (aNum && bNum) return (an - bn) * dir;
+          return String(av).localeCompare(String(bv), undefined, {numeric:true, sensitivity:"base"}) * dir;
+        });
+      }
+
+      // Pagination
+      const ps = state.pageSize;
+      const total = rows.length;
+      const maxPage = Math.max(1, Math.ceil(total / ps));
+      state.page = Math.min(state.page, maxPage);
+      const start = (state.page - 1) * ps;
+      const pageRows = rows.slice(start, start + ps);
+
+      // Header
+      const thead = $("thead");
+      thead.innerHTML = "";
+      const trh = document.createElement("tr");
+      for (const c of colNames){
+        const th = document.createElement("th");
+        th.textContent = c === "_row_id" ? "row_id" : c;
+        th.title = "Click para ordenar";
+        th.onclick = () => {
+          if (state.sortKey === c){
+            state.sortDir = (state.sortDir === "asc") ? "desc" : "asc";
+          } else {
+            state.sortKey = c;
+            state.sortDir = "asc";
+          }
+          render();
+        };
+        trh.appendChild(th);
+      }
+      thead.appendChild(trh);
+
+      // Body
+      const tbody = $("tbody");
+      tbody.innerHTML = "";
+      for (const r of pageRows){
+        const tr = document.createElement("tr");
+        for (const c of colNames){
+          const td = document.createElement("td");
+          const v = r[c];
+          td.textContent = (v === null || v === undefined) ? "" : String(v);
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      }
+
+      // Meta
+      $("meta").textContent =
+        `${total.toLocaleString()} filas` +
+        (q ? ` (filtradas por "${state.q}")` : "") +
+        (state.sortKey ? ` • orden: ${state.sortKey} (${state.sortDir})` : "");
+
+      $("pageN").textContent = String(state.page);
+      $("pageMax").textContent = String(maxPage);
+      $("prev").disabled = state.page <= 1;
+      $("next").disabled = state.page >= maxPage;
+
+      // Debug
+      $("debug").textContent = JSON.stringify(t.raw, null, 2);
+    }
+
+    // =========================
+    // Load tables
+    // =========================
+    async function loadAll(){
+      const baseUrl = $("baseUrl").value.trim().replace(/\/+$/,"");
+      const user = $("user").value.trim();
+      const pass = $("pass").value;
+
+      if (!baseUrl || !user || !pass){
+        setStatus("warn", "Faltan credenciales");
+        return;
+      }
+
+      setStatus("warn", "Cargando…");
+      $("btnLoad").disabled = true;
+      $("btnReload").disabled = true;
+      $("btnExport").disabled = true;
+
+      // read IDs from inputs
+      state.tables[0].id = Number($("t1").value.trim()) || 2;
+      state.tables[1].id = Number($("t2").value.trim()) || 3;
+      state.tables[0].name = `Tabla ${state.tables[0].id}`;
+      state.tables[1].name = `Tabla ${state.tables[1].id}`;
+
+      try{
+        for (let i=0;i<2;i++){
+          const tid = state.tables[i].id;
+
+          // 1) columns
+          const urlCols = `${baseUrl}/apps/tables/api/1/tables/${tid}/columns`;
+          const rCols = await fetchJson(urlCols, user, pass);
+
+          // 2) rows
+          const urlRows = `${baseUrl}/apps/tables/api/1/tables/${tid}/rows`;
+          const rRows = await fetchJson(urlRows, user, pass);
+
+          // store raw
+          state.tables[i].raw = {
+            columns: { url: urlCols, ok: rCols.ok, status: rCols.status, json: rCols.json ?? rCols.text },
+            rows:    { url: urlRows, ok: rRows.ok, status: rRows.status, json: rRows.json ?? rRows.text },
+          };
+
+          // normalize if ok
+          const cols = rCols.ok ? normalizeColumns(rCols.json) : [];
+          const rows = rRows.ok ? normalizeRows(rRows.json, cols) : [];
+
+          state.tables[i].cols = cols;
+          state.tables[i].rows = rows;
+        }
+
+        // At least one loaded?
+        const okAny = state.tables.some(t => (t.rows?.length || 0) > 0);
+        if (okAny){
+          setStatus("ok", "Conectado");
+        } else {
+          // Could be format mismatch or permissions
+          setStatus("warn", "Conectó pero sin filas (mirá Debug)");
+        }
+
+        $("btnReload").disabled = false;
+        $("btnExport").disabled = false;
+
+        // refresh active title + table
+        $("tableTitle").textContent = state.tables[state.activeIdx].name + " (ID " + state.tables[state.activeIdx].id + ")";
+        render();
+
+      } catch(err){
+        console.error(err);
+        setStatus("bad", "Error al cargar (ver consola)");
+      } finally {
+        $("btnLoad").disabled = false;
+      }
+    }
+
+    // =========================
+    // Wire UI
+    // =========================
+    $("tab1").onclick = () => setActive(0);
+    $("tab2").onclick = () => setActive(1);
+
+    $("btnLoad").onclick = loadAll;
+    $("btnReload").onclick = loadAll;
+
+    $("q").addEventListener("input", (e) => {
+      state.q = e.target.value || "";
+      state.page = 1;
+      render();
+    });
+
+    $("pageSize").addEventListener("change", (e) => {
+      state.pageSize = Number(e.target.value) || 25;
+      state.page = 1;
+      render();
+    });
+
+    $("prev").onclick = () => { state.page = Math.max(1, state.page - 1); render(); };
+    $("next").onclick = () => { state.page = state.page + 1; render(); };
+
+    $("btnExport").onclick = () => {
+      const t = state.tables[state.activeIdx];
+      const cols = ["_row_id", ...(t.cols || []).map(c => c.title)].filter((v,i,a)=>a.indexOf(v)===i);
+      const csv = toCsv(t.rows || [], cols);
+      downloadText(`table_${t.id}.csv`, csv, "text/csv;charset=utf-8");
+    };
+
+    // Initial render
+    render();
+  </script>
 </body>
 </html>
-HTML
