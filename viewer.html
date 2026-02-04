@@ -113,9 +113,7 @@
     }
 
     /* Layout for table view + month sidebar */
-    .layout{
-      display:block;
-    }
+    .layout{ display:block; }
     .layout.withSidebar{
       display:grid;
       grid-template-columns: 240px 1fr;
@@ -123,7 +121,7 @@
       align-items:start;
     }
     @media (max-width: 980px){
-      .layout{grid-template-columns:1fr}
+      .layout.withSidebar{grid-template-columns:1fr}
     }
 
     .sidebar{
@@ -290,6 +288,12 @@
     <div class="tabs">
       <div class="tab active" id="tab1">Base de datos de VCC</div>
       <div class="tab" id="tab2">Estudios por mes</div>
+      <div style="flex:1"></div>
+      <button class="btn secondary" id="btnRefresh" style="height:40px">Actualizar</button>
+      <span class="pill" id="statusPill" style="height:40px">
+        <span class="dot warn"></span>
+        <span id="statusText">Sin cargar</span>
+      </span>
     </div>
 
     <div class="layout" id="layout">
@@ -307,7 +311,6 @@
             <input id="pageSize" class="small" placeholder="25" title="Filas por página" />
           </div>
         </div>
-        <div id="alert" style="display:none; margin:8px 0 10px; padding:10px 12px; border-radius:14px; border:1px solid rgba(239,68,68,.25); background: rgba(239,68,68,.06); color: #7f1d1d; font-weight:800; font-size:12px;">No se pudieron cargar datos (ver Debug).</div>
 
         <div style="overflow:auto; max-height: 62vh; border-radius:14px;">
           <table>
@@ -335,6 +338,15 @@
 
   <script>
     const $ = (id) => document.getElementById(id);
+
+    function setStatus(kind, text){
+      const pill = $("statusPill");
+      if (!pill) return;
+      const dot = pill.querySelector(".dot");
+      dot.className = "dot " + (kind || "warn");
+      $("statusText").textContent = text;
+    }
+
 
     // ✅ Hardcode (pediste borrar UI de configuración)
     const CONFIG = {
@@ -479,9 +491,9 @@
 
       // sidebar months only for tab2
       $("sidebar").classList.toggle("show", idx===1);
-      // layout: when sidebar hidden, use one column to avoid "apiñada a la derecha"
       $("layout").classList.toggle("withSidebar", idx===1);
-setHeaderTitle();
+
+      setHeaderTitle();
       renderMonths(); // update sidebar highlight
       render();
     }
@@ -638,9 +650,23 @@ setHeaderTitle();
       const t = state.tables[1];
       const rows = getEffectiveRows(t);
 
-      const total = rows.length;
+      const monthLabel = (t.monthSelected && t.monthSelected !== "ALL") ? `Mes: ${t.monthSelected}` : "Todos los meses";
 
-      // detect keys (más tolerante)
+      if (!rows.length){
+        $("s1k").textContent = "Total de estudios";
+        $("s1v").textContent = "—";
+        $("s1s").textContent = monthLabel;
+
+        $("s2k").textContent = "VCC";
+        $("s2v").textContent = "—";
+        $("s2s").textContent = "Sin datos";
+
+        $("s3k").textContent = "VEDA";
+        $("s3v").textContent = "—";
+        $("s3s").textContent = "Sin datos";
+        return;
+      }
+
       const keys = Object.keys(rows[0] || {});
       const keyProc =
         findKey(keys, ["procedure_type"]) ||
@@ -652,8 +678,7 @@ setHeaderTitle();
         findContains(keys, ["terapeut"]) ||
         null;
 
-      // Si la tabla ya viene "agregada" (por ejemplo columnas tipo veda_sin, vcc_con, etc),
-      // detectamos columnas numéricas y sumamos.
+      // Si la tabla ya viene agregada por mes (columnas veda_sin / vcc_con, etc), sumamos columnas.
       const hasAgg =
         keys.some(k => k.toLowerCase().includes("veda")) &&
         keys.some(k => k.toLowerCase().includes("vcc")) &&
@@ -665,27 +690,10 @@ setHeaderTitle();
         return acc + (Number.isFinite(n) ? n : 0);
       }, 0);
 
-      // Defaults
       let vedaNo = 0, vccNo = 0, vedaYes = 0, vccYes = 0;
-      let totalStudies = total;
-
-      if (rows.length === 0){
-        $("s1k").textContent = "Total de estudios";
-        $("s1v").textContent = "—";
-        $("s1s").textContent = "Sin filas para calcular";
-
-        $("s2k").textContent = "VEDA / VCC (sin terapéutica)";
-        $("s2v").textContent = "—";
-        $("s2s").textContent = "—";
-
-        $("s3k").textContent = "VEDA / VCC (con terapéutica)";
-        $("s3v").textContent = "—";
-        $("s3s").textContent = "—";
-        return;
-      }
+      let totalStudies = rows.length;
 
       if (hasAgg){
-        // Heurística: buscamos claves más probables
         const kVedaSin = keys.find(k => k.toLowerCase().includes("veda") && k.toLowerCase().includes("sin")) || null;
         const kVccSin  = keys.find(k => k.toLowerCase().includes("vcc")  && k.toLowerCase().includes("sin")) || null;
         const kVedaCon = keys.find(k => k.toLowerCase().includes("veda") && k.toLowerCase().includes("con")) || null;
@@ -696,11 +704,10 @@ setHeaderTitle();
         vedaYes = kVedaCon ? sumNum(rows, kVedaCon) : 0;
         vccYes  = kVccCon  ? sumNum(rows, kVccCon)  : 0;
 
-        // total: si existe "total", lo usamos; si no, sumamos todo lo anterior
         const kTotal = keys.find(k => k.toLowerCase() === "total" || k.toLowerCase().includes("total_est")) || null;
         totalStudies = kTotal ? sumNum(rows, kTotal) : (vedaNo + vccNo + vedaYes + vccYes);
       } else {
-        // Tabla "fila por estudio"
+        // Tabla con 1 fila = 1 estudio
         const proc = (r) => (keyProc ? (r[keyProc] ?? "").toString().trim().toUpperCase() : "");
         const ther = (r) => (keyTher ? guessBoolean(r[keyTher]) : null);
 
@@ -710,43 +717,26 @@ setHeaderTitle();
 
           if (p === "VEDA"){
             if (th === true) vedaYes++;
-            else vedaNo++; // null/false -> sin terapéutica (por ahora)
+            else vedaNo++;
           } else if (p === "VCC"){
             if (th === true) vccYes++;
             else vccNo++;
           }
         }
-        totalStudies = total;
+        totalStudies = rows.length;
       }
 
       $("s1k").textContent = "Total de estudios";
       $("s1v").textContent = totalStudies.toLocaleString();
-      $("s1s").textContent = (t.monthSelected && t.monthSelected !== "ALL") ? `Mes: ${t.monthSelected}` : "Todos los meses";
+      $("s1s").textContent = monthLabel;
 
-      $("s2k").textContent = "VEDA / VCC (sin terapéutica)";
-      $("s2v").textContent = `${vedaNo.toLocaleString()} / ${vccNo.toLocaleString()}`;
-      $("s2s").textContent = keyTher || hasAgg ? "Sin terapéutica" : "No detecté columnas de procedimiento/terapéutica";
+      $("s2k").textContent = "VCC";
+      $("s2v").textContent = `${vccNo.toLocaleString()} sin • ${vccYes.toLocaleString()} con`;
+      $("s2s").textContent = (keyTher || hasAgg) ? "Terapéutica por estudio" : "No detecté columna terapéutica";
 
-      $("s3k").textContent = "VEDA / VCC (con terapéutica)";
-      $("s3v").textContent = `${vedaYes.toLocaleString()} / ${vccYes.toLocaleString()}`;
-      $("s3s").textContent = keyTher || hasAgg ? "Con terapéutica" : "No detecté columnas de procedimiento/terapéutica";
-    } else if (p === "VCC"){
-          if (th === true) vccYes++;
-          else vccNo++;
-        }
-      }
-
-      $("s1k").textContent = "Total de estudios";
-      $("s1v").textContent = total.toLocaleString();
-      $("s1s").textContent = (t.monthSelected && t.monthSelected !== "ALL") ? `Mes: ${t.monthSelected}` : "Todos los meses";
-
-      $("s2k").textContent = "VEDA / VCC (sin terapéutica)";
-      $("s2v").textContent = `${vedaNo.toLocaleString()} / ${vccNo.toLocaleString()}`;
-      $("s2s").textContent = keyTher ? "terapeutica = false/null" : "No detecté columna de terapéutica";
-
-      $("s3k").textContent = "VEDA / VCC (con terapéutica)";
-      $("s3v").textContent = `${vedaYes.toLocaleString()} / ${vccYes.toLocaleString()}`;
-      $("s3s").textContent = keyTher ? "terapeutica = true" : "No detecté columna de terapéutica";
+      $("s3k").textContent = "VEDA";
+      $("s3v").textContent = `${vedaNo.toLocaleString()} sin • ${vedaYes.toLocaleString()} con`;
+      $("s3s").textContent = (keyTher || hasAgg) ? "Terapéutica por estudio" : "No detecté columna terapéutica";
     }
 
     function updateStats(){
@@ -829,19 +819,11 @@ setHeaderTitle();
 
       $("debug").textContent = JSON.stringify(t.raw, null, 2);
 
-      // alert if fetch failed
-      const raw = t.raw || {};
-      const okCols = raw.columns?.ok !== false;
-      const okRows = raw.rows?.ok !== false;
-      const hasRows = (t.rows || []).length > 0;
-      const showAlert = (!okCols || !okRows) || (!hasRows && (raw.columns || raw.rows));
-      const alert = $("alert");
-      if (alert) alert.style.display = showAlert ? "block" : "none";
-
       updateStats();
     }
 
     async function loadAll(){
+      setStatus("warn", "Cargando…");
       try{
         for (let i=0;i<2;i++){
           const tid = state.tables[i].id;
@@ -868,9 +850,11 @@ setHeaderTitle();
         buildMonths();
         renderMonths();
         setHeaderTitle();
+        setStatus("ok", "Cargado");
         render();
       } catch (e){
         console.error(e);
+        setStatus("bad", "Error al cargar");
         $("debug").textContent = "Error cargando datos. Mirá consola del navegador.";
       }
     }
@@ -878,6 +862,9 @@ setHeaderTitle();
     // UI handlers
     $("tab1").onclick = () => setActive(0);
     $("tab2").onclick = () => setActive(1);
+
+    const btnRefresh = $("btnRefresh");
+    if (btnRefresh) btnRefresh.onclick = loadAll;
 
     $("q").addEventListener("input", (e) => {
       const t = state.tables[state.activeIdx];
