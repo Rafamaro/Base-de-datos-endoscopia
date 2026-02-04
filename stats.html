@@ -45,6 +45,7 @@
       width:100%;padding:10px 10px;border-radius:12px;border:1px solid var(--line);
       outline:none;background:#fff;
     }
+    input[disabled]{background:rgba(15,23,42,.03); color:rgba(15,23,42,.75)}
     input:focus,select:focus{border-color:rgba(29,78,216,.55);box-shadow:0 0 0 4px rgba(29,78,216,.12)}
     .row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
     @media (max-width:980px){.row{grid-template-columns:1fr}}
@@ -52,11 +53,9 @@
       border:1px solid var(--line);border-radius:16px;background:#fff;padding:12px;
     }
     .k{font-size:12px;color:var(--muted);font-weight:900;margin-bottom:6px}
-    .v{font-size:13px;font-weight:900}
     .tag{display:inline-flex;gap:8px;align-items:center;padding:8px 10px;border-radius:999px;
       border:1px solid var(--line);background:rgba(29,78,216,.06);font-size:12px;color:var(--muted);font-weight:900}
     .ok{color:#0f766e}
-    .warn{color:#b45309}
     .bad{color:#b91c1c}
     table{
       width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--line);
@@ -77,6 +76,13 @@
     }
     details{margin-top:12px}
     .muted{color:var(--muted);font-size:12px}
+    button{
+      width:100%;padding:11px;border-radius:12px;border:1px solid var(--line);
+      background:rgba(29,78,216,.10);font-weight:900;cursor:pointer
+    }
+    button:hover{background:rgba(29,78,216,.14)}
+    .btnrow{display:flex;gap:10px;flex-wrap:wrap}
+    .btnrow button{flex:1;min-width:120px}
   </style>
 </head>
 
@@ -101,20 +107,24 @@
     <div class="panel">
       <div class="row">
         <div>
-          <label for="baseUrl">Worker baseUrl</label>
-          <input id="baseUrl" />
-          <div class="muted">Debe terminar sin slash. Ej: https://xxxx.workers.dev</div>
+          <label>Worker baseUrl (fijo, como viewer)</label>
+          <input id="baseUrl" disabled />
+          <div class="muted">Si el día de mañana cambia, se edita una sola línea en este archivo.</div>
         </div>
+
         <div>
           <label for="tableId">Table ID</label>
           <input id="tableId" placeholder="Ej: 2" inputmode="numeric" />
-          <div class="muted">Poné el ID y tocá “Cargar”.</div>
+          <div class="muted">Usá Enter o los botones rápidos.</div>
         </div>
+
         <div>
           <label>&nbsp;</label>
-          <button id="btnLoad" style="width:100%;padding:11px;border-radius:12px;border:1px solid var(--line);background:rgba(29,78,216,.10);font-weight:900;cursor:pointer">
-            Cargar tabla
-          </button>
+          <div class="btnrow">
+            <button id="btnLoad2">Cargar 2</button>
+            <button id="btnLoad3">Cargar 3</button>
+            <button id="btnLoad">Cargar ID</button>
+          </div>
           <div class="muted" id="status">—</div>
         </div>
       </div>
@@ -163,11 +173,15 @@
 <script>
   const $ = (id) => document.getElementById(id);
 
-  // === CONFIG DEFAULT ===
+  // === CONFIG (Fijo, como viewer) ===
   const DEFAULT_BASE_URL = "https://basededatos.corrongo182.workers.dev";
 
+  // ✅ CAMBIO CRÍTICO: asegurar protocolo SIEMPRE
   function normBaseUrl(s){
-    return (s || "").trim().replace(/\/+$/,"");
+    let u = (s || "").trim().replace(/\/+$/,"");
+    if (!u) return u;
+    if (!/^https?:\/\//i.test(u)) u = "https://" + u;
+    return u;
   }
 
   async function fetchText(url){
@@ -179,7 +193,6 @@
   }
 
   function normalizeColumns(colsJson){
-    // Nextcloud Tables API suele devolver array o {data:[...]}
     const arr = Array.isArray(colsJson) ? colsJson : (colsJson && Array.isArray(colsJson.data) ? colsJson.data : []);
     return arr.map(c => ({
       id: c.id ?? c.columnId ?? c._id ?? c,
@@ -231,18 +244,21 @@
     if (value === null || value === undefined) return null;
     const s = String(value).trim();
     if (!s) return null;
+
     const m1 = s.match(/^(\d{4})[-/](\d{1,2})/);
     if (m1){
       const y = m1[1];
       const mm = String(Math.max(1, Math.min(12, parseInt(m1[2],10)))).padStart(2,"0");
       return `${y}-${mm}`;
     }
+
     const d = new Date(s);
     if (!Number.isNaN(d.getTime())){
       const y = d.getFullYear();
       const mm = String(d.getMonth()+1).padStart(2,"0");
       return `${y}-${mm}`;
     }
+
     const m2 = s.match(/^(\d{1,2})[-/](\d{4})$/);
     if (m2){
       const mm = String(Math.max(1, Math.min(12, parseInt(m2[1],10)))).padStart(2,"0");
@@ -287,6 +303,15 @@
     return { keyDate, keyProc, keyTher, keyCecal, keys };
   }
 
+  function escapeHtml(s){
+    return String(s)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
   function renderColumns(cols){
     const tbody = $("colsTbody");
     tbody.innerHTML = "";
@@ -311,14 +336,12 @@
     }
 
     const keys = Object.keys(sample[0]);
-    // header
     for (const k of keys){
       const th = document.createElement("th");
       th.textContent = k;
       thead.appendChild(th);
     }
 
-    // body
     for (const r of sample){
       const tr = document.createElement("tr");
       for (const k of keys){
@@ -329,15 +352,6 @@
       }
       tbody.appendChild(tr);
     }
-  }
-
-  function escapeHtml(s){
-    return String(s)
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;")
-      .replaceAll("'","&#039;");
   }
 
   function renderDetection(rows){
@@ -360,12 +374,10 @@
       ${mk("Terapéutica", det.keyTher)}
       ${mk("Ciego/Cecal", det.keyCecal)}
       <div class="muted" style="margin-top:8px">
-        Si algo sale “NO detectado”, no pasa nada: lo mapeamos manualmente después.
+        Si algo sale “NO detectado”, lo mapeamos manualmente después.
       </div>
     `;
 
-    // mini resumen
-    const keys = det.keys;
     const monthKey = det.keyDate;
     let months = 0;
     if (monthKey){
@@ -377,7 +389,6 @@
       months = set.size;
     }
 
-    // calidad de booleanos
     let therOk = 0, therTot = 0;
     if (det.keyTher){
       for (const r of rows){
@@ -389,7 +400,7 @@
 
     $("summaryBox").innerHTML = `
       <div>• Filas totales: <b>${rows.length.toLocaleString()}</b></div>
-      <div>• Columnas: <b>${keys.length.toLocaleString()}</b></div>
+      <div>• Columnas: <b>${det.keys.length.toLocaleString()}</b></div>
       <div>• Meses detectables: <b>${months ? months : "—"}</b></div>
       <div>• Terapéutica parseable (bool): <b>${therTot ? (therOk + "/" + therTot) : "—"}</b></div>
     `;
@@ -403,7 +414,7 @@
     $("status").textContent = "Cargando…";
 
     if (!baseUrl || !tableId){
-      $("status").textContent = "Poné baseUrl y tableId.";
+      $("status").textContent = "Poné un Table ID.";
       return;
     }
 
@@ -413,7 +424,7 @@
     const [cRes, rRes] = await Promise.all([fetchText(urlCols), fetchText(urlRows)]);
 
     if (!cRes.ok || !rRes.ok){
-      $("status").innerHTML = `<span class="bad">Error cargando. cols=${cRes.status} rows=${rRes.status}</span>`;
+      $("status").innerHTML = `<span class="bad">Error cargando.</span> cols=${cRes.status} rows=${rRes.status}`;
       $("debug").textContent = JSON.stringify({ columns: cRes, rows: rRes }, null, 2);
       return;
     }
@@ -437,8 +448,9 @@
     $("baseUrlText").textContent = DEFAULT_BASE_URL;
 
     $("btnLoad").onclick = load;
+    $("btnLoad2").onclick = () => { $("tableId").value = "2"; load(); };
+    $("btnLoad3").onclick = () => { $("tableId").value = "3"; load(); };
 
-    // Tips rápidos: atajos para probar IDs comunes
     $("tableId").addEventListener("keydown", (e) => {
       if (e.key === "Enter") load();
     });
