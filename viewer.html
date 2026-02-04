@@ -3,11 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>EndoDB • Viewer</title>
+  <title>Base de Datos Dr Perez • Viewer</title>
 
   <style>
     :root{
-      /* Blanco + azul rey */
       --bg0:#f6f9ff;
       --bg1:#ffffff;
       --card:#ffffff;
@@ -16,7 +15,7 @@
       --line:#e2e8f0;
 
       --accent:#1d4ed8;      /* azul rey */
-      --accent2:#1e40af;     /* azul más profundo */
+      --accent2:#1e40af;
       --accentSoft: rgba(29,78,216,.10);
 
       --ok:#16a34a;
@@ -41,127 +40,71 @@
       color:var(--ink);
     }
 
-    .wrap{max-width:1250px;margin:0 auto;padding:22px}
+    .wrap{max-width:1350px;margin:0 auto;padding:22px}
 
-    .top{
-      display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;
-      margin-bottom:14px;
-    }
-
-    .brand{
-      flex:1 1 330px;
+    /* Header */
+    .header{
+      display:flex;align-items:center;justify-content:space-between;gap:14px;
       background: var(--card);
       border:1px solid var(--line);
       border-radius: var(--radius);
       padding:16px 16px;
       box-shadow: var(--shadow);
-      min-width: 280px;
     }
-    .brand h1{margin:0 0 6px;font-size:18px;letter-spacing:.2px}
-    .brand p{margin:0;color:var(--muted);font-size:13px;line-height:1.4}
+    .title{
+      font-size:22px;
+      font-weight:900;
+      letter-spacing:.2px;
+      margin:0;
+      line-height:1.15;
+    }
+    .subtitle{
+      margin:6px 0 0;
+      color:var(--muted);
+      font-size:13px;
+    }
+    .brand-right{
+      display:flex;align-items:center;gap:10px;
+    }
+    .logo{
+      width:86px;height:86px;
+      object-fit:cover;
+      border-radius: 18px;
+      border:1px solid rgba(29,78,216,.25);
+      box-shadow: 0 10px 22px rgba(29,78,216,.18);
+      background: #fff;
+    }
 
-    .card{
-      flex:2 1 560px;
-      background: var(--card);
-      border:1px solid var(--line);
-      border-radius: var(--radius);
-      padding:14px;
-      box-shadow: var(--shadow);
-      min-width: 320px;
-    }
-
-    .grid{
-      display:grid;
-      grid-template-columns: 1.3fr 0.7fr 0.7fr;
-      gap:10px;
-    }
-    @media (max-width: 980px){
-      .grid{grid-template-columns: 1fr}
-    }
-
+    /* Stats row */
     .stats{
       width:100%;
       display:grid;
       grid-template-columns: 1.2fr 0.8fr 0.8fr;
       gap:10px;
-      margin-top:12px;
+      margin:14px 0 14px;
     }
     @media (max-width: 980px){
       .stats{grid-template-columns:1fr}
     }
-
     .stat{
       border:1px solid var(--line);
       background: linear-gradient(180deg, rgba(29,78,216,.06), rgba(255,255,255,1));
       border-radius: 16px;
       padding:12px;
+      min-height: 74px;
     }
     .stat .k{font-size:12px;color:var(--muted);margin-bottom:6px}
-    .stat .v{font-size:16px;font-weight:800;letter-spacing:.2px}
+    .stat .v{font-size:16px;font-weight:900;letter-spacing:.2px}
     .stat .s{font-size:12px;color:var(--muted);margin-top:4px}
 
-    label{display:block;font-size:12px;color:var(--muted);margin:2px 0 6px}
-    input{
-      width:100%;
-      border-radius: 12px;
-      border:1px solid var(--line);
-      background: #fff;
-      color:var(--ink);
-      padding:10px 10px;
-      outline:none;
-      transition: box-shadow .12s ease, border-color .12s ease;
-    }
-    input:focus{
-      border-color: rgba(29,78,216,.55);
-      box-shadow: 0 0 0 4px rgba(29,78,216,.12);
-    }
-    input::placeholder{color:rgba(71,85,105,.55)}
-
-    .row{
-      display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px
-    }
-
-    .btn{
-      border:1px solid rgba(29,78,216,.20);
-      background: linear-gradient(180deg, rgba(29,78,216,.15), rgba(29,78,216,.06));
-      color:var(--ink);
-      padding:10px 12px;
-      border-radius: 12px;
-      cursor:pointer;
-      font-weight:800;
-    }
-    .btn.secondary{
-      border-color: rgba(29,78,216,.22);
-      background: linear-gradient(180deg, rgba(29,78,216,.10), rgba(29,78,216,.04));
-    }
-    .btn.ghost{
-      border-color: var(--line);
-      background: transparent;
-      color: var(--muted);
-      font-weight:700;
-    }
-    .btn:disabled{opacity:.55;cursor:not-allowed}
-
-    .pill{
-      display:inline-flex;align-items:center;gap:8px;
-      padding:7px 10px;border-radius:999px;
-      border:1px solid var(--line);
-      background: rgba(255,255,255,.85);
-      color:var(--muted);
-      font-size:12px;
-    }
-    .dot{width:8px;height:8px;border-radius:50%}
-    .dot.ok{background:var(--ok)}
-    .dot.bad{background:var(--bad)}
-    .dot.warn{background:var(--warn)}
-
-    .tabs{ display:flex;gap:10px;flex-wrap:wrap; margin:16px 0 10px; }
+    /* Tabs */
+    .tabs{ display:flex;gap:10px;flex-wrap:wrap; margin:0 0 10px; }
     .tab{
       padding:10px 12px;border-radius: 999px;
       border:1px solid var(--line);
       background: rgba(255,255,255,.75);
       cursor:pointer;color: var(--muted);user-select:none;
-      font-weight:800;
+      font-weight:900;
     }
     .tab.active{
       background: linear-gradient(180deg, rgba(29,78,216,.18), rgba(29,78,216,.06));
@@ -169,6 +112,53 @@
       border-color: rgba(29,78,216,.30);
     }
 
+    /* Layout for table view + month sidebar */
+    .layout{
+      display:grid;
+      grid-template-columns: 240px 1fr;
+      gap:12px;
+    }
+    @media (max-width: 980px){
+      .layout{grid-template-columns:1fr}
+    }
+
+    .sidebar{
+      background: var(--card);
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      padding:12px;
+      box-shadow: var(--shadow);
+      height: calc(62vh + 90px);
+      overflow:auto;
+      display:none;
+    }
+    .sidebar.show{display:block}
+    .side-title{
+      margin:0 0 10px;
+      font-size:12px;
+      color: var(--muted);
+      font-weight:900;
+      letter-spacing:.3px;
+      text-transform: uppercase;
+    }
+    .month{
+      display:flex;align-items:center;justify-content:space-between;gap:10px;
+      padding:10px 10px;
+      border-radius: 12px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.85);
+      cursor:pointer;
+      margin-bottom:8px;
+      font-weight:900;
+      color: var(--ink);
+    }
+    .month small{color: var(--muted); font-weight:800}
+    .month.active{
+      border-color: rgba(29,78,216,.35);
+      background: linear-gradient(180deg, rgba(29,78,216,.16), rgba(29,78,216,.06));
+    }
+
+    /* Panel + table */
     .panel{
       background: var(--card);
       border:1px solid var(--line);
@@ -182,7 +172,23 @@
     }
     .panel-head h2{margin:0;font-size:14px}
     .tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-    .tools input{width:260px;max-width:100%}
+    label{display:block;font-size:12px;color:var(--muted);margin:2px 0 6px}
+    input{
+      border-radius: 12px;
+      border:1px solid var(--line);
+      background: #fff;
+      color:var(--ink);
+      padding:10px 10px;
+      outline:none;
+      transition: box-shadow .12s ease, border-color .12s ease;
+      width:260px; max-width:100%;
+    }
+    input:focus{
+      border-color: rgba(29,78,216,.55);
+      box-shadow: 0 0 0 4px rgba(29,78,216,.12);
+    }
+    input.small{width:120px}
+    input::placeholder{color:rgba(71,85,105,.55)}
 
     table{
       width:100%;
@@ -217,7 +223,7 @@
     .pager button{
       padding:7px 10px;border-radius: 10px;border:1px solid var(--line);
       background: rgba(255,255,255,.85); color:var(--ink); cursor:pointer;
-      font-weight:800;
+      font-weight:900;
     }
     .pager button:disabled{opacity:.55;cursor:not-allowed}
 
@@ -228,7 +234,7 @@
       background: rgba(15,23,42,.02);
       padding:10px 12px;
     }
-    summary{cursor:pointer;color:var(--muted);font-weight:800}
+    summary{cursor:pointer;color:var(--muted);font-weight:900}
     pre{
       margin:10px 0 0;
       background: rgba(15,23,42,.04);
@@ -246,59 +252,34 @@
 
 <body>
   <div class="wrap">
-    <div class="top">
-      <div class="brand">
-        <h1>EndoDB • Viewer</h1>
-        <p>
-          Lee tablas de Nextcloud Tables usando tu Worker (evita CORS).<br/>
-          Arriba te muestro métricas rápidas; abajo podés navegar y buscar en cada tabla.
-        </p>
+    <div class="header">
+      <div>
+        <h1 class="title">Base de Datos Dr Perez</h1>
+        <p class="subtitle">Viewer de tablas (VCC y estadísticas por mes).</p>
       </div>
+      <div class="brand-right">
+        <img class="logo"
+             alt="Logo"
+             src="https://raw.githubusercontent.com/Rafamaro/Base-de-datos-endoscopia/main/WhatsApp%20Image%202026-02-03%20at%2022.23.15.jpeg">
+      </div>
+    </div>
 
-      <div class="card">
-        <div class="grid">
-          <div>
-            <label>Base URL del Worker</label>
-            <input id="baseUrl" placeholder="https://basededatos.corrongo182.workers.dev" />
-          </div>
-          <div>
-            <label>Table ID (Base de datos de VCC)</label>
-            <input id="t1" placeholder="2" />
-          </div>
-          <div>
-            <label>Table ID (Estudios por mes)</label>
-            <input id="t2" placeholder="3" />
-          </div>
-        </div>
-
-        <div class="row">
-          <button class="btn" id="btnLoad">Cargar</button>
-          <button class="btn secondary" id="btnReload" disabled>Recargar</button>
-          <button class="btn ghost" id="btnExport" disabled>Export CSV</button>
-
-          <span class="pill" id="statusPill">
-            <span class="dot warn"></span>
-            <span id="statusText">Sin cargar</span>
-          </span>
-        </div>
-
-        <div class="stats">
-          <div class="stat">
-            <div class="k">Entubación cecal</div>
-            <div class="v" id="statCecal">—</div>
-            <div class="s" id="statCecalSub">—</div>
-          </div>
-          <div class="stat">
-            <div class="k">VCC totales (denominador)</div>
-            <div class="v" id="statVccTot">—</div>
-            <div class="s">Desde “Base de datos de VCC”</div>
-          </div>
-          <div class="stat">
-            <div class="k">VCC con ciego alcanzado (numerador)</div>
-            <div class="v" id="statVccCiego">—</div>
-            <div class="s">Detectado por campo “llego_a_ciego / cecal_intubation”</div>
-          </div>
-        </div>
+    <!-- Stats (cambian según vista) -->
+    <div class="stats">
+      <div class="stat" id="s1">
+        <div class="k" id="s1k">—</div>
+        <div class="v" id="s1v">—</div>
+        <div class="s" id="s1s">—</div>
+      </div>
+      <div class="stat" id="s2">
+        <div class="k" id="s2k">—</div>
+        <div class="v" id="s2v">—</div>
+        <div class="s" id="s2s">—</div>
+      </div>
+      <div class="stat" id="s3">
+        <div class="k" id="s3k">—</div>
+        <div class="v" id="s3v">—</div>
+        <div class="s" id="s3s">—</div>
       </div>
     </div>
 
@@ -307,53 +288,55 @@
       <div class="tab" id="tab2">Estudios por mes</div>
     </div>
 
-    <div class="panel">
-      <div class="panel-head">
-        <h2 id="tableTitle">—</h2>
-        <div class="tools">
-          <input id="q" placeholder="Buscar en esta tabla…" />
-          <input id="pageSize" placeholder="25" title="Filas por página" />
+    <div class="layout">
+      <!-- sidebar months -->
+      <div class="sidebar" id="sidebar">
+        <div class="side-title">Meses</div>
+        <div id="months"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2 id="tableTitle">—</h2>
+          <div class="tools">
+            <input id="q" placeholder="Buscar en esta tabla…" />
+            <input id="pageSize" class="small" placeholder="25" title="Filas por página" />
+          </div>
         </div>
-      </div>
 
-      <div style="overflow:auto; max-height: 62vh; border-radius:14px;">
-        <table>
-          <thead id="thead"></thead>
-          <tbody id="tbody"></tbody>
-        </table>
-      </div>
-
-      <div class="footer">
-        <div id="meta">—</div>
-        <div class="pager">
-          <button id="prev">◀</button>
-          <span>Pág <span id="pageN">1</span> / <span id="pageMax">1</span></span>
-          <button id="next">▶</button>
+        <div style="overflow:auto; max-height: 62vh; border-radius:14px;">
+          <table>
+            <thead id="thead"></thead>
+            <tbody id="tbody"></tbody>
+          </table>
         </div>
-      </div>
 
-      <details>
-        <summary>Debug</summary>
-        <pre id="debug">(vacío)</pre>
-      </details>
+        <div class="footer">
+          <div id="meta">—</div>
+          <div class="pager">
+            <button id="prev">◀</button>
+            <span>Pág <span id="pageN">1</span> / <span id="pageMax">1</span></span>
+            <button id="next">▶</button>
+          </div>
+        </div>
+
+        <details>
+          <summary>Debug</summary>
+          <pre id="debug">(vacío)</pre>
+        </details>
+      </div>
     </div>
   </div>
 
   <script>
-    const KEY = {
-      baseUrl: "endodb_worker_baseUrl",
-      t1: "endodb_worker_t1",
-      t2: "endodb_worker_t2",
-    };
-
     const $ = (id) => document.getElementById(id);
 
-    function setStatus(kind, text){
-      const pill = $("statusPill");
-      const dot = pill.querySelector(".dot");
-      dot.className = "dot " + (kind || "warn");
-      $("statusText").textContent = text;
-    }
+    // ✅ Hardcode (pediste borrar UI de configuración)
+    const CONFIG = {
+      baseUrl: "https://basededatos.corrongo182.workers.dev",
+      tableVccId: 2,
+      tableByMonthId: 3,
+    };
 
     async function fetchJson(url){
       const res = await fetch(url, { method: "GET" });
@@ -396,38 +379,6 @@
       return out;
     }
 
-    function toCsv(rows, columns){
-      const esc = (v) => {
-        if (v === null || v === undefined) return "";
-        const s = String(v).replaceAll('"','""');
-        return `"${s}"`;
-      };
-      const header = columns.map(c => esc(c)).join(",");
-      const lines = rows.map(r => columns.map(c => esc(r[c])).join(","));
-      return [header, ...lines].join("\n");
-    }
-
-    function downloadText(filename, content, mime="text/plain"){
-      const blob = new Blob([content], {type:mime});
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    }
-
-    const state = {
-      activeIdx: 0,
-      tables: [
-        { id: 2, name: "Base de datos de VCC", cols: [], rows: [], raw: {}, q:"", page:1, pageSize:25 },
-        { id: 3, name: "Estudios por mes", cols: [], rows: [], raw: {}, q:"", page:1, pageSize:25 },
-      ],
-      sortKey: null,
-      sortDir: "asc",
-    };
-
     function guessBoolean(v){
       if (typeof v === "boolean") return v;
       if (v === null || v === undefined) return null;
@@ -437,26 +388,215 @@
       return null;
     }
 
-    function computeStats(){
-      const t = state.tables[0]; // base VCC
+    function findKey(keys, wanted){
+      const low = keys.map(k => [k, k.toLowerCase()]);
+      for (const w of wanted){
+        const wl = w.toLowerCase();
+        const exact = low.find(([k, kl]) => kl === wl);
+        if (exact) return exact[0];
+      }
+      return null;
+    }
+
+    function findContains(keys, substrs){
+      const low = keys.map(k => [k, k.toLowerCase()]);
+      for (const s of substrs){
+        const sl = s.toLowerCase();
+        const hit = low.find(([k, kl]) => kl.includes(sl));
+        if (hit) return hit[0];
+      }
+      return null;
+    }
+
+    function parseMonth(value){
+      if (value === null || value === undefined) return null;
+      const s = String(value).trim();
+      if (!s) return null;
+
+      // If already like YYYY-MM
+      const m1 = s.match(/^(\d{4})[-/](\d{1,2})/);
+      if (m1){
+        const y = m1[1];
+        const mm = String(Math.max(1, Math.min(12, parseInt(m1[2],10)))).padStart(2,"0");
+        return `${y}-${mm}`;
+      }
+
+      // Try Date parsing
+      const d = new Date(s);
+      if (!Number.isNaN(d.getTime())){
+        const y = d.getFullYear();
+        const mm = String(d.getMonth()+1).padStart(2,"0");
+        return `${y}-${mm}`;
+      }
+
+      // Try "MM/YYYY" or "MM-YYYY"
+      const m2 = s.match(/^(\d{1,2})[-/](\d{4})$/);
+      if (m2){
+        const mm = String(Math.max(1, Math.min(12, parseInt(m2[1],10)))).padStart(2,"0");
+        const y = m2[2];
+        return `${y}-${mm}`;
+      }
+
+      return null;
+    }
+
+    const state = {
+      activeIdx: 0,
+      tables: [
+        { id: CONFIG.tableVccId, name: "Base de datos de VCC", cols: [], rows: [], raw: {}, q:"", page:1, pageSize:25 },
+        { id: CONFIG.tableByMonthId, name: "Estudios por mes", cols: [], rows: [], raw: {}, q:"", page:1, pageSize:25, monthKey: null, monthSelected: "ALL", months: [] },
+      ],
+      sortKey: null,
+      sortDir: "asc",
+    };
+
+    function setHeaderTitle(){
+      const t = state.tables[state.activeIdx];
+      $("tableTitle").textContent = `${t.name} (ID ${t.id})`;
+    }
+
+    function setActive(idx){
+      // persist inputs
+      const prev = state.tables[state.activeIdx];
+      prev.q = $("q").value || "";
+      prev.pageSize = parseInt($("pageSize").value || "25", 10) || prev.pageSize;
+
+      state.activeIdx = idx;
+      state.sortKey = null;
+      state.sortDir = "asc";
+
+      $("tab1").classList.toggle("active", idx===0);
+      $("tab2").classList.toggle("active", idx===1);
+
+      const t = state.tables[idx];
+      $("q").value = t.q || "";
+      $("pageSize").value = String(t.pageSize || 25);
+
+      // sidebar months only for tab2
+      $("sidebar").classList.toggle("show", idx===1);
+
+      setHeaderTitle();
+      renderMonths(); // update sidebar highlight
+      render();
+    }
+
+    function buildMonths(){
+      const t = state.tables[1];
       const rows = t.rows || [];
+      if (!rows.length){ t.months = []; t.monthKey = null; return; }
+
+      const keys = Object.keys(rows[0] || {}).filter(k => k !== "_row_id");
+      // try best date/month key
+      const key =
+        findContains(keys, ["mes", "month"]) ||
+        findContains(keys, ["fecha", "date"]) ||
+        null;
+
+      t.monthKey = key;
+
+      const map = new Map(); // month -> count
+      if (key){
+        for (const r of rows){
+          const m = parseMonth(r[key]);
+          if (!m) continue;
+          map.set(m, (map.get(m) || 0) + 1);
+        }
+      }
+      // sorted descending
+      t.months = [...map.entries()].sort((a,b) => b[0].localeCompare(a[0]));
+    }
+
+    function renderMonths(){
+      const t = state.tables[1];
+      const box = $("months");
+      box.innerHTML = "";
+
+      // If not in tab2, nothing
+      if (state.activeIdx !== 1) return;
+
+      // Always show ALL
+      const mkBtn = (label, value, count=null) => {
+        const div = document.createElement("div");
+        div.className = "month" + (t.monthSelected === value ? " active" : "");
+        div.innerHTML = `<span>${label}</span>${count!==null ? `<small>${count}</small>` : `<small> </small>`}`;
+        div.onclick = () => {
+          t.monthSelected = value;
+          t.page = 1;
+          renderMonths();
+          render();
+        };
+        box.appendChild(div);
+      };
+
+      const total = (t.rows || []).length;
+      mkBtn("Todos", "ALL", total);
+
+      if (!t.monthKey || !t.months.length){
+        const note = document.createElement("div");
+        note.style.color = "var(--muted)";
+        note.style.fontSize = "12px";
+        note.style.marginTop = "8px";
+        note.textContent = "No pude detectar una columna de fecha/mes para agrupar.";
+        box.appendChild(note);
+        return;
+      }
+
+      for (const [m, c] of t.months){
+        // pretty label: YYYY-MM -> Mes YYYY
+        const y = m.slice(0,4);
+        const mm = m.slice(5,7);
+        const nombres = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+        const lbl = `${nombres[parseInt(mm,10)-1] || mm} ${y}`;
+        mkBtn(lbl, m, c);
+      }
+    }
+
+    function getEffectiveRows(t){
+      let rows = t.rows || [];
+
+      // Month filter only for tab2
+      if (state.activeIdx === 1 && t.monthSelected && t.monthSelected !== "ALL" && t.monthKey){
+        rows = rows.filter(r => parseMonth(r[t.monthKey]) === t.monthSelected);
+      }
+
+      // Search filter
+      const q = (t.q || "").trim().toLowerCase();
+      if (q){
+        rows = rows.filter(r =>
+          Object.keys(r).some(k => (r[k] ?? "").toString().toLowerCase().includes(q))
+        );
+      }
+
+      return rows;
+    }
+
+    function setStatsForVcc(){
+      const t = state.tables[0];
+      const rows = getEffectiveRows(t);
       if (!rows.length){
-        $("statCecal").textContent = "—";
-        $("statCecalSub").textContent = "Cargá datos para calcular";
-        $("statVccTot").textContent = "—";
-        $("statVccCiego").textContent = "—";
+        $("s1k").textContent = "Entubación cecal";
+        $("s1v").textContent = "—";
+        $("s1s").textContent = "Sin filas para calcular";
+
+        $("s2k").textContent = "VCC totales";
+        $("s2v").textContent = "—";
+        $("s2s").textContent = "—";
+
+        $("s3k").textContent = "VCC con ciego alcanzado";
+        $("s3v").textContent = "—";
+        $("s3s").textContent = "—";
         return;
       }
 
       const keys = Object.keys(rows[0] || {});
-      const keyProc = keys.find(k => k.toLowerCase() === "procedure_type") || null;
+      const keyProc = findKey(keys, ["procedure_type"]) || findContains(keys, ["procedure"]) || null;
       const keyCecal =
-        keys.find(k => ["llego_a_ciego","cecal_intubation","entubacion_cecal","entubación_cecal"].includes(k.toLowerCase())) ||
-        keys.find(k => k.toLowerCase().includes("ciego") || k.toLowerCase().includes("cecal")) ||
+        findKey(keys, ["llego_a_ciego","cecal_intubation","entubacion_cecal","entubación_cecal"]) ||
+        findContains(keys, ["ciego", "cecal"]) ||
         null;
 
       const isVccRow = (r) => {
-        if (!keyProc) return true; // si no hay procedure_type, asumimos que la tabla es solo VCC
+        if (!keyProc) return true;
         const v = (r[keyProc] ?? "").toString().trim().toUpperCase();
         return v === "VCC";
       };
@@ -475,51 +615,75 @@
       const pct = denom > 0 ? (num/denom*100) : 0;
       const frac = `${num.toLocaleString()} / ${denom.toLocaleString()}`;
 
-      $("statVccTot").textContent = denom.toLocaleString();
-      $("statVccCiego").textContent = keyCecal ? num.toLocaleString() : "—";
-      $("statCecal").textContent = keyCecal ? `${frac} (${pct.toFixed(1)}%)` : "—";
-      $("statCecalSub").textContent = keyCecal
-        ? `Campo usado: ${keyCecal}${keyProc ? ` • procedure_type=VCC` : ""}`
-        : "No encontré el campo de ciego (llego_a_ciego / cecal_intubation).";
+      $("s1k").textContent = "Entubación cecal";
+      $("s1v").textContent = keyCecal ? `${frac} (${pct.toFixed(1)}%)` : "—";
+      $("s1s").textContent = keyCecal ? `Campo: ${keyCecal}${keyProc ? " • procedure_type=VCC" : ""}` : "No encontré campo de ciego.";
+
+      $("s2k").textContent = "VCC totales";
+      $("s2v").textContent = denom.toLocaleString();
+      $("s2s").textContent = "Denominador";
+
+      $("s3k").textContent = "VCC con ciego alcanzado";
+      $("s3v").textContent = keyCecal ? num.toLocaleString() : "—";
+      $("s3s").textContent = "Numerador";
     }
 
-    function setActive(idx){
-      // persistimos búsqueda/paginación del tab anterior
-      const prev = state.tables[state.activeIdx];
-      prev.q = $("q").value || "";
-      prev.pageSize = parseInt($("pageSize").value || "25", 10) || prev.pageSize;
+    function setStatsForByMonth(){
+      const t = state.tables[1];
+      const rows = getEffectiveRows(t);
 
-      state.activeIdx = idx;
-      state.sortKey = null;
-      state.sortDir = "asc";
+      const total = rows.length;
 
-      $("tab1").classList.toggle("active", idx===0);
-      $("tab2").classList.toggle("active", idx===1);
+      // detect keys
+      const keys = Object.keys(rows[0] || {});
+      const keyProc = findKey(keys, ["procedure_type"]) || findContains(keys, ["procedure"]) || null;
+      const keyTher = findKey(keys, ["terapeutica","terapéutica","therapeutic","therapeutics"]) || findContains(keys, ["terapeut"]) || null;
 
-      const t = state.tables[idx];
-      $("tableTitle").textContent = `${t.name} (ID ${t.id})`;
+      const proc = (r) => (keyProc ? (r[keyProc] ?? "").toString().trim().toUpperCase() : "");
+      const ther = (r) => (keyTher ? guessBoolean(r[keyTher]) : null);
 
-      // restaurar inputs
-      $("q").value = t.q || "";
-      $("pageSize").value = String(t.pageSize || 25);
+      let vedaNo = 0, vccNo = 0, vedaYes = 0, vccYes = 0;
 
-      render();
+      for (const r of rows){
+        const p = proc(r);
+        const th = ther(r);
+
+        if (p === "VEDA"){
+          if (th === true) vedaYes++;
+          else vedaNo++; // null/false -> sin terapéutica (por ahora)
+        } else if (p === "VCC"){
+          if (th === true) vccYes++;
+          else vccNo++;
+        }
+      }
+
+      $("s1k").textContent = "Total de estudios";
+      $("s1v").textContent = total.toLocaleString();
+      $("s1s").textContent = (t.monthSelected && t.monthSelected !== "ALL") ? `Mes: ${t.monthSelected}` : "Todos los meses";
+
+      $("s2k").textContent = "VEDA / VCC (sin terapéutica)";
+      $("s2v").textContent = `${vedaNo.toLocaleString()} / ${vccNo.toLocaleString()}`;
+      $("s2s").textContent = keyTher ? "terapeutica = false/null" : "No detecté columna de terapéutica";
+
+      $("s3k").textContent = "VEDA / VCC (con terapéutica)";
+      $("s3v").textContent = `${vedaYes.toLocaleString()} / ${vccYes.toLocaleString()}`;
+      $("s3s").textContent = keyTher ? "terapeutica = true" : "No detecté columna de terapéutica";
+    }
+
+    function updateStats(){
+      if (state.activeIdx === 0) setStatsForVcc();
+      else setStatsForByMonth();
     }
 
     function render(){
       const t = state.tables[state.activeIdx];
-      const rows0 = t.rows || [];
+      const rows0 = getEffectiveRows(t);
       const cols0 = t.cols || [];
       const colNames = ["_row_id", ...cols0.map(c => c.title)].filter((v, i, a) => a.indexOf(v) === i);
 
-      const q = (t.q || "").trim().toLowerCase();
       let rows = rows0;
-      if (q){
-        rows = rows0.filter(r =>
-          Object.keys(r).some(k => (r[k] ?? "").toString().toLowerCase().includes(q))
-        );
-      }
 
+      // sort
       if (state.sortKey){
         const k = state.sortKey;
         const dir = state.sortDir === "asc" ? 1 : -1;
@@ -534,6 +698,7 @@
         });
       }
 
+      // paginate
       const ps = Math.max(1, t.pageSize|0);
       const total = rows.length;
       const maxPage = Math.max(1, Math.ceil(total / ps));
@@ -574,7 +739,8 @@
 
       $("meta").textContent =
         `${total.toLocaleString()} filas` +
-        (q ? ` (filtradas por "${t.q}")` : "") +
+        (t.q ? ` (filtradas por "${t.q}")` : "") +
+        (state.activeIdx===1 && t.monthSelected!=="ALL" ? ` • mes: ${t.monthSelected}` : "") +
         (state.sortKey ? ` • orden: ${state.sortKey} (${state.sortDir})` : "");
 
       $("pageN").textContent = String(t.page);
@@ -583,39 +749,15 @@
       $("next").disabled = t.page >= maxPage;
 
       $("debug").textContent = JSON.stringify(t.raw, null, 2);
-    }
 
-    function saveSettings(){
-      localStorage.setItem(KEY.baseUrl, $("baseUrl").value.trim());
-      localStorage.setItem(KEY.t1, $("t1").value.trim());
-      localStorage.setItem(KEY.t2, $("t2").value.trim());
-    }
-
-    function loadSettings(){
-      $("baseUrl").value = localStorage.getItem(KEY.baseUrl) || "https://basededatos.corrongo182.workers.dev";
-      $("t1").value = localStorage.getItem(KEY.t1) || "2";
-      $("t2").value = localStorage.getItem(KEY.t2) || "3";
+      updateStats();
     }
 
     async function loadAll(){
-      saveSettings();
-      const baseUrl = $("baseUrl").value.trim().replace(/\/+$/,"");
-      const t1 = Number($("t1").value.trim()) || 2;
-      const t2 = Number($("t2").value.trim()) || 3;
-
-      state.tables[0].id = t1;
-      state.tables[1].id = t2;
-
-      $("tableTitle").textContent = `${state.tables[state.activeIdx].name} (ID ${state.tables[state.activeIdx].id})`;
-
-      setStatus("warn", "Cargando…");
-      $("btnLoad").disabled = true;
-      $("btnReload").disabled = true;
-      $("btnExport").disabled = true;
-
       try{
         for (let i=0;i<2;i++){
           const tid = state.tables[i].id;
+          const baseUrl = CONFIG.baseUrl.replace(/\/+$/,"");
 
           const urlCols = `${baseUrl}/nc/tables/${tid}/columns`;
           const urlRows = `${baseUrl}/nc/tables/${tid}/rows`;
@@ -635,28 +777,19 @@
           state.tables[i].rows = rows;
         }
 
-        const okAny = state.tables.some(t => (t.rows?.length || 0) > 0);
-        setStatus(okAny ? "ok" : "warn", okAny ? "Cargado" : "Sin filas (ver Debug)");
-
-        $("btnReload").disabled = false;
-        $("btnExport").disabled = false;
-
-        computeStats();
-
+        buildMonths();
+        renderMonths();
+        setHeaderTitle();
         render();
       } catch (e){
         console.error(e);
-        setStatus("bad", "Error (ver consola)");
-      } finally {
-        $("btnLoad").disabled = false;
+        $("debug").textContent = "Error cargando datos. Mirá consola del navegador.";
       }
     }
 
+    // UI handlers
     $("tab1").onclick = () => setActive(0);
     $("tab2").onclick = () => setActive(1);
-
-    $("btnLoad").onclick = loadAll;
-    $("btnReload").onclick = loadAll;
 
     $("q").addEventListener("input", (e) => {
       const t = state.tables[state.activeIdx];
@@ -676,17 +809,10 @@
     $("prev").onclick = () => { const t=state.tables[state.activeIdx]; t.page = Math.max(1, t.page - 1); render(); };
     $("next").onclick = () => { const t=state.tables[state.activeIdx]; t.page = t.page + 1; render(); };
 
-    $("btnExport").onclick = () => {
-      const t = state.tables[state.activeIdx];
-      const cols = ["_row_id", ...(t.cols || []).map(c => c.title)].filter((v,i,a)=>a.indexOf(v)===i);
-      const csv = toCsv(t.rows || [], cols);
-      downloadText(`table_${t.id}.csv`, csv, "text/csv;charset=utf-8");
-    };
-
-    loadSettings();
-    // set defaults in inputs
+    // Init
     $("pageSize").value = "25";
     setActive(0);
+    loadAll();
   </script>
 </body>
 </html>
