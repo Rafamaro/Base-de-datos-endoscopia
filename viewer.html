@@ -336,6 +336,9 @@
     </div>
   </div>
 
+  <!-- Hidden stats loader (reusa stats.html) -->
+  <iframe id="statsFrame" src="./stats.html" style="display:none" aria-hidden="true"></iframe>
+
   <script>
     const $ = (id) => document.getElementById(id);
 
@@ -588,161 +591,65 @@
       return rows;
     }
 
-    function setStatsForVcc(){
-      const t = state.tables[0];
-      const rows = getEffectiveRows(t);
-      if (!rows.length){
+    
+    // === Stats bridge (viewer solo muestra lo que calcula stats.html) ===
+    const statsState = { payload: null, ready: false };
+
+    function applyStats(){
+      const p = statsState.payload;
+      if (!p || p.status !== "OK"){
         $("s1k").textContent = "Entubación cecal";
         $("s1v").textContent = "—";
-        $("s1s").textContent = "Sin filas para calcular";
+        $("s1s").textContent = p && p.status ? `Estado: ${p.status}` : "—";
 
-        $("s2k").textContent = "VCC totales";
+        $("s2k").textContent = "Calidad preparación (Boston)";
         $("s2v").textContent = "—";
-        $("s2s").textContent = "—";
+        $("s2s").textContent = p && p.error ? String(p.error).slice(0,120) : "—";
 
-        $("s3k").textContent = "VCC con ciego alcanzado";
+        $("s3k").textContent = (state.activeIdx === 0) ? "VCC totales" : "Estudios totales";
         $("s3v").textContent = "—";
         $("s3s").textContent = "—";
         return;
       }
 
-      const keys = Object.keys(rows[0] || {});
-      const keyProc = findKey(keys, ["procedure_type"]) || findContains(keys, ["procedure"]) || null;
-      const keyCecal =
-        findKey(keys, ["llego_a_ciego","cecal_intubation","entubacion_cecal","entubación_cecal"]) ||
-        findContains(keys, ["ciego", "cecal"]) ||
-        null;
-
-      const isVccRow = (r) => {
-        if (!keyProc) return true;
-        const v = (r[keyProc] ?? "").toString().trim().toUpperCase();
-        return v === "VCC";
-      };
-
-      const vccRows = rows.filter(isVccRow);
-      const denom = vccRows.length;
-
-      let num = 0;
-      if (keyCecal){
-        for (const r of vccRows){
-          const b = guessBoolean(r[keyCecal]);
-          if (b === true) num++;
-        }
-      }
-
-      const pct = denom > 0 ? (num/denom*100) : 0;
-      const frac = `${num.toLocaleString()} / ${denom.toLocaleString()}`;
-
+      // Card 1
       $("s1k").textContent = "Entubación cecal";
-      $("s1v").textContent = keyCecal ? `${frac} (${pct.toFixed(1)}%)` : "—";
-      $("s1s").textContent = keyCecal ? `Campo: ${keyCecal}${keyProc ? " • procedure_type=VCC" : ""}` : "No encontré campo de ciego.";
+      $("s1v").textContent = p.cecal?.value ?? "—";
+      $("s1s").textContent = p.cecal?.meta ?? "—";
 
-      $("s2k").textContent = "VCC totales";
-      $("s2v").textContent = denom.toLocaleString();
-      $("s2s").textContent = "Denominador";
+      // Card 2
+      $("s2k").textContent = "Calidad preparación (Boston)";
+      $("s2v").textContent = p.prep?.value ?? "—";
+      $("s2s").textContent = p.prep?.meta ?? "—";
 
-      $("s3k").textContent = "VCC con ciego alcanzado";
-      $("s3v").textContent = keyCecal ? num.toLocaleString() : "—";
-      $("s3s").textContent = "Numerador";
-    }
-
-    function setStatsForByMonth(){
-      const t = state.tables[1];
-      const rows = getEffectiveRows(t);
-
-      const monthLabel = (t.monthSelected && t.monthSelected !== "ALL") ? `Mes: ${t.monthSelected}` : "Todos los meses";
-
-      if (!rows.length){
-        $("s1k").textContent = "Total de estudios";
-        $("s1v").textContent = "—";
-        $("s1s").textContent = monthLabel;
-
-        $("s2k").textContent = "VCC";
-        $("s2v").textContent = "—";
-        $("s2s").textContent = "Sin datos";
-
-        $("s3k").textContent = "VEDA";
-        $("s3v").textContent = "—";
-        $("s3s").textContent = "Sin datos";
-        return;
-      }
-
-      const keys = Object.keys(rows[0] || {});
-      const keyProc =
-        findKey(keys, ["procedure_type"]) ||
-        findContains(keys, ["procedure", "proc", "tipo", "estudio"]) ||
-        null;
-
-      const keyTher =
-        findKey(keys, ["terapeutica","terapéutica","therapeutica","therapeutic","therapeutics"]) ||
-        findContains(keys, ["terapeut"]) ||
-        null;
-
-      // Si la tabla ya viene agregada por mes (columnas veda_sin / vcc_con, etc), sumamos columnas.
-      const hasAgg =
-        keys.some(k => k.toLowerCase().includes("veda")) &&
-        keys.some(k => k.toLowerCase().includes("vcc")) &&
-        (keys.some(k => k.toLowerCase().includes("sin")) || keys.some(k => k.toLowerCase().includes("con")));
-
-      const sumNum = (arr, key) => arr.reduce((acc,r) => {
-        const v = r[key];
-        const n = Number(String(v ?? "").replace(",", "."));
-        return acc + (Number.isFinite(n) ? n : 0);
-      }, 0);
-
-      let vedaNo = 0, vccNo = 0, vedaYes = 0, vccYes = 0;
-      let totalStudies = rows.length;
-
-      if (hasAgg){
-        const kVedaSin = keys.find(k => k.toLowerCase().includes("veda") && k.toLowerCase().includes("sin")) || null;
-        const kVccSin  = keys.find(k => k.toLowerCase().includes("vcc")  && k.toLowerCase().includes("sin")) || null;
-        const kVedaCon = keys.find(k => k.toLowerCase().includes("veda") && k.toLowerCase().includes("con")) || null;
-        const kVccCon  = keys.find(k => k.toLowerCase().includes("vcc")  && k.toLowerCase().includes("con")) || null;
-
-        vedaNo  = kVedaSin ? sumNum(rows, kVedaSin) : 0;
-        vccNo   = kVccSin  ? sumNum(rows, kVccSin)  : 0;
-        vedaYes = kVedaCon ? sumNum(rows, kVedaCon) : 0;
-        vccYes  = kVccCon  ? sumNum(rows, kVccCon)  : 0;
-
-        const kTotal = keys.find(k => k.toLowerCase() === "total" || k.toLowerCase().includes("total_est")) || null;
-        totalStudies = kTotal ? sumNum(rows, kTotal) : (vedaNo + vccNo + vedaYes + vccYes);
+      // Card 3 (cambia por pestaña)
+      if (state.activeIdx === 0){
+        $("s3k").textContent = "VCC totales";
+        $("s3v").textContent = (p.vcc ?? "—").toString();
+        $("s3s").textContent = "Según tipo de estudio (Tabla 3)";
       } else {
-        // Tabla con 1 fila = 1 estudio
-        const proc = (r) => (keyProc ? (r[keyProc] ?? "").toString().trim().toUpperCase() : "");
-        const ther = (r) => (keyTher ? guessBoolean(r[keyTher]) : null);
-
-        for (const r of rows){
-          const p = proc(r);
-          const th = ther(r);
-
-          if (p === "VEDA"){
-            if (th === true) vedaYes++;
-            else vedaNo++;
-          } else if (p === "VCC"){
-            if (th === true) vccYes++;
-            else vccNo++;
-          }
-        }
-        totalStudies = rows.length;
+        $("s3k").textContent = "Estudios totales";
+        $("s3v").textContent = (p.total ?? "—").toString();
+        $("s3s").textContent = "Total de filas (Tabla 3)";
       }
-
-      $("s1k").textContent = "Total de estudios";
-      $("s1v").textContent = totalStudies.toLocaleString();
-      $("s1s").textContent = monthLabel;
-
-      $("s2k").textContent = "VCC";
-      $("s2v").textContent = `${vccNo.toLocaleString()} sin • ${vccYes.toLocaleString()} con`;
-      $("s2s").textContent = (keyTher || hasAgg) ? "Terapéutica por estudio" : "No detecté columna terapéutica";
-
-      $("s3k").textContent = "VEDA";
-      $("s3v").textContent = `${vedaNo.toLocaleString()} sin • ${vedaYes.toLocaleString()} con`;
-      $("s3s").textContent = (keyTher || hasAgg) ? "Terapéutica por estudio" : "No detecté columna terapéutica";
     }
 
-    function updateStats(){
-      if (state.activeIdx === 0) setStatsForVcc();
-      else setStatsForByMonth();
+    function requestStatsRecalc(){
+      const fr = $("statsFrame");
+      if (!fr || !fr.contentWindow) return;
+      try{
+        fr.contentWindow.postMessage({ type: "endodb_stats_run" }, "*");
+      } catch {}
     }
+
+    window.addEventListener("message", (e) => {
+      const d = e.data;
+      if (!d || d.type !== "endodb_stats") return;
+      statsState.payload = d.payload || null;
+      statsState.ready = true;
+      applyStats();
+    });
+
 
     function render(){
       const t = state.tables[state.activeIdx];
@@ -819,7 +726,7 @@
 
       $("debug").textContent = JSON.stringify(t.raw, null, 2);
 
-      updateStats();
+      applyStats();
     }
 
     async function loadAll(){
@@ -851,6 +758,8 @@
         renderMonths();
         setHeaderTitle();
         setStatus("ok", "Cargado");
+        // refrescar stats desde stats.html
+        requestStatsRecalc();
         render();
       } catch (e){
         console.error(e);
@@ -887,6 +796,13 @@
     // Init
     $("pageSize").value = "25";
     setActive(0);
+
+    // stats iframe boot
+    const sf = $("statsFrame");
+    if (sf){
+      sf.addEventListener("load", () => requestStatsRecalc());
+    }
+
     loadAll();
   </script>
 </body>
