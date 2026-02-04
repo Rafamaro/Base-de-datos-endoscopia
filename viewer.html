@@ -3,54 +3,66 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>EndoDB • Nextcloud Tables Viewer (via Worker)</title>
+  <title>EndoDB • Viewer</title>
 
   <style>
     :root{
-      --bg0:#0b1220;
-      --bg1:#0f1a2e;
-      --card:#101c33;
-      --ink:#e7eefc;
-      --muted:#a9b7d6;
-      --line:rgba(255,255,255,.10);
-      --ok:#36d399;
-      --warn:#fbbf24;
-      --bad:#fb7185;
-      --accent:#60a5fa;
-      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      /* Blanco + azul rey */
+      --bg0:#f6f9ff;
+      --bg1:#ffffff;
+      --card:#ffffff;
+      --ink:#0f172a;
+      --muted:#475569;
+      --line:#e2e8f0;
+
+      --accent:#1d4ed8;      /* azul rey */
+      --accent2:#1e40af;     /* azul más profundo */
+      --accentSoft: rgba(29,78,216,.10);
+
+      --ok:#16a34a;
+      --warn:#f59e0b;
+      --bad:#ef4444;
+
+      --shadow: 0 10px 30px rgba(15,23,42,.08);
       --radius: 18px;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
     }
+
     *{box-sizing:border-box}
+    html,body{height:100%}
     body{
       margin:0;
       font-family: var(--sans);
-      background: radial-gradient(1200px 600px at 20% 0%, rgba(96,165,250,.25), transparent 60%),
-                  radial-gradient(900px 500px at 80% 10%, rgba(167,139,250,.18), transparent 65%),
-                  linear-gradient(180deg, var(--bg0), var(--bg1));
+      background:
+        radial-gradient(1100px 600px at 12% 0%, rgba(29,78,216,.12), transparent 55%),
+        radial-gradient(900px 520px at 92% 8%, rgba(29,78,216,.08), transparent 60%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
       color:var(--ink);
     }
-    .wrap{max-width:1200px;margin:0 auto;padding:22px}
+
+    .wrap{max-width:1250px;margin:0 auto;padding:22px}
+
     .top{
       display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;
-      margin-bottom:16px;
+      margin-bottom:14px;
     }
+
     .brand{
-      flex:1 1 320px;
-      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      flex:1 1 330px;
+      background: var(--card);
       border:1px solid var(--line);
       border-radius: var(--radius);
       padding:16px 16px;
       box-shadow: var(--shadow);
       min-width: 280px;
     }
-    .brand h1{margin:0 0 6px;font-size:18px}
-    .brand p{margin:0;color:var(--muted);font-size:13px;line-height:1.35}
+    .brand h1{margin:0 0 6px;font-size:18px;letter-spacing:.2px}
+    .brand p{margin:0;color:var(--muted);font-size:13px;line-height:1.4}
 
     .card{
-      flex:2 1 520px;
-      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      flex:2 1 560px;
+      background: var(--card);
       border:1px solid var(--line);
       border-radius: var(--radius);
       padding:14px;
@@ -66,39 +78,75 @@
     @media (max-width: 980px){
       .grid{grid-template-columns: 1fr}
     }
+
+    .stats{
+      width:100%;
+      display:grid;
+      grid-template-columns: 1.2fr 0.8fr 0.8fr;
+      gap:10px;
+      margin-top:12px;
+    }
+    @media (max-width: 980px){
+      .stats{grid-template-columns:1fr}
+    }
+
+    .stat{
+      border:1px solid var(--line);
+      background: linear-gradient(180deg, rgba(29,78,216,.06), rgba(255,255,255,1));
+      border-radius: 16px;
+      padding:12px;
+    }
+    .stat .k{font-size:12px;color:var(--muted);margin-bottom:6px}
+    .stat .v{font-size:16px;font-weight:800;letter-spacing:.2px}
+    .stat .s{font-size:12px;color:var(--muted);margin-top:4px}
+
     label{display:block;font-size:12px;color:var(--muted);margin:2px 0 6px}
     input{
       width:100%;
       border-radius: 12px;
-      border:1px solid rgba(255,255,255,.12);
-      background: rgba(10,18,34,.65);
+      border:1px solid var(--line);
+      background: #fff;
       color:var(--ink);
       padding:10px 10px;
       outline:none;
+      transition: box-shadow .12s ease, border-color .12s ease;
     }
-    input::placeholder{color:rgba(233,238,252,.45)}
+    input:focus{
+      border-color: rgba(29,78,216,.55);
+      box-shadow: 0 0 0 4px rgba(29,78,216,.12);
+    }
+    input::placeholder{color:rgba(71,85,105,.55)}
 
     .row{
       display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px
     }
+
     .btn{
-      border:1px solid rgba(255,255,255,.14);
-      background: linear-gradient(180deg, rgba(96,165,250,.25), rgba(96,165,250,.12));
+      border:1px solid rgba(29,78,216,.20);
+      background: linear-gradient(180deg, rgba(29,78,216,.15), rgba(29,78,216,.06));
       color:var(--ink);
       padding:10px 12px;
       border-radius: 12px;
       cursor:pointer;
-      font-weight:600;
+      font-weight:800;
     }
-    .btn.secondary{ background: linear-gradient(180deg, rgba(167,139,250,.18), rgba(167,139,250,.08)); }
-    .btn.ghost{ background: transparent; }
+    .btn.secondary{
+      border-color: rgba(29,78,216,.22);
+      background: linear-gradient(180deg, rgba(29,78,216,.10), rgba(29,78,216,.04));
+    }
+    .btn.ghost{
+      border-color: var(--line);
+      background: transparent;
+      color: var(--muted);
+      font-weight:700;
+    }
     .btn:disabled{opacity:.55;cursor:not-allowed}
 
     .pill{
       display:inline-flex;align-items:center;gap:8px;
       padding:7px 10px;border-radius:999px;
-      border:1px solid rgba(255,255,255,.12);
-      background: rgba(0,0,0,.18);
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.85);
       color:var(--muted);
       font-size:12px;
     }
@@ -110,18 +158,19 @@
     .tabs{ display:flex;gap:10px;flex-wrap:wrap; margin:16px 0 10px; }
     .tab{
       padding:10px 12px;border-radius: 999px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.15);
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.75);
       cursor:pointer;color: var(--muted);user-select:none;
+      font-weight:800;
     }
     .tab.active{
-      background: linear-gradient(180deg, rgba(96,165,250,.25), rgba(96,165,250,.10));
+      background: linear-gradient(180deg, rgba(29,78,216,.18), rgba(29,78,216,.06));
       color: var(--ink);
-      border-color: rgba(96,165,250,.35);
+      border-color: rgba(29,78,216,.30);
     }
 
     .panel{
-      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      background: var(--card);
       border:1px solid var(--line);
       border-radius: var(--radius);
       padding:14px;
@@ -139,26 +188,26 @@
       width:100%;
       border-collapse:separate;border-spacing:0;
       overflow:hidden;border-radius: 14px;
-      border:1px solid rgba(255,255,255,.10);
+      border:1px solid var(--line);
     }
     thead th{
-      background: rgba(0,0,0,.22);
+      background: rgba(15,23,42,.02);
       color: var(--muted);
       font-size:12px;
       text-align:left;
       padding:10px 10px;
-      border-bottom:1px solid rgba(255,255,255,.10);
+      border-bottom:1px solid var(--line);
       position:sticky; top:0;
       cursor:pointer; user-select:none; white-space:nowrap;
     }
     tbody td{
       padding:10px 10px;
-      border-bottom:1px solid rgba(255,255,255,.07);
+      border-bottom:1px solid rgba(226,232,240,.85);
       font-size:13px;
       vertical-align:top;
-      background: rgba(0,0,0,.10);
+      background: #fff;
     }
-    tbody tr:hover td{background: rgba(96,165,250,.10)}
+    tbody tr:hover td{background: rgba(29,78,216,.06)}
 
     .footer{
       display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;
@@ -166,25 +215,26 @@
     }
     .pager{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .pager button{
-      padding:7px 10px;border-radius: 10px;border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.15); color:var(--ink); cursor:pointer;
+      padding:7px 10px;border-radius: 10px;border:1px solid var(--line);
+      background: rgba(255,255,255,.85); color:var(--ink); cursor:pointer;
+      font-weight:800;
     }
     .pager button:disabled{opacity:.55;cursor:not-allowed}
 
     details{
       margin-top:12px;
-      border:1px solid rgba(255,255,255,.12);
+      border:1px solid var(--line);
       border-radius: 14px;
-      background: rgba(0,0,0,.12);
+      background: rgba(15,23,42,.02);
       padding:10px 12px;
     }
-    summary{cursor:pointer;color:var(--muted);font-weight:600}
+    summary{cursor:pointer;color:var(--muted);font-weight:800}
     pre{
       margin:10px 0 0;
-      background: rgba(0,0,0,.30);
+      background: rgba(15,23,42,.04);
       padding:10px;
       border-radius: 12px;
-      border:1px solid rgba(255,255,255,.08);
+      border:1px solid var(--line);
       overflow:auto;
       max-height: 320px;
       font-size:12px;
@@ -198,10 +248,10 @@
   <div class="wrap">
     <div class="top">
       <div class="brand">
-        <h1>Viewer • Nextcloud Tables (via Cloudflare Worker)</h1>
+        <h1>EndoDB • Viewer</h1>
         <p>
-          Este viewer lee tablas de Nextcloud usando un proxy Worker para evitar CORS.
-          Si algo falla, abrí Debug para ver la respuesta cruda.
+          Lee tablas de Nextcloud Tables usando tu Worker (evita CORS).<br/>
+          Arriba te muestro métricas rápidas; abajo podés navegar y buscar en cada tabla.
         </p>
       </div>
 
@@ -212,11 +262,11 @@
             <input id="baseUrl" placeholder="https://basededatos.corrongo182.workers.dev" />
           </div>
           <div>
-            <label>Table ID (BD)</label>
+            <label>Table ID (Base de datos de VCC)</label>
             <input id="t1" placeholder="2" />
           </div>
           <div>
-            <label>Table ID (Estudios/mes)</label>
+            <label>Table ID (Estudios por mes)</label>
             <input id="t2" placeholder="3" />
           </div>
         </div>
@@ -231,19 +281,37 @@
             <span id="statusText">Sin cargar</span>
           </span>
         </div>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="k">Entubación cecal</div>
+            <div class="v" id="statCecal">—</div>
+            <div class="s" id="statCecalSub">—</div>
+          </div>
+          <div class="stat">
+            <div class="k">VCC totales (denominador)</div>
+            <div class="v" id="statVccTot">—</div>
+            <div class="s">Desde “Base de datos de VCC”</div>
+          </div>
+          <div class="stat">
+            <div class="k">VCC con ciego alcanzado (numerador)</div>
+            <div class="v" id="statVccCiego">—</div>
+            <div class="s">Detectado por campo “llego_a_ciego / cecal_intubation”</div>
+          </div>
+        </div>
       </div>
     </div>
 
     <div class="tabs">
-      <div class="tab active" id="tab1">Tabla</div>
-      <div class="tab" id="tab2">Tabla</div>
+      <div class="tab active" id="tab1">Base de datos de VCC</div>
+      <div class="tab" id="tab2">Estudios por mes</div>
     </div>
 
     <div class="panel">
       <div class="panel-head">
         <h2 id="tableTitle">—</h2>
         <div class="tools">
-          <input id="q" placeholder="Buscar…" />
+          <input id="q" placeholder="Buscar en esta tabla…" />
           <input id="pageSize" placeholder="25" title="Filas por página" />
         </div>
       </div>
@@ -353,24 +421,88 @@
     const state = {
       activeIdx: 0,
       tables: [
-        { id: 2, name: "Base de datos", cols: [], rows: [], raw: {} },
-        { id: 3, name: "Estudios por mes", cols: [], rows: [], raw: {} },
+        { id: 2, name: "Base de datos de VCC", cols: [], rows: [], raw: {}, q:"", page:1, pageSize:25 },
+        { id: 3, name: "Estudios por mes", cols: [], rows: [], raw: {}, q:"", page:1, pageSize:25 },
       ],
       sortKey: null,
       sortDir: "asc",
-      q: "",
-      page: 1,
-      pageSize: 25,
     };
 
+    function guessBoolean(v){
+      if (typeof v === "boolean") return v;
+      if (v === null || v === undefined) return null;
+      const s = String(v).trim().toLowerCase();
+      if (["true","1","si","sí","y","yes"].includes(s)) return true;
+      if (["false","0","no","n"].includes(s)) return false;
+      return null;
+    }
+
+    function computeStats(){
+      const t = state.tables[0]; // base VCC
+      const rows = t.rows || [];
+      if (!rows.length){
+        $("statCecal").textContent = "—";
+        $("statCecalSub").textContent = "Cargá datos para calcular";
+        $("statVccTot").textContent = "—";
+        $("statVccCiego").textContent = "—";
+        return;
+      }
+
+      const keys = Object.keys(rows[0] || {});
+      const keyProc = keys.find(k => k.toLowerCase() === "procedure_type") || null;
+      const keyCecal =
+        keys.find(k => ["llego_a_ciego","cecal_intubation","entubacion_cecal","entubación_cecal"].includes(k.toLowerCase())) ||
+        keys.find(k => k.toLowerCase().includes("ciego") || k.toLowerCase().includes("cecal")) ||
+        null;
+
+      const isVccRow = (r) => {
+        if (!keyProc) return true; // si no hay procedure_type, asumimos que la tabla es solo VCC
+        const v = (r[keyProc] ?? "").toString().trim().toUpperCase();
+        return v === "VCC";
+      };
+
+      const vccRows = rows.filter(isVccRow);
+      const denom = vccRows.length;
+
+      let num = 0;
+      if (keyCecal){
+        for (const r of vccRows){
+          const b = guessBoolean(r[keyCecal]);
+          if (b === true) num++;
+        }
+      }
+
+      const pct = denom > 0 ? (num/denom*100) : 0;
+      const frac = `${num.toLocaleString()} / ${denom.toLocaleString()}`;
+
+      $("statVccTot").textContent = denom.toLocaleString();
+      $("statVccCiego").textContent = keyCecal ? num.toLocaleString() : "—";
+      $("statCecal").textContent = keyCecal ? `${frac} (${pct.toFixed(1)}%)` : "—";
+      $("statCecalSub").textContent = keyCecal
+        ? `Campo usado: ${keyCecal}${keyProc ? ` • procedure_type=VCC` : ""}`
+        : "No encontré el campo de ciego (llego_a_ciego / cecal_intubation).";
+    }
+
     function setActive(idx){
+      // persistimos búsqueda/paginación del tab anterior
+      const prev = state.tables[state.activeIdx];
+      prev.q = $("q").value || "";
+      prev.pageSize = parseInt($("pageSize").value || "25", 10) || prev.pageSize;
+
       state.activeIdx = idx;
       state.sortKey = null;
       state.sortDir = "asc";
-      state.page = 1;
+
       $("tab1").classList.toggle("active", idx===0);
       $("tab2").classList.toggle("active", idx===1);
-      $("tableTitle").textContent = `${state.tables[idx].name} (ID ${state.tables[idx].id})`;
+
+      const t = state.tables[idx];
+      $("tableTitle").textContent = `${t.name} (ID ${t.id})`;
+
+      // restaurar inputs
+      $("q").value = t.q || "";
+      $("pageSize").value = String(t.pageSize || 25);
+
       render();
     }
 
@@ -380,7 +512,7 @@
       const cols0 = t.cols || [];
       const colNames = ["_row_id", ...cols0.map(c => c.title)].filter((v, i, a) => a.indexOf(v) === i);
 
-      const q = (state.q || "").trim().toLowerCase();
+      const q = (t.q || "").trim().toLowerCase();
       let rows = rows0;
       if (q){
         rows = rows0.filter(r =>
@@ -402,11 +534,11 @@
         });
       }
 
-      const ps = Math.max(1, state.pageSize|0);
+      const ps = Math.max(1, t.pageSize|0);
       const total = rows.length;
       const maxPage = Math.max(1, Math.ceil(total / ps));
-      state.page = Math.min(state.page, maxPage);
-      const start = (state.page - 1) * ps;
+      t.page = Math.min(t.page, maxPage);
+      const start = (t.page - 1) * ps;
       const pageRows = rows.slice(start, start + ps);
 
       const thead = $("thead");
@@ -442,13 +574,13 @@
 
       $("meta").textContent =
         `${total.toLocaleString()} filas` +
-        (q ? ` (filtradas por "${state.q}")` : "") +
+        (q ? ` (filtradas por "${t.q}")` : "") +
         (state.sortKey ? ` • orden: ${state.sortKey} (${state.sortDir})` : "");
 
-      $("pageN").textContent = String(state.page);
+      $("pageN").textContent = String(t.page);
       $("pageMax").textContent = String(maxPage);
-      $("prev").disabled = state.page <= 1;
-      $("next").disabled = state.page >= maxPage;
+      $("prev").disabled = t.page <= 1;
+      $("next").disabled = t.page >= maxPage;
 
       $("debug").textContent = JSON.stringify(t.raw, null, 2);
     }
@@ -474,8 +606,6 @@
       state.tables[0].id = t1;
       state.tables[1].id = t2;
 
-      $("tab1").textContent = `Tabla ${t1}`;
-      $("tab2").textContent = `Tabla ${t2}`;
       $("tableTitle").textContent = `${state.tables[state.activeIdx].name} (ID ${state.tables[state.activeIdx].id})`;
 
       setStatus("warn", "Cargando…");
@@ -511,6 +641,8 @@
         $("btnReload").disabled = false;
         $("btnExport").disabled = false;
 
+        computeStats();
+
         render();
       } catch (e){
         console.error(e);
@@ -527,20 +659,22 @@
     $("btnReload").onclick = loadAll;
 
     $("q").addEventListener("input", (e) => {
-      state.q = e.target.value || "";
-      state.page = 1;
+      const t = state.tables[state.activeIdx];
+      t.q = e.target.value || "";
+      t.page = 1;
       render();
     });
 
     $("pageSize").addEventListener("input", (e) => {
+      const t = state.tables[state.activeIdx];
       const n = parseInt(e.target.value || "25", 10);
-      state.pageSize = Number.isFinite(n) && n > 0 ? n : 25;
-      state.page = 1;
+      t.pageSize = Number.isFinite(n) && n > 0 ? n : 25;
+      t.page = 1;
       render();
     });
 
-    $("prev").onclick = () => { state.page = Math.max(1, state.page - 1); render(); };
-    $("next").onclick = () => { state.page = state.page + 1; render(); };
+    $("prev").onclick = () => { const t=state.tables[state.activeIdx]; t.page = Math.max(1, t.page - 1); render(); };
+    $("next").onclick = () => { const t=state.tables[state.activeIdx]; t.page = t.page + 1; render(); };
 
     $("btnExport").onclick = () => {
       const t = state.tables[state.activeIdx];
@@ -550,6 +684,8 @@
     };
 
     loadSettings();
+    // set defaults in inputs
+    $("pageSize").value = "25";
     setActive(0);
   </script>
 </body>
