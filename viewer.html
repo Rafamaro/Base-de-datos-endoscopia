@@ -14,7 +14,7 @@
       --muted:#475569;
       --line:#e2e8f0;
 
-      --accent:#1d4ed8;      /* azul rey */
+      --accent:#1d4ed8;
       --accent2:#1e40af;
       --accentSoft: rgba(29,78,216,.10);
 
@@ -42,7 +42,6 @@
 
     .wrap{max-width:1350px;margin:0 auto;padding:22px}
 
-    /* Header */
     .header{
       display:flex;align-items:center;justify-content:space-between;gap:14px;
       background: var(--card);
@@ -63,19 +62,28 @@
       color:var(--muted);
       font-size:13px;
     }
-    .brand-right{
-      display:flex;align-items:center;gap:10px;
-    }
-    .logo{
-      width:86px;height:86px;
-      object-fit:cover;
-      border-radius: 18px;
-      border:1px solid rgba(29,78,216,.25);
-      box-shadow: 0 10px 22px rgba(29,78,216,.18);
-      background: #fff;
-    }
 
-    /* Stats row */
+    .brand-right{display:flex;align-items:center;gap:10px;}
+
+    .pill{
+      display:flex;align-items:center;gap:8px;
+      padding:10px 12px;
+      border-radius: 999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.75);
+      font-weight:900;
+      color: var(--muted);
+      user-select:none;
+    }
+    .dot{
+      width:10px;height:10px;border-radius:999px;
+      background: var(--warn);
+      box-shadow: 0 0 0 6px rgba(245,158,11,.15);
+    }
+    .dot.ok{background: var(--ok); box-shadow: 0 0 0 6px rgba(22,163,74,.15);}
+    .dot.bad{background: var(--bad); box-shadow: 0 0 0 6px rgba(239,68,68,.15);}
+    .dot.warn{background: var(--warn); box-shadow: 0 0 0 6px rgba(245,158,11,.15);}
+
     .stats{
       width:100%;
       display:grid;
@@ -97,7 +105,6 @@
     .stat .v{font-size:16px;font-weight:900;letter-spacing:.2px}
     .stat .s{font-size:12px;color:var(--muted);margin-top:4px}
 
-    /* Tabs */
     .tabs{ display:flex;gap:10px;flex-wrap:wrap; margin:0 0 10px; }
     .tab{
       padding:10px 12px;border-radius: 999px;
@@ -112,7 +119,6 @@
       border-color: rgba(29,78,216,.30);
     }
 
-    /* Layout for table view + month sidebar */
     .layout{ display:block; }
     .layout.withSidebar{
       display:grid;
@@ -160,7 +166,6 @@
       background: linear-gradient(180deg, rgba(29,78,216,.16), rgba(29,78,216,.06));
     }
 
-    /* Panel + table */
     .panel{
       background: var(--card);
       border:1px solid var(--line);
@@ -192,6 +197,19 @@
     input.small{width:120px}
     input::placeholder{color:rgba(71,85,105,.55)}
 
+    .btn{
+      border-radius: 14px;
+      border:1px solid rgba(29,78,216,.35);
+      background: rgba(255,255,255,.85);
+      color: var(--ink);
+      padding:10px 12px;
+      cursor:pointer;
+      font-weight:900;
+      display:flex;align-items:center;gap:8px;
+    }
+    .btn:hover{box-shadow: 0 0 0 4px rgba(29,78,216,.10)}
+    .btn .icon{font-family: var(--mono)}
+
     table{
       width:100%;
       border-collapse:separate;border-spacing:0;
@@ -199,81 +217,73 @@
       border:1px solid var(--line);
     }
     thead th{
-      position:sticky; top:0; z-index:2;
-      background: linear-gradient(180deg, rgba(15,23,42,.06), rgba(255,255,255,1));
-      font-size:12px;
-      text-align:left;
-      padding:10px;
+      position:sticky;top:0;
+      background: linear-gradient(180deg, rgba(29,78,216,.08), rgba(255,255,255,1));
       border-bottom:1px solid var(--line);
+      padding:10px 10px;
+      text-align:left;
+      font-size:12px;
+      color: var(--muted);
+      font-weight:900;
       cursor:pointer;
       user-select:none;
+      white-space:nowrap;
     }
     tbody td{
-      padding:10px;
-      font-size:12px;
-      border-bottom:1px solid var(--line);
+      padding:10px 10px;
+      border-bottom:1px solid rgba(226,232,240,.85);
+      font-size:13px;
+      color: var(--ink);
       vertical-align:top;
-      max-width: 480px;
-      word-break: break-word;
     }
-    tbody tr:hover td{background: rgba(29,78,216,.04)}
+    tbody tr:hover td{background: rgba(29,78,216,.05)}
     tbody tr:last-child td{border-bottom:none}
 
     .footer{
-      display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+      display:flex;align-items:center;justify-content:space-between;gap:10px;
       margin-top:10px;
-      color:var(--muted);
+      color: var(--muted);
       font-size:12px;
     }
     .pager{display:flex;gap:8px;align-items:center}
-    button{
+    .pager button{
       border-radius: 12px;
-      border:1px solid rgba(29,78,216,.25);
-      background: rgba(255,255,255,.9);
-      padding:9px 10px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.85);
+      padding:8px 10px;
       cursor:pointer;
       font-weight:900;
     }
-    button:hover{border-color: rgba(29,78,216,.45)}
-    button:disabled{opacity:.5; cursor:not-allowed}
-
-    details{margin-top:10px}
+    .pager button:disabled{opacity:.5;cursor:not-allowed}
+    details{margin-top:12px}
+    summary{cursor:pointer;color:var(--muted);font-weight:900}
     pre{
-      background:#0b1020;
-      color:#d6e0ff;
-      padding:12px;border-radius: 14px;
+      background:#0b1220;
+      color:#e5e7eb;
+      padding:12px;
+      border-radius: 14px;
       overflow:auto;
-      max-height: 240px;
+      border:1px solid rgba(255,255,255,.12);
+      box-shadow: 0 14px 30px rgba(2,6,23,.35);
+      font-family: var(--mono);
       font-size:12px;
-      border:1px solid rgba(29,78,216,.22);
+      line-height:1.25;
     }
-
-    .pill{
-      display:inline-flex;align-items:center;gap:8px;
-      padding:8px 10px;
-      border-radius: 999px;
-      border:1px solid var(--line);
-      background: rgba(255,255,255,.85);
-      font-size:12px;
-      color:var(--muted);
-      font-weight:900;
-    }
-    .dot{width:9px;height:9px;border-radius:99px;background:var(--warn)}
-    .dot.ok{background:var(--ok)}
-    .dot.warn{background:var(--warn)}
-    .dot.bad{background:var(--bad)}
   </style>
 </head>
+
 <body>
   <div class="wrap">
     <div class="header">
       <div>
         <h1 class="title">EndoDB • Viewer</h1>
-        <p class="subtitle">Visualización de tablas (multiusuario: Rafa/Caro)</p>
+        <div class="subtitle">Visualización de tablas (multiusuario: Rafa/Caro)</div>
       </div>
+
       <div class="brand-right">
         <div class="pill" id="statusPill">
-          <span class="dot warn"></span><span id="statusText">—</span>
+          <span class="dot warn"></span>
+          <span id="statusText">Cargando…</span>
         </div>
       </div>
     </div>
@@ -299,7 +309,10 @@
     <div class="tabs">
       <div class="tab active" id="tab1">Base de datos de VCC</div>
       <div class="tab" id="tab2">Estudios por mes</div>
-      <button id="btnRefresh" style="margin-left:auto">↻ Recargar</button>
+      <div style="flex:1"></div>
+      <button class="btn" id="btnRefresh" title="Recargar datos">
+        <span class="icon">↻</span> Recargar
+      </button>
     </div>
 
     <div class="layout" id="layout">
@@ -311,10 +324,11 @@
       <div class="panel">
         <div class="panel-head">
           <h2 id="tableTitle">—</h2>
+
           <div class="tools">
             <div>
               <label>Buscar</label>
-              <input id="q" placeholder="texto…" />
+              <input id="q" placeholder="texto..." />
             </div>
             <div>
               <label>Filas / página</label>
@@ -323,7 +337,7 @@
           </div>
         </div>
 
-        <div style="overflow:auto; max-height:62vh; border-radius:14px">
+        <div style="overflow:auto; max-height:62vh">
           <table>
             <thead id="thead"></thead>
             <tbody id="tbody"></tbody>
@@ -358,9 +372,10 @@
       $("statusText").textContent = text;
     }
 
-    // ✅ Hardcode
+    // ✅ IMPORTANTÍSIMO: baseUrl relativo para que pase por Cloudflare Access
+    // Así el fetch va a https://endodb.drperez86.com/api/... (no a workers.dev)
     const CONFIG = {
-      baseUrl: "",
+      baseUrl: "", // <--- clave del fix
       tableVccId: 2,
       tableByMonthId: 3,
     };
@@ -385,6 +400,7 @@
       return [];
     }
 
+    // Nextcloud Tables devuelve celdas como [{columnId, value}]
     function normalizeRows(rowsJson, cols){
       const colById = new Map(cols.map(c => [String(c.id), c.title]));
       const unwrap = (x) => Array.isArray(x) ? x : (x && Array.isArray(x.data) ? x.data : []);
@@ -524,6 +540,7 @@
           map.set(m, (map.get(m) || 0) + 1);
         }
       }
+
       t.months = [...map.entries()].sort((a,b) => b[0].localeCompare(a[0]));
     }
 
@@ -647,7 +664,6 @@
     function setStatsForByMonth(){
       const t = state.tables[1];
       const rows = getEffectiveRows(t);
-
       const monthLabel = (t.monthSelected && t.monthSelected !== "ALL") ? `Mes: ${t.monthSelected}` : "Todos los meses";
 
       if (!rows.length){
@@ -822,7 +838,7 @@
         for (let i=0;i<2;i++){
           const baseUrl = CONFIG.baseUrl.replace(/\/+$/,"");
 
-          // Multi-usuario: el Worker decide la tabla según el email (Cloudflare Access)
+          // Multi-usuario: el Worker decide tabla según email (Cloudflare Access)
           const scope = (i === 0) ? "calidad" : "registro";
           const urlCols = `${baseUrl}/api/${scope}/columns`;
           const urlRows = `${baseUrl}/api/${scope}/rows`;
