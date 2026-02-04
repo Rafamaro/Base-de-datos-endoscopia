@@ -1,13 +1,13 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Inspector • EndoDB Stats</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Stats • EndoDB</title>
   <style>
     :root{
       --bg0:#f6f9ff; --bg1:#ffffff; --card:#fff; --ink:#0f172a; --muted:#475569;
-      --line:#e2e8f0; --accent:#1d4ed8; --shadow:0 10px 30px rgba(15,23,42,.08); --r:18px;
+      --line:#e2e8f0; --shadow:0 10px 30px rgba(15,23,42,.08); --r:18px;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
     }
@@ -34,29 +34,28 @@
       background:rgba(255,255,255,.75);text-decoration:none;color:var(--muted);font-weight:900;
     }
     a.btn:hover{background:rgba(29,78,216,.06);border-color:rgba(29,78,216,.25);color:var(--ink)}
+    .tag{display:inline-flex;gap:8px;align-items:center;padding:8px 10px;border-radius:999px;
+      border:1px solid var(--line);background:rgba(29,78,216,.06);font-size:12px;color:var(--muted);font-weight:900}
     .panel{
       margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);
       padding:14px;box-shadow:var(--shadow);
     }
-    .grid{display:grid;grid-template-columns:1.2fr .8fr;gap:12px;align-items:start}
-    @media (max-width:980px){.grid{grid-template-columns:1fr}}
-    label{display:block;font-size:12px;color:var(--muted);margin:2px 0 6px;font-weight:900}
-    input,select{
-      width:100%;padding:10px 10px;border-radius:12px;border:1px solid var(--line);
-      outline:none;background:#fff;
-    }
-    input[disabled]{background:rgba(15,23,42,.03); color:rgba(15,23,42,.75)}
-    input:focus,select:focus{border-color:rgba(29,78,216,.55);box-shadow:0 0 0 4px rgba(29,78,216,.12)}
     .row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
     @media (max-width:980px){.row{grid-template-columns:1fr}}
-    .card{
-      border:1px solid var(--line);border-radius:16px;background:#fff;padding:12px;
+    label{display:block;font-size:12px;color:var(--muted);margin:2px 0 6px;font-weight:900}
+    select,button{
+      width:100%;padding:11px;border-radius:12px;border:1px solid var(--line);
+      background:#fff;font-weight:900;
     }
-    .k{font-size:12px;color:var(--muted);font-weight:900;margin-bottom:6px}
-    .tag{display:inline-flex;gap:8px;align-items:center;padding:8px 10px;border-radius:999px;
-      border:1px solid var(--line);background:rgba(29,78,216,.06);font-size:12px;color:var(--muted);font-weight:900}
-    .ok{color:#0f766e}
-    .bad{color:#b91c1c}
+    button{background:rgba(29,78,216,.10);cursor:pointer}
+    button:hover{background:rgba(29,78,216,.14)}
+    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px}
+    @media (max-width:980px){.grid{grid-template-columns:1fr 1fr}}
+    @media (max-width:560px){.grid{grid-template-columns:1fr}}
+    .card{border:1px solid var(--line);border-radius:16px;background:#fff;padding:12px;box-shadow:var(--shadow)}
+    .k{font-size:12px;color:var(--muted);font-weight:900}
+    .v{font-size:22px;font-weight:950;margin-top:6px}
+    .muted{color:var(--muted);font-size:12px}
     table{
       width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--line);
       border-radius:14px;overflow:hidden;background:#fff;
@@ -67,125 +66,134 @@
     }
     tbody td{
       padding:10px;border-bottom:1px solid rgba(226,232,240,.85);font-size:13px;vertical-align:top;
-      max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+      white-space:nowrap;
     }
     tbody tr:hover td{background:rgba(29,78,216,.06)}
-    pre{
-      margin:0;background:#0b1220;color:#e5e7eb;padding:12px;border-radius:14px;overflow:auto;
-      font-family:var(--mono);font-size:12px;line-height:1.35;
-    }
     details{margin-top:12px}
-    .muted{color:var(--muted);font-size:12px}
-    button{
-      width:100%;padding:11px;border-radius:12px;border:1px solid var(--line);
-      background:rgba(29,78,216,.10);font-weight:900;cursor:pointer
-    }
-    button:hover{background:rgba(29,78,216,.14)}
-    .btnrow{display:flex;gap:10px;flex-wrap:wrap}
-    .btnrow button{flex:1;min-width:120px}
+    pre{margin:0;background:#0b1220;color:#e5e7eb;padding:12px;border-radius:14px;overflow:auto;font-family:var(--mono);font-size:12px}
   </style>
 </head>
-
 <body>
   <div class="wrap">
     <div class="header">
       <div>
-        <h1>Inspector de tablas • Nextcloud Tables</h1>
+        <h1>Stats • EndoDB</h1>
         <div class="sub">
-          Esto es para ver <b>qué tabla y qué columnas</b> estás leyendo realmente desde el Worker.
-          Después armamos las métricas con nombres correctos (sin adivinar).
+          Tabla 2 (Calidad VCC) + Tabla 3 (Registro general). Las métricas salen de ambas.
           <div class="nav">
             <a class="btn" href="./index.html">⬆️ Subida</a>
             <a class="btn" href="./viewer.html">🔎 Viewer</a>
-            <a class="btn" href="./stats.html">🧪 Inspector</a>
+            <a class="btn" href="./stats.html">📊 Stats</a>
           </div>
         </div>
       </div>
-      <div class="tag">Base URL Worker: <span id="baseUrlText" style="font-family:var(--mono)"></span></div>
+      <div class="tag">Worker: <span id="baseUrlText" style="font-family:var(--mono)"></span></div>
     </div>
 
     <div class="panel">
       <div class="row">
         <div>
-          <label>Worker baseUrl (fijo, como viewer)</label>
-          <input id="baseUrl" disabled />
-          <div class="muted">Si el día de mañana cambia, se edita una sola línea en este archivo.</div>
+          <label>ID común entre tablas</label>
+          <select id="joinKey3"></select>
+          <div class="muted">Columna de la Tabla 3 (registro) que identifica el estudio (ej: exam_id).</div>
         </div>
-
-        <div>
-          <label for="tableId">Table ID</label>
-          <input id="tableId" placeholder="Ej: 2" inputmode="numeric" />
-          <div class="muted">Usá Enter o los botones rápidos.</div>
-        </div>
-
         <div>
           <label>&nbsp;</label>
-          <div class="btnrow">
-            <button id="btnLoad2">Cargar 2</button>
-            <button id="btnLoad3">Cargar 3</button>
-            <button id="btnLoad">Cargar ID</button>
-          </div>
+          <select id="joinKey2"></select>
+          <div class="muted">Columna equivalente en Tabla 2 (calidad).</div>
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <button id="btnRun">Calcular métricas</button>
           <div class="muted" id="status">—</div>
         </div>
       </div>
 
-      <div class="grid" style="margin-top:12px;">
+      <div class="grid">
         <div class="card">
-          <div class="k">Columnas detectadas</div>
-          <div class="muted" id="colsMeta">—</div>
-          <div style="overflow:auto;max-height:320px;margin-top:10px">
-            <table>
-              <thead><tr><th>columnId</th><th>title</th></tr></thead>
-              <tbody id="colsTbody"></tbody>
-            </table>
-          </div>
+          <div class="k">Entubación cecal (VCC)</div>
+          <div class="v" id="kCecal">—</div>
+          <div class="muted" id="kCecalMeta">—</div>
         </div>
-
         <div class="card">
-          <div class="k">Detección automática (para métricas)</div>
-          <div id="detectBox" class="muted">—</div>
-
-          <div style="margin-top:12px" class="k">Resumen</div>
-          <div class="muted" id="summaryBox">—</div>
-
-          <details>
-            <summary style="cursor:pointer;font-weight:900;color:var(--muted)">Debug (raw)</summary>
-            <pre id="debug">(vacío)</pre>
-          </details>
+          <div class="k">Calidad preparación (Boston)</div>
+          <div class="v" id="kPrep">—</div>
+          <div class="muted" id="kPrepMeta">—</div>
+        </div>
+        <div class="card">
+          <div class="k">Estudios totales (Tabla 3)</div>
+          <div class="v" id="kTotal">—</div>
+          <div class="muted">Total de filas procesadas.</div>
+        </div>
+        <div class="card">
+          <div class="k">VCC totales (Tabla 3)</div>
+          <div class="v" id="kVcc">—</div>
+          <div class="muted">Según tipo de estudio.</div>
         </div>
       </div>
 
-      <div class="card" style="margin-top:12px;">
-        <div class="k">Filas (muestra)</div>
-        <div class="muted">
-          Se muestran hasta <b>25 filas</b>. Si hay muchas columnas, vas a ver truncado (…).
-        </div>
-        <div style="overflow:auto;max-height:420px;margin-top:10px">
+      <div class="card" style="margin-top:12px">
+        <div class="k">Conteos por mes (Tabla 3)</div>
+        <div class="muted">Total, VCC/VEDA con/sin terapéutica. (Esto no depende de Tabla 2.)</div>
+        <div style="overflow:auto;max-height:520px;margin-top:10px">
           <table>
-            <thead><tr id="rowsThead"></tr></thead>
-            <tbody id="rowsTbody"></tbody>
+            <thead>
+              <tr>
+                <th>Mes</th>
+                <th>Total</th>
+                <th>VCC</th>
+                <th>VCC con tera</th>
+                <th>VCC sin tera</th>
+                <th>VEDA</th>
+                <th>VEDA con tera</th>
+                <th>VEDA sin tera</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyMonths"></tbody>
           </table>
         </div>
       </div>
+
+      <details>
+        <summary style="cursor:pointer;font-weight:900;color:var(--muted)">Debug</summary>
+        <pre id="debug">(vacío)</pre>
+      </details>
     </div>
   </div>
 
 <script>
   const $ = (id) => document.getElementById(id);
 
-  // === CONFIG (Fijo, como viewer) ===
-  const DEFAULT_BASE_URL = "https://basededatos.corrongo182.workers.dev";
+  // === CONFIG ===
+  const CONFIG = {
+    baseUrl: "https://basededatos.corrongo182.workers.dev",
+    tableQualityId: 2, // Tabla 2 (calidad VCC)
+    tableRegistryId: 3 // Tabla 3 (registro general)
+  };
 
-  // ✅ CAMBIO CRÍTICO: asegurar protocolo SIEMPRE
-  function normBaseUrl(s){
-    let u = (s || "").trim().replace(/\/+$/,"");
-    if (!u) return u;
+  // Mapeos “probables” (los ajustamos cuando veas columnas exactas)
+  const AUTO = {
+    // Tabla 3
+    dateKeys: ["fecha","date","Fecha","FECHA"],
+    procKeys: ["tipo_estudio","procedure_type","tipo","estudio","Tipo estudio"],
+    therKeys: ["terapeutica","terapéutica","therapeutica","terapia"],
+
+    // Tabla 2
+    cecalKeys: ["llego_a_ciego","llegó_a_ciego","ciego","cecal_intubation","entubacion_cecal","entubación_cecal"],
+    bTotalKeys: ["boston_total","Boston total","boston"],
+    bRKeys: ["boston_derecho","boston_derecha","derecho","right"],
+    bTKeys: ["boston_transverso","transverso","transverse"],
+    bLKeys: ["boston_izquierdo","izquierdo","left"]
+  };
+
+  function normBaseUrl(u){
+    u = (u||"").trim().replace(/\/+$/,"");
     if (!/^https?:\/\//i.test(u)) u = "https://" + u;
     return u;
   }
 
-  async function fetchText(url){
-    const res = await fetch(url, { method:"GET" });
+  async function fetchJson(url){
+    const res = await fetch(url, {method:"GET"});
     const text = await res.text();
     let json = null;
     try { json = JSON.parse(text); } catch(e) {}
@@ -206,7 +214,6 @@
     const out = [];
     for (const r of arr){
       const obj = {};
-      obj["_row_id"] = r.id ?? r.rowId ?? r._id ?? "";
       const cells = r.data ?? r.values ?? r.cells ?? [];
       if (Array.isArray(cells)){
         for (const cell of cells){
@@ -220,55 +227,7 @@
     return out;
   }
 
-  function findKey(keys, wanted){
-    const low = keys.map(k => [k, k.toLowerCase()]);
-    for (const w of wanted){
-      const wl = w.toLowerCase();
-      const exact = low.find(([k, kl]) => kl === wl);
-      if (exact) return exact[0];
-    }
-    return null;
-  }
-
-  function findContains(keys, substrs){
-    const low = keys.map(k => [k, k.toLowerCase()]);
-    for (const s of substrs){
-      const sl = s.toLowerCase();
-      const hit = low.find(([k, kl]) => kl.includes(sl));
-      if (hit) return hit[0];
-    }
-    return null;
-  }
-
-  function parseMonth(value){
-    if (value === null || value === undefined) return null;
-    const s = String(value).trim();
-    if (!s) return null;
-
-    const m1 = s.match(/^(\d{4})[-/](\d{1,2})/);
-    if (m1){
-      const y = m1[1];
-      const mm = String(Math.max(1, Math.min(12, parseInt(m1[2],10)))).padStart(2,"0");
-      return `${y}-${mm}`;
-    }
-
-    const d = new Date(s);
-    if (!Number.isNaN(d.getTime())){
-      const y = d.getFullYear();
-      const mm = String(d.getMonth()+1).padStart(2,"0");
-      return `${y}-${mm}`;
-    }
-
-    const m2 = s.match(/^(\d{1,2})[-/](\d{4})$/);
-    if (m2){
-      const mm = String(Math.max(1, Math.min(12, parseInt(m2[1],10)))).padStart(2,"0");
-      const y = m2[2];
-      return `${y}-${mm}`;
-    }
-    return null;
-  }
-
-  function guessBoolean(v){
+  function guessBool(v){
     if (typeof v === "boolean") return v;
     if (v === null || v === undefined) return null;
     const s = String(v).trim().toLowerCase();
@@ -277,183 +236,241 @@
     return null;
   }
 
-  function detectColumnsFromRow(row){
-    const keys = Object.keys(row || {}).filter(k => k !== "_row_id");
-
-    const keyDate =
-      findContains(keys, ["fecha", "date"]) ||
-      findContains(keys, ["mes", "month"]) ||
-      null;
-
-    const keyProc =
-      findKey(keys, ["procedure_type","tipo_estudio","tipo de estudio","tipo"]) ||
-      findContains(keys, ["procedure","proced","estudio","tipo"]) ||
-      null;
-
-    const keyTher =
-      findKey(keys, ["terapeutica","terapéutica","therapeutica","terapia","terapeutica_realizada"]) ||
-      findContains(keys, ["terapeut", "terapia"]) ||
-      null;
-
-    const keyCecal =
-      findKey(keys, ["llego_a_ciego","llegó_a_ciego","ciego","cecal_intubation","entubacion_cecal","entubación_cecal"]) ||
-      findContains(keys, ["ciego","cecal","entub"]) ||
-      null;
-
-    return { keyDate, keyProc, keyTher, keyCecal, keys };
+  function parseMonth(v){
+    if (v === null || v === undefined) return null;
+    const s = String(v).trim();
+    if (!s) return null;
+    const m1 = s.match(/^(\d{4})[-/](\d{1,2})/);
+    if (m1){
+      const y = m1[1];
+      const mm = String(Math.max(1, Math.min(12, parseInt(m1[2],10)))).padStart(2,"0");
+      return `${y}-${mm}`;
+    }
+    const d = new Date(s);
+    if (!Number.isNaN(d.getTime())){
+      const y = d.getFullYear();
+      const mm = String(d.getMonth()+1).padStart(2,"0");
+      return `${y}-${mm}`;
+    }
+    return null;
   }
 
-  function escapeHtml(s){
-    return String(s)
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;")
-      .replaceAll("'","&#039;");
+  function findKey(keys, candidates){
+    const low = keys.map(k => [k, k.toLowerCase()]);
+    for (const c of candidates){
+      const cl = c.toLowerCase();
+      const exact = low.find(([k, kl]) => kl === cl);
+      if (exact) return exact[0];
+    }
+    // fallback: contains
+    for (const c of candidates){
+      const cl = c.toLowerCase();
+      const hit = low.find(([k, kl]) => kl.includes(cl));
+      if (hit) return hit[0];
+    }
+    return null;
   }
 
-  function renderColumns(cols){
-    const tbody = $("colsTbody");
-    tbody.innerHTML = "";
-    for (const c of cols){
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td style="font-family:var(--mono)">${c.id}</td><td>${escapeHtml(c.title)}</td>`;
-      tbody.appendChild(tr);
-    }
-    $("colsMeta").textContent = `${cols.length.toLocaleString()} columnas`;
+  function pct(n, d){
+    if (!d) return "—";
+    return (100 * (n/d)).toFixed(1) + "%";
   }
 
-  function renderRows(rows){
-    const thead = $("rowsThead");
-    const tbody = $("rowsTbody");
-    thead.innerHTML = "";
-    tbody.innerHTML = "";
-
-    const sample = rows.slice(0, 25);
-    if (!sample.length){
-      thead.innerHTML = `<th>Sin filas</th>`;
-      return;
-    }
-
-    const keys = Object.keys(sample[0]);
-    for (const k of keys){
-      const th = document.createElement("th");
-      th.textContent = k;
-      thead.appendChild(th);
-    }
-
-    for (const r of sample){
-      const tr = document.createElement("tr");
-      for (const k of keys){
-        const td = document.createElement("td");
-        const v = r[k];
-        td.textContent = (v === null || v === undefined) ? "" : String(v);
-        tr.appendChild(td);
-      }
-      tbody.appendChild(tr);
-    }
+  function asNum(v){
+    const n = Number(String(v).replace(",", "."));
+    return Number.isFinite(n) ? n : null;
   }
 
-  function renderDetection(rows){
-    if (!rows.length){
-      $("detectBox").innerHTML = `<span class="bad">No hay filas para detectar columnas.</span>`;
-      $("summaryBox").textContent = "—";
-      return;
-    }
-
-    const det = detectColumnsFromRow(rows[0]);
-
-    const mk = (label, key) => {
-      if (!key) return `<div>• ${label}: <span class="bad">NO detectado</span></div>`;
-      return `<div>• ${label}: <span class="ok">${escapeHtml(key)}</span></div>`;
-    };
-
-    $("detectBox").innerHTML = `
-      ${mk("Fecha/Mes", det.keyDate)}
-      ${mk("Tipo estudio", det.keyProc)}
-      ${mk("Terapéutica", det.keyTher)}
-      ${mk("Ciego/Cecal", det.keyCecal)}
-      <div class="muted" style="margin-top:8px">
-        Si algo sale “NO detectado”, lo mapeamos manualmente después.
-      </div>
-    `;
-
-    const monthKey = det.keyDate;
-    let months = 0;
-    if (monthKey){
-      const set = new Set();
-      for (const r of rows){
-        const m = parseMonth(r[monthKey]);
-        if (m) set.add(m);
-      }
-      months = set.size;
-    }
-
-    let therOk = 0, therTot = 0;
-    if (det.keyTher){
-      for (const r of rows){
-        const b = guessBoolean(r[det.keyTher]);
-        if (b !== null) therOk++;
-        therTot++;
-      }
-    }
-
-    $("summaryBox").innerHTML = `
-      <div>• Filas totales: <b>${rows.length.toLocaleString()}</b></div>
-      <div>• Columnas: <b>${det.keys.length.toLocaleString()}</b></div>
-      <div>• Meses detectables: <b>${months ? months : "—"}</b></div>
-      <div>• Terapéutica parseable (bool): <b>${therTot ? (therOk + "/" + therTot) : "—"}</b></div>
-    `;
-  }
-
-  async function load(){
-    const baseUrl = normBaseUrl($("baseUrl").value);
-    const tableId = String(($("tableId").value || "").trim());
-
-    $("baseUrlText").textContent = baseUrl || "(vacío)";
-    $("status").textContent = "Cargando…";
-
-    if (!baseUrl || !tableId){
-      $("status").textContent = "Poné un Table ID.";
-      return;
-    }
-
+  async function loadTable(tableId){
+    const baseUrl = normBaseUrl(CONFIG.baseUrl);
     const urlCols = `${baseUrl}/nc/tables/${tableId}/columns`;
     const urlRows = `${baseUrl}/nc/tables/${tableId}/rows`;
 
-    const [cRes, rRes] = await Promise.all([fetchText(urlCols), fetchText(urlRows)]);
-
+    const [cRes, rRes] = await Promise.all([fetchJson(urlCols), fetchJson(urlRows)]);
     if (!cRes.ok || !rRes.ok){
-      $("status").innerHTML = `<span class="bad">Error cargando.</span> cols=${cRes.status} rows=${rRes.status}`;
-      $("debug").textContent = JSON.stringify({ columns: cRes, rows: rRes }, null, 2);
-      return;
+      throw new Error(`Tabla ${tableId}: cols=${cRes.status} rows=${rRes.status}`);
     }
-
     const cols = normalizeColumns(cRes.json);
     const rows = normalizeRows(rRes.json, cols);
+    return { tableId, cols, rows, urlCols, urlRows };
+  }
 
-    renderColumns(cols);
-    renderRows(rows);
-    renderDetection(rows);
+  function fillSelect(selectEl, keys){
+    selectEl.innerHTML = "";
+    for (const k of keys){
+      const opt = document.createElement("option");
+      opt.value = k;
+      opt.textContent = k;
+      selectEl.appendChild(opt);
+    }
+  }
 
-    $("status").innerHTML = `<span class="ok">OK</span> • Tabla ${tableId} • filas=${rows.length.toLocaleString()} cols=${cols.length.toLocaleString()}`;
-    $("debug").textContent = JSON.stringify({
-      used: { baseUrl, tableId, urlCols, urlRows },
-      sampleRow: rows[0] || null
-    }, null, 2);
+  function renderMonths(monthAgg){
+    const tbody = $("tbodyMonths");
+    tbody.innerHTML = "";
+    const months = Array.from(monthAgg.keys()).sort();
+    for (const m of months){
+      const x = monthAgg.get(m);
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${m}</td>
+        <td>${x.total}</td>
+        <td>${x.vcc}</td>
+        <td>${x.vcc_t}</td>
+        <td>${x.vcc_nt}</td>
+        <td>${x.veda}</td>
+        <td>${x.veda_t}</td>
+        <td>${x.veda_nt}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
+  async function run(){
+    $("status").textContent = "Cargando tablas…";
+    $("debug").textContent = "(cargando)";
+
+    try{
+      const [t2, t3] = await Promise.all([
+        loadTable(CONFIG.tableQualityId),
+        loadTable(CONFIG.tableRegistryId)
+      ]);
+
+      const keys2 = Object.keys(t2.rows[0] || {});
+      const keys3 = Object.keys(t3.rows[0] || {});
+
+      // Pre-selección automática del join key (si existe “exam_id” etc.)
+      const guessJoin = (keys) => findKey(keys, ["exam_id","id_estudio","id","nro_estudio","numero_estudio","historia","nhc"]);
+      const j3 = $("joinKey3").value || guessJoin(keys3) || keys3[0];
+      const j2 = $("joinKey2").value || guessJoin(keys2) || keys2[0];
+
+      fillSelect($("joinKey3"), keys3);
+      fillSelect($("joinKey2"), keys2);
+      if (j3) $("joinKey3").value = j3;
+      if (j2) $("joinKey2").value = j2;
+
+      // Detectar columnas principales
+      const kDate = findKey(keys3, AUTO.dateKeys);
+      const kProc = findKey(keys3, AUTO.procKeys);
+      const kTher = findKey(keys3, AUTO.therKeys);
+
+      const kCecal = findKey(keys2, AUTO.cecalKeys);
+      const kBT = findKey(keys2, AUTO.bTotalKeys);
+      const kBR = findKey(keys2, AUTO.bRKeys);
+      const kBTr = findKey(keys2, AUTO.bTKeys);
+      const kBL = findKey(keys2, AUTO.bLKeys);
+
+      // Índice por join (Tabla 2)
+      const idx2 = new Map();
+      for (const r of t2.rows){
+        const id = r[j2];
+        if (id !== null && id !== undefined && String(id).trim() !== ""){
+          idx2.set(String(id).trim(), r);
+        }
+      }
+
+      // === Tabla 3: conteos por mes ===
+      const monthAgg = new Map();
+      let total = 0, vcc = 0;
+
+      const isVcc = (v) => String(v||"").trim().toUpperCase() === "VCC";
+      const isVeda = (v) => String(v||"").trim().toUpperCase() === "VEDA";
+      const isTher = (v) => guessBool(v) === true || String(v||"").trim().toLowerCase() === "sí" || String(v||"").trim().toLowerCase() === "si";
+
+      for (const r of t3.rows){
+        total++;
+        const m = kDate ? (parseMonth(r[kDate]) || "Sin mes") : "Sin mes";
+        if (!monthAgg.has(m)){
+          monthAgg.set(m, { total:0, vcc:0, vcc_t:0, vcc_nt:0, veda:0, veda_t:0, veda_nt:0 });
+        }
+        const a = monthAgg.get(m);
+        a.total++;
+
+        const proc = kProc ? r[kProc] : "";
+        const ther = kTher ? r[kTher] : "";
+
+        if (isVcc(proc)){
+          vcc++; a.vcc++;
+          if (isTher(ther)) a.vcc_t++; else a.vcc_nt++;
+        } else if (isVeda(proc)){
+          a.veda++;
+          if (isTher(ther)) a.veda_t++; else a.veda_nt++;
+        }
+      }
+
+      // === Tabla 2: métricas de calidad VCC ===
+      // Para calidad, cruzamos SOLO los VCC de Tabla 3 que tienen match en Tabla 2
+      let cecal_num=0, cecal_den=0;
+      let prep_num=0, prep_den=0;
+
+      for (const r3 of t3.rows){
+        const proc = kProc ? r3[kProc] : "";
+        if (!isVcc(proc)) continue;
+
+        const id = r3[j3];
+        if (id === null || id === undefined || String(id).trim()==="") continue;
+
+        const r2 = idx2.get(String(id).trim());
+        if (!r2) continue;
+
+        // Cecal
+        if (kCecal){
+          const b = guessBool(r2[kCecal]);
+          if (b !== null){
+            cecal_den++;
+            if (b === true) cecal_num++;
+          }
+        }
+
+        // Boston calidad: total>=6 AND seg>=2
+        if (kBT && kBR && kBTr && kBL){
+          const bt = asNum(r2[kBT]);
+          const br = asNum(r2[kBR]);
+          const btr = asNum(r2[kBTr]);
+          const bl = asNum(r2[kBL]);
+          const complete = [bt,br,btr,bl].every(x => x !== null);
+          if (complete){
+            prep_den++;
+            if (bt >= 6 && br >= 2 && btr >= 2 && bl >= 2) prep_num++;
+          }
+        }
+      }
+
+      // Render
+      $("kTotal").textContent = total.toLocaleString();
+      $("kVcc").textContent = vcc.toLocaleString();
+
+      $("kCecal").textContent = pct(cecal_num, cecal_den);
+      $("kCecalMeta").textContent = cecal_den ? `${cecal_num}/${cecal_den} VCC con dato válido` : "Sin datos parseables en ciego";
+
+      $("kPrep").textContent = pct(prep_num, prep_den);
+      $("kPrepMeta").textContent = prep_den ? `${prep_num}/${prep_den} VCC con Boston completo` : "Sin Boston completo (total + 3 segmentos)";
+
+      renderMonths(monthAgg);
+
+      $("status").textContent = "OK";
+
+      $("debug").textContent = JSON.stringify({
+        config: CONFIG,
+        detected: {
+          table3: { joinKey: j3, date: kDate, proc: kProc, ther: kTher },
+          table2: { joinKey: j2, cecal: kCecal, boston_total: kBT, boston_derecho: kBR, boston_transverso: kBTr, boston_izquierdo: kBL }
+        },
+        join: { t2_index_size: idx2.size, t3_rows: t3.rows.length, t2_rows: t2.rows.length },
+        quality: { cecal_num, cecal_den, prep_num, prep_den }
+      }, null, 2);
+
+    } catch(err){
+      $("status").textContent = "Error (ver debug)";
+      $("debug").textContent = String(err && err.stack ? err.stack : err);
+    }
   }
 
   function boot(){
-    $("baseUrl").value = DEFAULT_BASE_URL;
-    $("baseUrlText").textContent = DEFAULT_BASE_URL;
-
-    $("btnLoad").onclick = load;
-    $("btnLoad2").onclick = () => { $("tableId").value = "2"; load(); };
-    $("btnLoad3").onclick = () => { $("tableId").value = "3"; load(); };
-
-    $("tableId").addEventListener("keydown", (e) => {
-      if (e.key === "Enter") load();
-    });
+    $("baseUrlText").textContent = CONFIG.baseUrl;
+    $("btnRun").onclick = run;
+    // Auto-run una vez
+    run();
   }
 
   boot();
