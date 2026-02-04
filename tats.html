@@ -1,0 +1,713 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Base de Datos Dr Perez • Estadísticas</title>
+
+  <style>
+    :root{
+      --bg0:#f6f9ff;
+      --bg1:#ffffff;
+      --card:#ffffff;
+      --ink:#0f172a;
+      --muted:#475569;
+      --line:#e2e8f0;
+
+      --accent:#1d4ed8;
+      --accent2:#1e40af;
+      --accentSoft: rgba(29,78,216,.10);
+
+      --ok:#16a34a;
+      --warn:#f59e0b;
+      --bad:#ef4444;
+
+      --shadow: 0 10px 30px rgba(15,23,42,.08);
+      --radius: 18px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: var(--sans);
+      background:
+        radial-gradient(1100px 600px at 12% 0%, rgba(29,78,216,.12), transparent 55%),
+        radial-gradient(900px 520px at 92% 8%, rgba(29,78,216,.08), transparent 60%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      color:var(--ink);
+    }
+
+    .wrap{max-width:1350px;margin:0 auto;padding:22px}
+
+    .header{
+      display:flex;align-items:center;justify-content:space-between;gap:14px;
+      background: var(--card);
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      padding:16px 16px;
+      box-shadow: var(--shadow);
+    }
+    .title{
+      font-size:22px;
+      font-weight:900;
+      letter-spacing:.2px;
+      margin:0;
+      line-height:1.15;
+    }
+    .subtitle{
+      margin:6px 0 0;
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.45;
+    }
+    .brand-right{
+      display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;
+    }
+    .logo{
+      width:86px;height:86px;
+      object-fit:cover;
+      border-radius: 18px;
+      border:1px solid rgba(29,78,216,.25);
+      box-shadow: 0 10px 22px rgba(29,78,216,.18);
+      background: #fff;
+    }
+
+    .pill{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:8px 10px;border-radius:999px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.72);
+      box-shadow: 0 4px 18px rgba(15,23,42,.06);
+      font-size: 12px;color: var(--muted);
+      white-space: nowrap;
+      user-select:none;
+    }
+    .dot{
+      width:10px;height:10px;border-radius:50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+    }
+
+    .nav{
+      display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;
+    }
+    .linkbtn{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:10px 12px;border-radius:999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.75);
+      cursor:pointer;color: var(--muted);
+      font-weight:900;
+      text-decoration:none;
+    }
+    .linkbtn:hover{ background: rgba(29,78,216,.06); color: var(--ink); border-color: rgba(29,78,216,.25); }
+
+    .panel{
+      margin-top:14px;
+      background: var(--card);
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      padding:14px;
+      box-shadow: var(--shadow);
+    }
+
+    .controls{
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap:12px;
+      align-items:end;
+    }
+    @media (max-width: 980px){
+      .controls{grid-template-columns:1fr}
+    }
+    label{display:block;font-size:12px;color:var(--muted);margin:2px 0 6px;font-weight:800}
+    select, input{
+      border-radius: 12px;
+      border:1px solid var(--line);
+      background: #fff;
+      color:var(--ink);
+      padding:10px 10px;
+      outline:none;
+      transition: box-shadow .12s ease, border-color .12s ease;
+      width:100%;
+    }
+    select:focus, input:focus{
+      border-color: rgba(29,78,216,.55);
+      box-shadow: 0 0 0 4px rgba(29,78,216,.12);
+    }
+
+    .tabs{ display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 0; }
+    .tab{
+      padding:10px 12px;border-radius: 999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.75);
+      cursor:pointer;color: var(--muted);
+      font-weight:900;user-select:none;
+    }
+    .tab.active{
+      background: linear-gradient(180deg, rgba(29,78,216,.18), rgba(29,78,216,.06));
+      color: var(--ink);
+      border-color: rgba(29,78,216,.30);
+    }
+
+    .stats{
+      width:100%;
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap:10px;
+      margin-top:12px;
+    }
+    @media (max-width: 980px){
+      .stats{grid-template-columns:1fr}
+    }
+    .stat{
+      border:1px solid var(--line);
+      background: linear-gradient(180deg, rgba(29,78,216,.06), rgba(255,255,255,1));
+      border-radius: 16px;
+      padding:12px;
+      min-height: 74px;
+    }
+    .stat .k{font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:900}
+    .stat .v{font-size:18px;font-weight:900;letter-spacing:.2px}
+    .stat .s{font-size:12px;color:var(--muted);margin-top:4px}
+
+    .grid2{
+      margin-top:12px;
+      display:grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap:12px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .grid2{grid-template-columns:1fr}
+    }
+
+    .chartbox{
+      border:1px solid var(--line);
+      border-radius: 16px;
+      padding:12px;
+      background:#fff;
+      overflow:hidden;
+    }
+    .charthead{
+      display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+      margin-bottom:8px;
+    }
+    .charthead h3{margin:0;font-size:13px}
+    .small{font-size:12px;color:var(--muted)}
+    canvas{width:100%;height:260px;display:block}
+
+    table{
+      width:100%;
+      border-collapse:separate;border-spacing:0;
+      overflow:hidden;border-radius: 14px;
+      border:1px solid var(--line);
+    }
+    thead th{
+      background: rgba(15,23,42,.02);
+      color: var(--muted);
+      font-size:12px;
+      text-align:left;
+      padding:10px 10px;
+      border-bottom:1px solid var(--line);
+      white-space:nowrap;
+    }
+    tbody td{
+      padding:10px 10px;
+      border-bottom:1px solid rgba(226,232,240,.85);
+      font-size:13px;
+      vertical-align:top;
+      background: #fff;
+    }
+    tbody tr:hover td{background: rgba(29,78,216,.06)}
+
+    details{margin-top:12px}
+    pre{
+      margin:10px 0 0;
+      background:#0b1220;
+      color:#e5e7eb;
+      padding:12px;
+      border-radius: 14px;
+      overflow:auto;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div>
+        <h1 class="title">Base de Datos Dr Perez</h1>
+        <div class="subtitle">
+          Estadísticas básicas desde Nextcloud Tables (vía Worker). Listo para crecer a dashboards por usuario.
+          <div class="nav">
+            <a class="linkbtn" href="./index.html">⬆️ Subida</a>
+            <a class="linkbtn" href="./viewer.html">🔎 Viewer</a>
+            <a class="linkbtn" href="./stats.html">📊 Estadísticas</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="brand-right">
+        <div class="pill"><span class="dot"></span> Datos vía Worker (sin CORS)</div>
+        <img class="logo"
+          alt="Logo"
+          src="https://raw.githubusercontent.com/Rafamaro/Base-de-datos-endoscopia/main/WhatsApp%20Image%202026-02-03%20at%2022.23.15.jpeg">
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="controls">
+        <div>
+          <label for="tableSelect">Fuente de datos (tabla)</label>
+          <select id="tableSelect"></select>
+        </div>
+
+        <div>
+          <label for="monthSelect">Mes</label>
+          <select id="monthSelect"></select>
+          <div class="small" id="monthHint">—</div>
+        </div>
+
+        <div>
+          <label for="searchBox">Filtro rápido</label>
+          <input id="searchBox" placeholder="Buscar en filas (opcional)" />
+          <div class="small">Afecta la tabla de detalle (no las tarjetas).</div>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active" id="tabMonthly">Resumen mensual</div>
+        <div class="tab" id="tabVcc">Calidad VCC</div>
+      </div>
+
+      <div id="viewMonthly">
+        <div class="stats" id="monthlyCards"></div>
+
+        <div class="grid2">
+          <div class="chartbox">
+            <div class="charthead">
+              <h3>Estudios por mes</h3>
+              <div class="small" id="chartMeta">—</div>
+            </div>
+            <canvas id="chart"></canvas>
+            <div class="small">Si no aparece, es porque no se detectó una columna de fecha/mes.</div>
+          </div>
+
+          <div class="chartbox">
+            <div class="charthead">
+              <h3>Detalle del mes seleccionado</h3>
+              <div class="small" id="detailMeta">—</div>
+            </div>
+            <div style="overflow:auto; max-height: 330px;">
+              <table>
+                <thead><tr id="thead"></tr></thead>
+                <tbody id="tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="viewVcc" style="display:none;">
+        <div class="stats" id="vccCards"></div>
+
+        <div class="chartbox" style="margin-top:12px;">
+          <div class="charthead">
+            <h3>Notas</h3>
+            <div class="small">Qué se detecta y con qué columnas</div>
+          </div>
+          <div class="small" id="vccNotes">—</div>
+        </div>
+      </div>
+
+      <details>
+        <summary>Debug</summary>
+        <pre id="debug">(vacío)</pre>
+      </details>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    // === CONFIG (igual que viewer) ===
+    const CONFIG = {
+      baseUrl: "https://basededatos.corrongo182.workers.dev",
+      // IDs actuales (los mismos que ya usás)
+      tableVccId: 2,
+      tableByMonthId: 3,
+    };
+
+    const TABLES = [
+      { id: CONFIG.tableByMonthId, name: "Estudios (fuente)" },
+      { id: CONFIG.tableVccId, name: "Base VCC (calidad)" },
+    ];
+
+    async function fetchJson(url){
+      const res = await fetch(url, { method: "GET" });
+      const text = await res.text();
+      let json = null;
+      try { json = JSON.parse(text); } catch(e) {}
+      return { ok: res.ok, status: res.status, text, json };
+    }
+
+    function normalizeColumns(colsJson){
+      if (Array.isArray(colsJson)) return colsJson.map(c => ({
+        id: c.id ?? c.columnId ?? c._id ?? c,
+        title: c.title ?? c.name ?? c.label ?? String(c.id ?? c.columnId ?? c),
+      }));
+      if (colsJson && Array.isArray(colsJson.data)) return colsJson.data.map(c => ({
+        id: c.id ?? c.columnId ?? c._id ?? c,
+        title: c.title ?? c.name ?? c.label ?? String(c.id ?? c.columnId ?? c),
+      }));
+      return [];
+    }
+
+    function normalizeRows(rowsJson, cols){
+      const colById = new Map(cols.map(c => [String(c.id), c.title]));
+      const unwrap = (x) => Array.isArray(x) ? x : (x && Array.isArray(x.data) ? x.data : []);
+      const rowsArr = unwrap(rowsJson);
+      const out = [];
+      for (const r of rowsArr){
+        const obj = {};
+        obj["_row_id"] = r.id ?? r.rowId ?? r._id ?? "";
+        const cells = r.data ?? r.values ?? r.cells ?? [];
+        if (Array.isArray(cells)){
+          for (const cell of cells){
+            const cid = String(cell.columnId ?? cell.id ?? "");
+            const key = colById.get(cid) || (cid ? `col_${cid}` : "col");
+            obj[key] = cell.value ?? cell.value_json ?? cell.displayValue ?? cell.text ?? "";
+          }
+        }
+        out.push(obj);
+      }
+      return out;
+    }
+
+    function guessBoolean(v){
+      if (typeof v === "boolean") return v;
+      if (v === null || v === undefined) return null;
+      const s = String(v).trim().toLowerCase();
+      if (["true","1","si","sí","y","yes"].includes(s)) return true;
+      if (["false","0","no","n"].includes(s)) return false;
+      return null;
+    }
+
+    function findKey(keys, wanted){
+      const low = keys.map(k => [k, k.toLowerCase()]);
+      for (const w of wanted){
+        const wl = w.toLowerCase();
+        const exact = low.find(([k, kl]) => kl === wl);
+        if (exact) return exact[0];
+      }
+      return null;
+    }
+
+    function findContains(keys, substrs){
+      const low = keys.map(k => [k, k.toLowerCase()]);
+      for (const s of substrs){
+        const sl = s.toLowerCase();
+        const hit = low.find(([k, kl]) => kl.includes(sl));
+        if (hit) return hit[0];
+      }
+      return null;
+    }
+
+    function parseMonth(value){
+      if (value === null || value === undefined) return null;
+      const s = String(value).trim();
+      if (!s) return null;
+
+      // YYYY-MM or YYYY-MM-DD
+      const m1 = s.match(/^(\d{4})[-/](\d{1,2})/);
+      if (m1){
+        const y = m1[1];
+        const mm = String(Math.max(1, Math.min(12, parseInt(m1[2],10)))).padStart(2,"0");
+        return `${y}-${mm}`;
+      }
+
+      const d = new Date(s);
+      if (!Number.isNaN(d.getTime())){
+        const y = d.getFullYear();
+        const mm = String(d.getMonth()+1).padStart(2,"0");
+        return `${y}-${mm}`;
+      }
+
+      // MM/YYYY
+      const m2 = s.match(/^(\d{1,2})[-/](\d{4})$/);
+      if (m2){
+        const mm = String(Math.max(1, Math.min(12, parseInt(m2[1],10)))).padStart(2,"0");
+        const y = m2[2];
+        return `${y}-${mm}`;
+      }
+
+      return null;
+    }
+
+    // === State ===
+    const state = {
+      activeTab: "monthly",
+      tableId: CONFIG.tableByMonthId,
+      cols: [],
+      rows: [],
+      rowsFiltered: [],
+      monthKey: null,
+      keyProc: null,
+      keyTher: null,
+      keyCecal: null,
+      months: [], // [{m,count}]
+      monthSelected: "ALL",
+    };
+
+    function setTab(which){
+      state.activeTab = which;
+      $("tabMonthly").classList.toggle("active", which==="monthly");
+      $("tabVcc").classList.toggle("active", which==="vcc");
+      $("viewMonthly").style.display = which==="monthly" ? "" : "none";
+      $("viewVcc").style.display = which==="vcc" ? "" : "none";
+      renderAll();
+    }
+
+    function buildMonthIndex(){
+      state.months = [];
+      state.monthKey = null;
+
+      if (!state.rows.length) return;
+
+      const keys = Object.keys(state.rows[0] || {}).filter(k => k !== "_row_id");
+      const key =
+        findContains(keys, ["mes", "month"]) ||
+        findContains(keys, ["fecha", "date"]) ||
+        null;
+
+      state.monthKey = key;
+      if (!key) return;
+
+      const map = new Map();
+      for (const r of state.rows){
+        const m = parseMonth(r[key]);
+        if (!m) continue;
+        map.set(m, (map.get(m) || 0) + 1);
+      }
+      state.months = [...map.entries()]
+        .sort((a,b) => a[0].localeCompare(b[0])) // asc
+        .map(([m,count]) => ({ m, count }));
+    }
+
+    function detectKeys(){
+      state.keyProc = null;
+      state.keyTher = null;
+      state.keyCecal = null;
+
+      if (!state.rows.length) return;
+
+      const keys = Object.keys(state.rows[0] || {});
+      state.keyProc =
+        findKey(keys, ["procedure_type"]) ||
+        findContains(keys, ["procedure", "proc", "tipo", "estudio"]) ||
+        null;
+
+      state.keyTher =
+        findKey(keys, ["terapeutica","terapéutica","therapeutica","therapeutic"]) ||
+        findContains(keys, ["terapeut"]) ||
+        null;
+
+      state.keyCecal =
+        findKey(keys, ["llego_a_ciego","cecal_intubation","entubacion_cecal","entubación_cecal"]) ||
+        findContains(keys, ["ciego", "cecal"]) ||
+        null;
+    }
+
+    function fillMonthSelect(){
+      const sel = $("monthSelect");
+      sel.innerHTML = "";
+
+      const optAll = document.createElement("option");
+      optAll.value = "ALL";
+      optAll.textContent = "Todos";
+      sel.appendChild(optAll);
+
+      for (const {m, count} of state.months){
+        const y = m.slice(0,4);
+        const mm = m.slice(5,7);
+        const nombres = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+        const lbl = `${nombres[parseInt(mm,10)-1] || mm} ${y} (${count})`;
+        const opt = document.createElement("option");
+        opt.value = m;
+        opt.textContent = lbl;
+        sel.appendChild(opt);
+      }
+
+      // keep selection if possible
+      if ([...sel.options].some(o => o.value === state.monthSelected)){
+        sel.value = state.monthSelected;
+      } else {
+        state.monthSelected = "ALL";
+        sel.value = "ALL";
+      }
+
+      if (!state.monthKey){
+        $("monthHint").textContent = "No se detectó columna de fecha/mes.";
+      } else {
+        $("monthHint").textContent = `Detectado: ${state.monthKey}`;
+      }
+    }
+
+    function monthFilteredRows(){
+      if (!state.rows.length) return [];
+      if (state.monthSelected === "ALL" || !state.monthKey) return state.rows;
+      return state.rows.filter(r => parseMonth(r[state.monthKey]) === state.monthSelected);
+    }
+
+    // === Metric engine ===
+    function computeMonthlySummary(rows){
+      // Detect if data is aggregated or "1 row = 1 study"
+      if (!rows.length){
+        return { total: 0, vccNo:0, vccYes:0, vedaNo:0, vedaYes:0, mode:"empty" };
+      }
+
+      const keys = Object.keys(rows[0] || {});
+      const hasAgg =
+        keys.some(k => k.toLowerCase().includes("veda")) &&
+        keys.some(k => k.toLowerCase().includes("vcc")) &&
+        (keys.some(k => k.toLowerCase().includes("sin")) || keys.some(k => k.toLowerCase().includes("con")));
+
+      const sumNum = (arr, key) => arr.reduce((acc,r) => {
+        const v = r[key];
+        const n = Number(String(v ?? "").replace(",", "."));
+        return acc + (Number.isFinite(n) ? n : 0);
+      }, 0);
+
+      let vedaNo = 0, vccNo = 0, vedaYes = 0, vccYes = 0;
+      let total = rows.length;
+
+      if (hasAgg){
+        const kVedaSin = keys.find(k => k.toLowerCase().includes("veda") && k.toLowerCase().includes("sin")) || null;
+        const kVccSin  = keys.find(k => k.toLowerCase().includes("vcc")  && k.toLowerCase().includes("sin")) || null;
+        const kVedaCon = keys.find(k => k.toLowerCase().includes("veda") && k.toLowerCase().includes("con")) || null;
+        const kVccCon  = keys.find(k => k.toLowerCase().includes("vcc")  && k.toLowerCase().includes("con")) || null;
+
+        vedaNo  = kVedaSin ? sumNum(rows, kVedaSin) : 0;
+        vccNo   = kVccSin  ? sumNum(rows, kVccSin)  : 0;
+        vedaYes = kVedaCon ? sumNum(rows, kVedaCon) : 0;
+        vccYes  = kVccCon  ? sumNum(rows, kVccCon)  : 0;
+
+        const kTotal = keys.find(k => k.toLowerCase() === "total" || k.toLowerCase().includes("total_est")) || null;
+        total = kTotal ? sumNum(rows, kTotal) : (vedaNo + vccNo + vedaYes + vccYes);
+
+        return { total, vccNo, vccYes, vedaNo, vedaYes, mode:"agg" };
+      }
+
+      // row-per-study
+      const proc = (r) => (state.keyProc ? (r[state.keyProc] ?? "").toString().trim().toUpperCase() : "");
+      const ther = (r) => (state.keyTher ? guessBoolean(r[state.keyTher]) : null);
+
+      for (const r of rows){
+        const p = proc(r);
+        const th = ther(r);
+        if (p === "VEDA"){
+          if (th === true) vedaYes++;
+          else vedaNo++;
+        } else if (p === "VCC"){
+          if (th === true) vccYes++;
+          else vccNo++;
+        }
+      }
+      total = rows.length;
+      return { total, vccNo, vccYes, vedaNo, vedaYes, mode:"raw" };
+    }
+
+    function renderCards(containerId, cards){
+      const box = $(containerId);
+      box.innerHTML = "";
+      for (const c of cards){
+        const div = document.createElement("div");
+        div.className = "stat";
+        div.innerHTML = `<div class="k">${c.k}</div><div class="v">${c.v}</div><div class="s">${c.s||""}</div>`;
+        box.appendChild(div);
+      }
+    }
+
+    // Simple line chart (no libs)
+    function drawLineChart(canvas, series){
+      // series: [{x:"YYYY-MM", y:number}]
+      const ctx = canvas.getContext("2d");
+      const w = canvas.width = canvas.clientWidth * devicePixelRatio;
+      const h = canvas.height = canvas.clientHeight * devicePixelRatio;
+
+      ctx.clearRect(0,0,w,h);
+
+      if (!series || series.length < 2){
+        ctx.font = `${12*devicePixelRatio}px ${getComputedStyle(document.body).fontFamily}`;
+        ctx.fillStyle = "#64748b";
+        ctx.fillText("Sin datos suficientes para graficar", 12*devicePixelRatio, 20*devicePixelRatio);
+        return;
+      }
+
+      const pad = 22*devicePixelRatio;
+      const xs = series.map(p => p.x);
+      const ys = series.map(p => p.y);
+      const yMin = Math.min(...ys);
+      const yMax = Math.max(...ys);
+      const ySpan = Math.max(1, yMax - yMin);
+
+      const xTo = (i) => pad + (w - pad*2) * (i/(series.length-1));
+      const yTo = (v) => (h - pad) - (h - pad*2) * ((v - yMin)/ySpan);
+
+      // grid
+      ctx.strokeStyle = "rgba(226,232,240,.9)";
+      ctx.lineWidth = 1*devicePixelRatio;
+      for (let k=0;k<4;k++){
+        const yy = pad + (h-pad*2)* (k/3);
+        ctx.beginPath();
+        ctx.moveTo(pad, yy);
+        ctx.lineTo(w-pad, yy);
+        ctx.stroke();
+      }
+
+      // line
+      ctx.strokeStyle = "rgba(29,78,216,.95)";
+      ctx.lineWidth = 2*devicePixelRatio;
+      ctx.beginPath();
+      series.forEach((p,i)=>{
+        const x = xTo(i);
+        const y = yTo(p.y);
+        if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      });
+      ctx.stroke();
+
+      // dots
+      ctx.fillStyle = "rgba(29,78,216,.95)";
+      series.forEach((p,i)=>{
+        const x = xTo(i);
+        const y = yTo(p.y);
+        ctx.beginPath();
+        ctx.arc(x,y,3.2*devicePixelRatio,0,Math.PI*2);
+        ctx.fill();
+      });
+
+      // labels (min/max)
+      ctx.fillStyle = "#64748b";
+      ctx.font = `${11*devicePixelRatio}px ${getComputedStyle(document.body).fontFamily}`;
+      ctx.fillText(`min ${yMin}`, pad, (h-pad)+14*devicePixelRatio);
+      ctx.fillText(`max ${yMax}`, pad, pad-8*devicePixelRatio);
+    }
+
+    function renderDetailTable(rows){
+      const q = ($("searchBox").value || "").trim().toLowerCase();
+      let list = rows;
+
+      if (q){
+        list = list.filter(r =>
+          Object.keys(r).some(k => (r[k] ?? "").toString().toLowerCase().includes(q))
+        );
+      }
+
+      const show = list.slice(0, 25); // para que no mate el DOM
+      $("detailMeta").te
