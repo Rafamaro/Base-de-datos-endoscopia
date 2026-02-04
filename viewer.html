@@ -114,9 +114,13 @@
 
     /* Layout for table view + month sidebar */
     .layout{
+      display:block;
+    }
+    .layout.withSidebar{
       display:grid;
       grid-template-columns: 240px 1fr;
       gap:12px;
+      align-items:start;
     }
     @media (max-width: 980px){
       .layout{grid-template-columns:1fr}
@@ -288,7 +292,7 @@
       <div class="tab" id="tab2">Estudios por mes</div>
     </div>
 
-    <div class="layout">
+    <div class="layout" id="layout">
       <!-- sidebar months -->
       <div class="sidebar" id="sidebar">
         <div class="side-title">Meses</div>
@@ -303,6 +307,7 @@
             <input id="pageSize" class="small" placeholder="25" title="Filas por página" />
           </div>
         </div>
+        <div id="alert" style="display:none; margin:8px 0 10px; padding:10px 12px; border-radius:14px; border:1px solid rgba(239,68,68,.25); background: rgba(239,68,68,.06); color: #7f1d1d; font-weight:800; font-size:12px;">No se pudieron cargar datos (ver Debug).</div>
 
         <div style="overflow:auto; max-height: 62vh; border-radius:14px;">
           <table>
@@ -474,8 +479,9 @@
 
       // sidebar months only for tab2
       $("sidebar").classList.toggle("show", idx===1);
-
-      setHeaderTitle();
+      // layout: when sidebar hidden, use one column to avoid "apiñada a la derecha"
+      $("layout").classList.toggle("withSidebar", idx===1);
+setHeaderTitle();
       renderMonths(); // update sidebar highlight
       render();
     }
@@ -634,24 +640,97 @@
 
       const total = rows.length;
 
-      // detect keys
+      // detect keys (más tolerante)
       const keys = Object.keys(rows[0] || {});
-      const keyProc = findKey(keys, ["procedure_type"]) || findContains(keys, ["procedure"]) || null;
-      const keyTher = findKey(keys, ["terapeutica","terapéutica","therapeutic","therapeutics"]) || findContains(keys, ["terapeut"]) || null;
+      const keyProc =
+        findKey(keys, ["procedure_type"]) ||
+        findContains(keys, ["procedure", "proc", "tipo", "estudio"]) ||
+        null;
 
-      const proc = (r) => (keyProc ? (r[keyProc] ?? "").toString().trim().toUpperCase() : "");
-      const ther = (r) => (keyTher ? guessBoolean(r[keyTher]) : null);
+      const keyTher =
+        findKey(keys, ["terapeutica","terapéutica","therapeutica","therapeutic","therapeutics"]) ||
+        findContains(keys, ["terapeut"]) ||
+        null;
 
+      // Si la tabla ya viene "agregada" (por ejemplo columnas tipo veda_sin, vcc_con, etc),
+      // detectamos columnas numéricas y sumamos.
+      const hasAgg =
+        keys.some(k => k.toLowerCase().includes("veda")) &&
+        keys.some(k => k.toLowerCase().includes("vcc")) &&
+        (keys.some(k => k.toLowerCase().includes("sin")) || keys.some(k => k.toLowerCase().includes("con")));
+
+      const sumNum = (arr, key) => arr.reduce((acc,r) => {
+        const v = r[key];
+        const n = Number(String(v ?? "").replace(",", "."));
+        return acc + (Number.isFinite(n) ? n : 0);
+      }, 0);
+
+      // Defaults
       let vedaNo = 0, vccNo = 0, vedaYes = 0, vccYes = 0;
+      let totalStudies = total;
 
-      for (const r of rows){
-        const p = proc(r);
-        const th = ther(r);
+      if (rows.length === 0){
+        $("s1k").textContent = "Total de estudios";
+        $("s1v").textContent = "—";
+        $("s1s").textContent = "Sin filas para calcular";
 
-        if (p === "VEDA"){
-          if (th === true) vedaYes++;
-          else vedaNo++; // null/false -> sin terapéutica (por ahora)
-        } else if (p === "VCC"){
+        $("s2k").textContent = "VEDA / VCC (sin terapéutica)";
+        $("s2v").textContent = "—";
+        $("s2s").textContent = "—";
+
+        $("s3k").textContent = "VEDA / VCC (con terapéutica)";
+        $("s3v").textContent = "—";
+        $("s3s").textContent = "—";
+        return;
+      }
+
+      if (hasAgg){
+        // Heurística: buscamos claves más probables
+        const kVedaSin = keys.find(k => k.toLowerCase().includes("veda") && k.toLowerCase().includes("sin")) || null;
+        const kVccSin  = keys.find(k => k.toLowerCase().includes("vcc")  && k.toLowerCase().includes("sin")) || null;
+        const kVedaCon = keys.find(k => k.toLowerCase().includes("veda") && k.toLowerCase().includes("con")) || null;
+        const kVccCon  = keys.find(k => k.toLowerCase().includes("vcc")  && k.toLowerCase().includes("con")) || null;
+
+        vedaNo  = kVedaSin ? sumNum(rows, kVedaSin) : 0;
+        vccNo   = kVccSin  ? sumNum(rows, kVccSin)  : 0;
+        vedaYes = kVedaCon ? sumNum(rows, kVedaCon) : 0;
+        vccYes  = kVccCon  ? sumNum(rows, kVccCon)  : 0;
+
+        // total: si existe "total", lo usamos; si no, sumamos todo lo anterior
+        const kTotal = keys.find(k => k.toLowerCase() === "total" || k.toLowerCase().includes("total_est")) || null;
+        totalStudies = kTotal ? sumNum(rows, kTotal) : (vedaNo + vccNo + vedaYes + vccYes);
+      } else {
+        // Tabla "fila por estudio"
+        const proc = (r) => (keyProc ? (r[keyProc] ?? "").toString().trim().toUpperCase() : "");
+        const ther = (r) => (keyTher ? guessBoolean(r[keyTher]) : null);
+
+        for (const r of rows){
+          const p = proc(r);
+          const th = ther(r);
+
+          if (p === "VEDA"){
+            if (th === true) vedaYes++;
+            else vedaNo++; // null/false -> sin terapéutica (por ahora)
+          } else if (p === "VCC"){
+            if (th === true) vccYes++;
+            else vccNo++;
+          }
+        }
+        totalStudies = total;
+      }
+
+      $("s1k").textContent = "Total de estudios";
+      $("s1v").textContent = totalStudies.toLocaleString();
+      $("s1s").textContent = (t.monthSelected && t.monthSelected !== "ALL") ? `Mes: ${t.monthSelected}` : "Todos los meses";
+
+      $("s2k").textContent = "VEDA / VCC (sin terapéutica)";
+      $("s2v").textContent = `${vedaNo.toLocaleString()} / ${vccNo.toLocaleString()}`;
+      $("s2s").textContent = keyTher || hasAgg ? "Sin terapéutica" : "No detecté columnas de procedimiento/terapéutica";
+
+      $("s3k").textContent = "VEDA / VCC (con terapéutica)";
+      $("s3v").textContent = `${vedaYes.toLocaleString()} / ${vccYes.toLocaleString()}`;
+      $("s3s").textContent = keyTher || hasAgg ? "Con terapéutica" : "No detecté columnas de procedimiento/terapéutica";
+    } else if (p === "VCC"){
           if (th === true) vccYes++;
           else vccNo++;
         }
@@ -749,6 +828,15 @@
       $("next").disabled = t.page >= maxPage;
 
       $("debug").textContent = JSON.stringify(t.raw, null, 2);
+
+      // alert if fetch failed
+      const raw = t.raw || {};
+      const okCols = raw.columns?.ok !== false;
+      const okRows = raw.rows?.ok !== false;
+      const hasRows = (t.rows || []).length > 0;
+      const showAlert = (!okCols || !okRows) || (!hasRows && (raw.columns || raw.rows));
+      const alert = $("alert");
+      if (alert) alert.style.display = showAlert ? "block" : "none";
 
       updateStats();
     }
