@@ -199,86 +199,97 @@
       border:1px solid var(--line);
     }
     thead th{
-      background: rgba(15,23,42,.02);
-      color: var(--muted);
+      position:sticky; top:0; z-index:2;
+      background: linear-gradient(180deg, rgba(15,23,42,.06), rgba(255,255,255,1));
       font-size:12px;
       text-align:left;
-      padding:10px 10px;
+      padding:10px;
       border-bottom:1px solid var(--line);
-      position:sticky; top:0;
-      cursor:pointer; user-select:none; white-space:nowrap;
+      cursor:pointer;
+      user-select:none;
     }
     tbody td{
-      padding:10px 10px;
-      border-bottom:1px solid rgba(226,232,240,.85);
-      font-size:13px;
+      padding:10px;
+      font-size:12px;
+      border-bottom:1px solid var(--line);
       vertical-align:top;
-      background: #fff;
+      max-width: 480px;
+      word-break: break-word;
     }
-    tbody tr:hover td{background: rgba(29,78,216,.06)}
+    tbody tr:hover td{background: rgba(29,78,216,.04)}
+    tbody tr:last-child td{border-bottom:none}
 
     .footer{
-      display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;
-      margin-top:10px;color:var(--muted);font-size:12px;
+      display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+      margin-top:10px;
+      color:var(--muted);
+      font-size:12px;
     }
-    .pager{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .pager button{
-      padding:7px 10px;border-radius: 10px;border:1px solid var(--line);
-      background: rgba(255,255,255,.85); color:var(--ink); cursor:pointer;
+    .pager{display:flex;gap:8px;align-items:center}
+    button{
+      border-radius: 12px;
+      border:1px solid rgba(29,78,216,.25);
+      background: rgba(255,255,255,.9);
+      padding:9px 10px;
+      cursor:pointer;
       font-weight:900;
     }
-    .pager button:disabled{opacity:.55;cursor:not-allowed}
+    button:hover{border-color: rgba(29,78,216,.45)}
+    button:disabled{opacity:.5; cursor:not-allowed}
 
-    details{
-      margin-top:12px;
-      border:1px solid var(--line);
-      border-radius: 14px;
-      background: rgba(15,23,42,.02);
-      padding:10px 12px;
-    }
-    summary{cursor:pointer;color:var(--muted);font-weight:900}
+    details{margin-top:10px}
     pre{
-      margin:10px 0 0;
-      background: rgba(15,23,42,.04);
-      padding:10px;
-      border-radius: 12px;
-      border:1px solid var(--line);
+      background:#0b1020;
+      color:#d6e0ff;
+      padding:12px;border-radius: 14px;
       overflow:auto;
-      max-height: 320px;
+      max-height: 240px;
       font-size:12px;
-      line-height:1.35;
-      font-family: var(--mono);
+      border:1px solid rgba(29,78,216,.22);
     }
+
+    .pill{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:8px 10px;
+      border-radius: 999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.85);
+      font-size:12px;
+      color:var(--muted);
+      font-weight:900;
+    }
+    .dot{width:9px;height:9px;border-radius:99px;background:var(--warn)}
+    .dot.ok{background:var(--ok)}
+    .dot.warn{background:var(--warn)}
+    .dot.bad{background:var(--bad)}
   </style>
 </head>
-
 <body>
   <div class="wrap">
     <div class="header">
       <div>
-        <h1 class="title">Base de Datos Dr Perez</h1>
-        <p class="subtitle">Viewer de tablas (VCC y estadísticas por mes).</p>
+        <h1 class="title">EndoDB • Viewer</h1>
+        <p class="subtitle">Visualización de tablas (multiusuario: Rafa/Caro)</p>
       </div>
       <div class="brand-right">
-        <img class="logo"
-             alt="Logo"
-             src="https://raw.githubusercontent.com/Rafamaro/Base-de-datos-endoscopia/main/WhatsApp%20Image%202026-02-03%20at%2022.23.15.jpeg">
+        <div class="pill" id="statusPill">
+          <span class="dot warn"></span><span id="statusText">—</span>
+        </div>
       </div>
     </div>
 
-    <!-- Stats (cambian según vista) -->
     <div class="stats">
-      <div class="stat" id="s1">
+      <div class="stat">
         <div class="k" id="s1k">—</div>
         <div class="v" id="s1v">—</div>
         <div class="s" id="s1s">—</div>
       </div>
-      <div class="stat" id="s2">
+      <div class="stat">
         <div class="k" id="s2k">—</div>
         <div class="v" id="s2v">—</div>
         <div class="s" id="s2s">—</div>
       </div>
-      <div class="stat" id="s3">
+      <div class="stat">
         <div class="k" id="s3k">—</div>
         <div class="v" id="s3v">—</div>
         <div class="s" id="s3s">—</div>
@@ -288,18 +299,12 @@
     <div class="tabs">
       <div class="tab active" id="tab1">Base de datos de VCC</div>
       <div class="tab" id="tab2">Estudios por mes</div>
-      <div style="flex:1"></div>
-      <button class="btn secondary" id="btnRefresh" style="height:40px">Actualizar</button>
-      <span class="pill" id="statusPill" style="height:40px">
-        <span class="dot warn"></span>
-        <span id="statusText">Sin cargar</span>
-      </span>
+      <button id="btnRefresh" style="margin-left:auto">↻ Recargar</button>
     </div>
 
     <div class="layout" id="layout">
-      <!-- sidebar months -->
       <div class="sidebar" id="sidebar">
-        <div class="side-title">Meses</div>
+        <div class="side-title">Filtrar por mes</div>
         <div id="months"></div>
       </div>
 
@@ -307,12 +312,18 @@
         <div class="panel-head">
           <h2 id="tableTitle">—</h2>
           <div class="tools">
-            <input id="q" placeholder="Buscar en esta tabla…" />
-            <input id="pageSize" class="small" placeholder="25" title="Filas por página" />
+            <div>
+              <label>Buscar</label>
+              <input id="q" placeholder="texto…" />
+            </div>
+            <div>
+              <label>Filas / página</label>
+              <input id="pageSize" class="small" value="25" />
+            </div>
           </div>
         </div>
 
-        <div style="overflow:auto; max-height: 62vh; border-radius:14px;">
+        <div style="overflow:auto; max-height:62vh; border-radius:14px">
           <table>
             <thead id="thead"></thead>
             <tbody id="tbody"></tbody>
@@ -336,9 +347,6 @@
     </div>
   </div>
 
-  <!-- Hidden stats loader (reusa stats.html) -->
-  <iframe id="statsFrame" src="./stats.html" style="display:none" aria-hidden="true"></iframe>
-
   <script>
     const $ = (id) => document.getElementById(id);
 
@@ -350,8 +358,7 @@
       $("statusText").textContent = text;
     }
 
-
-    // ✅ Hardcode (pediste borrar UI de configuración)
+    // ✅ Hardcode
     const CONFIG = {
       baseUrl: "https://basededatos.corrongo182.workers.dev",
       tableVccId: 2,
@@ -433,7 +440,6 @@
       const s = String(value).trim();
       if (!s) return null;
 
-      // If already like YYYY-MM
       const m1 = s.match(/^(\d{4})[-/](\d{1,2})/);
       if (m1){
         const y = m1[1];
@@ -441,7 +447,6 @@
         return `${y}-${mm}`;
       }
 
-      // Try Date parsing
       const d = new Date(s);
       if (!Number.isNaN(d.getTime())){
         const y = d.getFullYear();
@@ -449,7 +454,6 @@
         return `${y}-${mm}`;
       }
 
-      // Try "MM/YYYY" or "MM-YYYY"
       const m2 = s.match(/^(\d{1,2})[-/](\d{4})$/);
       if (m2){
         const mm = String(Math.max(1, Math.min(12, parseInt(m2[1],10)))).padStart(2,"0");
@@ -472,11 +476,10 @@
 
     function setHeaderTitle(){
       const t = state.tables[state.activeIdx];
-      $("tableTitle").textContent = `${t.name} (ID ${t.id})`;
+      $("tableTitle").textContent = `${t.name}`;
     }
 
     function setActive(idx){
-      // persist inputs
       const prev = state.tables[state.activeIdx];
       prev.q = $("q").value || "";
       prev.pageSize = parseInt($("pageSize").value || "25", 10) || prev.pageSize;
@@ -492,12 +495,11 @@
       $("q").value = t.q || "";
       $("pageSize").value = String(t.pageSize || 25);
 
-      // sidebar months only for tab2
       $("sidebar").classList.toggle("show", idx===1);
       $("layout").classList.toggle("withSidebar", idx===1);
 
       setHeaderTitle();
-      renderMonths(); // update sidebar highlight
+      renderMonths();
       render();
     }
 
@@ -507,7 +509,6 @@
       if (!rows.length){ t.months = []; t.monthKey = null; return; }
 
       const keys = Object.keys(rows[0] || {}).filter(k => k !== "_row_id");
-      // try best date/month key
       const key =
         findContains(keys, ["mes", "month"]) ||
         findContains(keys, ["fecha", "date"]) ||
@@ -515,7 +516,7 @@
 
       t.monthKey = key;
 
-      const map = new Map(); // month -> count
+      const map = new Map();
       if (key){
         for (const r of rows){
           const m = parseMonth(r[key]);
@@ -523,7 +524,6 @@
           map.set(m, (map.get(m) || 0) + 1);
         }
       }
-      // sorted descending
       t.months = [...map.entries()].sort((a,b) => b[0].localeCompare(a[0]));
     }
 
@@ -532,10 +532,8 @@
       const box = $("months");
       box.innerHTML = "";
 
-      // If not in tab2, nothing
       if (state.activeIdx !== 1) return;
 
-      // Always show ALL
       const mkBtn = (label, value, count=null) => {
         const div = document.createElement("div");
         div.className = "month" + (t.monthSelected === value ? " active" : "");
@@ -563,7 +561,6 @@
       }
 
       for (const [m, c] of t.months){
-        // pretty label: YYYY-MM -> Mes YYYY
         const y = m.slice(0,4);
         const mm = m.slice(5,7);
         const nombres = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -575,12 +572,10 @@
     function getEffectiveRows(t){
       let rows = t.rows || [];
 
-      // Month filter only for tab2
       if (state.activeIdx === 1 && t.monthSelected && t.monthSelected !== "ALL" && t.monthKey){
         rows = rows.filter(r => parseMonth(r[t.monthKey]) === t.monthSelected);
       }
 
-      // Search filter
       const q = (t.q || "").trim().toLowerCase();
       if (q){
         rows = rows.filter(r =>
@@ -591,65 +586,159 @@
       return rows;
     }
 
-    
-    // === Stats bridge (viewer solo muestra lo que calcula stats.html) ===
-    const statsState = { payload: null, ready: false };
-
-    function applyStats(){
-      const p = statsState.payload;
-      if (!p || p.status !== "OK"){
+    function setStatsForVcc(){
+      const t = state.tables[0];
+      const rows = getEffectiveRows(t);
+      if (!rows.length){
         $("s1k").textContent = "Entubación cecal";
         $("s1v").textContent = "—";
-        $("s1s").textContent = p && p.status ? `Estado: ${p.status}` : "—";
+        $("s1s").textContent = "Sin filas para calcular";
 
-        $("s2k").textContent = "Calidad preparación (Boston)";
+        $("s2k").textContent = "VCC totales";
         $("s2v").textContent = "—";
-        $("s2s").textContent = p && p.error ? String(p.error).slice(0,120) : "—";
+        $("s2s").textContent = "—";
 
-        $("s3k").textContent = (state.activeIdx === 0) ? "VCC totales" : "Estudios totales";
+        $("s3k").textContent = "VCC con ciego alcanzado";
         $("s3v").textContent = "—";
         $("s3s").textContent = "—";
         return;
       }
 
-      // Card 1
-      $("s1k").textContent = "Entubación cecal";
-      $("s1v").textContent = p.cecal?.value ?? "—";
-      $("s1s").textContent = p.cecal?.meta ?? "—";
+      const keys = Object.keys(rows[0] || {});
+      const keyProc = findKey(keys, ["procedure_type"]) || findContains(keys, ["procedure"]) || null;
+      const keyCecal =
+        findKey(keys, ["llego_a_ciego","cecal_intubation","entubacion_cecal","entubación_cecal"]) ||
+        findContains(keys, ["ciego", "cecal"]) ||
+        null;
 
-      // Card 2
-      $("s2k").textContent = "Calidad preparación (Boston)";
-      $("s2v").textContent = p.prep?.value ?? "—";
-      $("s2s").textContent = p.prep?.meta ?? "—";
+      const isVccRow = (r) => {
+        if (!keyProc) return true;
+        const v = (r[keyProc] ?? "").toString().trim().toUpperCase();
+        return v === "VCC";
+      };
 
-      // Card 3 (cambia por pestaña)
-      if (state.activeIdx === 0){
-        $("s3k").textContent = "VCC totales";
-        $("s3v").textContent = (p.vcc ?? "—").toString();
-        $("s3s").textContent = "Según tipo de estudio (Tabla 3)";
-      } else {
-        $("s3k").textContent = "Estudios totales";
-        $("s3v").textContent = (p.total ?? "—").toString();
-        $("s3s").textContent = "Total de filas (Tabla 3)";
+      const vccRows = rows.filter(isVccRow);
+      const denom = vccRows.length;
+
+      let num = 0;
+      if (keyCecal){
+        for (const r of vccRows){
+          const b = guessBoolean(r[keyCecal]);
+          if (b === true) num++;
+        }
       }
+
+      const pct = denom > 0 ? (num/denom*100) : 0;
+      const frac = `${num.toLocaleString()} / ${denom.toLocaleString()}`;
+
+      $("s1k").textContent = "Entubación cecal";
+      $("s1v").textContent = keyCecal ? `${frac} (${pct.toFixed(1)}%)` : "—";
+      $("s1s").textContent = keyCecal ? `Campo: ${keyCecal}${keyProc ? " • procedure_type=VCC" : ""}` : "No encontré campo de ciego.";
+
+      $("s2k").textContent = "VCC totales";
+      $("s2v").textContent = denom.toLocaleString();
+      $("s2s").textContent = "Denominador";
+
+      $("s3k").textContent = "VCC con ciego alcanzado";
+      $("s3v").textContent = keyCecal ? num.toLocaleString() : "—";
+      $("s3s").textContent = "Numerador";
     }
 
-    function requestStatsRecalc(){
-      const fr = $("statsFrame");
-      if (!fr || !fr.contentWindow) return;
-      try{
-        fr.contentWindow.postMessage({ type: "endodb_stats_run" }, "*");
-      } catch {}
+    function setStatsForByMonth(){
+      const t = state.tables[1];
+      const rows = getEffectiveRows(t);
+
+      const monthLabel = (t.monthSelected && t.monthSelected !== "ALL") ? `Mes: ${t.monthSelected}` : "Todos los meses";
+
+      if (!rows.length){
+        $("s1k").textContent = "Total de estudios";
+        $("s1v").textContent = "—";
+        $("s1s").textContent = monthLabel;
+
+        $("s2k").textContent = "VCC";
+        $("s2v").textContent = "—";
+        $("s2s").textContent = "Sin datos";
+
+        $("s3k").textContent = "VEDA";
+        $("s3v").textContent = "—";
+        $("s3s").textContent = "Sin datos";
+        return;
+      }
+
+      const keys = Object.keys(rows[0] || {});
+      const keyProc =
+        findKey(keys, ["procedure_type"]) ||
+        findContains(keys, ["procedure", "proc", "tipo", "estudio"]) ||
+        null;
+
+      const keyTher =
+        findKey(keys, ["terapeutica","terapéutica","therapeutica","therapeutic","therapeutics"]) ||
+        findContains(keys, ["terapeut"]) ||
+        null;
+
+      const hasAgg =
+        keys.some(k => k.toLowerCase().includes("veda")) &&
+        keys.some(k => k.toLowerCase().includes("vcc")) &&
+        (keys.some(k => k.toLowerCase().includes("sin")) || keys.some(k => k.toLowerCase().includes("con")));
+
+      const sumNum = (arr, key) => arr.reduce((acc,r) => {
+        const v = r[key];
+        const n = Number(String(v ?? "").replace(",", "."));
+        return acc + (Number.isFinite(n) ? n : 0);
+      }, 0);
+
+      let vedaNo = 0, vccNo = 0, vedaYes = 0, vccYes = 0;
+      let totalStudies = rows.length;
+
+      if (hasAgg){
+        const kVedaSin = keys.find(k => k.toLowerCase().includes("veda") && k.toLowerCase().includes("sin")) || null;
+        const kVccSin  = keys.find(k => k.toLowerCase().includes("vcc")  && k.toLowerCase().includes("sin")) || null;
+        const kVedaCon = keys.find(k => k.toLowerCase().includes("veda") && k.toLowerCase().includes("con")) || null;
+        const kVccCon  = keys.find(k => k.toLowerCase().includes("vcc")  && k.toLowerCase().includes("con")) || null;
+
+        vedaNo  = kVedaSin ? sumNum(rows, kVedaSin) : 0;
+        vccNo   = kVccSin  ? sumNum(rows, kVccSin)  : 0;
+        vedaYes = kVedaCon ? sumNum(rows, kVedaCon) : 0;
+        vccYes  = kVccCon  ? sumNum(rows, kVccCon)  : 0;
+
+        const kTotal = keys.find(k => k.toLowerCase() === "total" || k.toLowerCase().includes("total_est")) || null;
+        totalStudies = kTotal ? sumNum(rows, kTotal) : (vedaNo + vccNo + vedaYes + vccYes);
+      } else {
+        const proc = (r) => (keyProc ? (r[keyProc] ?? "").toString().trim().toUpperCase() : "");
+        const ther = (r) => (keyTher ? guessBoolean(r[keyTher]) : null);
+
+        for (const r of rows){
+          const p = proc(r);
+          const th = ther(r);
+
+          if (p === "VEDA"){
+            if (th === true) vedaYes++;
+            else vedaNo++;
+          } else if (p === "VCC"){
+            if (th === true) vccYes++;
+            else vccNo++;
+          }
+        }
+        totalStudies = rows.length;
+      }
+
+      $("s1k").textContent = "Total de estudios";
+      $("s1v").textContent = totalStudies.toLocaleString();
+      $("s1s").textContent = monthLabel;
+
+      $("s2k").textContent = "VCC";
+      $("s2v").textContent = `${vccNo.toLocaleString()} sin • ${vccYes.toLocaleString()} con`;
+      $("s2s").textContent = (keyTher || hasAgg) ? "Terapéutica por estudio" : "No detecté columna terapéutica";
+
+      $("s3k").textContent = "VEDA";
+      $("s3v").textContent = `${vedaNo.toLocaleString()} sin • ${vedaYes.toLocaleString()} con`;
+      $("s3s").textContent = (keyTher || hasAgg) ? "Terapéutica por estudio" : "No detecté columna terapéutica";
     }
 
-    window.addEventListener("message", (e) => {
-      const d = e.data;
-      if (!d || d.type !== "endodb_stats") return;
-      statsState.payload = d.payload || null;
-      statsState.ready = true;
-      applyStats();
-    });
-
+    function updateStats(){
+      if (state.activeIdx === 0) setStatsForVcc();
+      else setStatsForByMonth();
+    }
 
     function render(){
       const t = state.tables[state.activeIdx];
@@ -659,7 +748,6 @@
 
       let rows = rows0;
 
-      // sort
       if (state.sortKey){
         const k = state.sortKey;
         const dir = state.sortDir === "asc" ? 1 : -1;
@@ -674,7 +762,6 @@
         });
       }
 
-      // paginate
       const ps = Math.max(1, t.pageSize|0);
       const total = rows.length;
       const maxPage = Math.max(1, Math.ceil(total / ps));
@@ -726,18 +813,19 @@
 
       $("debug").textContent = JSON.stringify(t.raw, null, 2);
 
-      applyStats();
+      updateStats();
     }
 
     async function loadAll(){
       setStatus("warn", "Cargando…");
       try{
         for (let i=0;i<2;i++){
-          const tid = state.tables[i].id;
           const baseUrl = CONFIG.baseUrl.replace(/\/+$/,"");
 
-          const urlCols = `${baseUrl}/nc/tables/${tid}/columns`;
-          const urlRows = `${baseUrl}/nc/tables/${tid}/rows`;
+          // Multi-usuario: el Worker decide la tabla según el email (Cloudflare Access)
+          const scope = (i === 0) ? "calidad" : "registro";
+          const urlCols = `${baseUrl}/api/${scope}/columns`;
+          const urlRows = `${baseUrl}/api/${scope}/rows`;
 
           const rCols = await fetchJson(urlCols);
           const rRows = await fetchJson(urlRows);
@@ -758,8 +846,6 @@
         renderMonths();
         setHeaderTitle();
         setStatus("ok", "Cargado");
-        // refrescar stats desde stats.html
-        requestStatsRecalc();
         render();
       } catch (e){
         console.error(e);
@@ -768,7 +854,6 @@
       }
     }
 
-    // UI handlers
     $("tab1").onclick = () => setActive(0);
     $("tab2").onclick = () => setActive(1);
 
@@ -793,16 +878,8 @@
     $("prev").onclick = () => { const t=state.tables[state.activeIdx]; t.page = Math.max(1, t.page - 1); render(); };
     $("next").onclick = () => { const t=state.tables[state.activeIdx]; t.page = t.page + 1; render(); };
 
-    // Init
     $("pageSize").value = "25";
     setActive(0);
-
-    // stats iframe boot
-    const sf = $("statsFrame");
-    if (sf){
-      sf.addEventListener("load", () => requestStatsRecalc());
-    }
-
     loadAll();
   </script>
 </body>
