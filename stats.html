@@ -171,6 +171,22 @@
     bLKeys: ["boston_izquierdo","izquierdo","left"]
   };
 
+  // === Bridge: permite que viewer consuma estas métricas sin recalcular en viewer ===
+  function publishStats(payload){
+    try{
+      if (window.parent && window.parent !== window){
+        window.parent.postMessage({ type: "endodb_stats", payload }, "*");
+      }
+    } catch {}
+  }
+
+  window.addEventListener("message", (e) => {
+    const d = e.data;
+    if (!d || d.type !== "endodb_stats_run") return;
+    run();
+  });
+
+
   function normBaseUrl(u){
     u = (u||"").trim().replace(/\/+$/,"");
     if (!/^https?:\/\//i.test(u)) u = "https://" + u;
@@ -411,9 +427,20 @@
         quality: { cecal_num, cecal_den, prep_num, prep_den }
       }, null, 2);
 
+      // Publicar a parent (viewer)
+      publishStats({
+        status: "OK",
+        cecal: { value: $("kCecal").textContent, meta: $("kCecalMeta").textContent },
+        prep:  { value: $("kPrep").textContent,  meta: $("kPrepMeta").textContent },
+        total,
+        vcc
+      });
+
     } catch(err){
       $("status").textContent = "Error (ver debug)";
-      $("debug").textContent = String(err && err.stack ? err.stack : err);
+      const errText = String(err && err.stack ? err.stack : err);
+      $("debug").textContent = errText;
+      publishStats({ status: "Error", error: errText });
     }
   }
 
