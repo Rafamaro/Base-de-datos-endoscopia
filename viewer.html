@@ -63,14 +63,6 @@
       font-size:13px;
     }
 
-    .nav2{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
-    a.navbtn2{
-      display:inline-flex;align-items:center;gap:8px;
-      padding:10px 12px;border-radius:999px;border:1px solid var(--line);
-      background:rgba(255,255,255,.75);text-decoration:none;color:var(--muted);font-weight:900;
-    }
-    a.navbtn2:hover{background:rgba(29,78,216,.06);border-color:rgba(29,78,216,.25);color:var(--ink)}
-
     .brand-right{display:flex;align-items:center;gap:10px;}
 
     .pill{
@@ -95,7 +87,7 @@
     .stats{
       width:100%;
       display:grid;
-      grid-template-columns: 1.2fr 0.8fr 0.8fr;
+      grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
       gap:10px;
       margin:14px 0 14px;
     }
@@ -285,14 +277,7 @@
     <div class="header">
       <div>
         <h1 class="title">EndoDB • Viewer</h1>
-        <div class="subtitle">
-          Visualización de tablas (multiusuario: Rafa/Caro)
-          <div class="nav2">
-            <a class="navbtn2" href="./index.html" title="Subida">⬆️ Subida</a>
-            <a class="navbtn2" href="./viewer.html" title="Viewer">🔎 Viewer</a>
-            <a class="navbtn2" href="./stats.html" title="Stats">📊 Stats</a>
-          </div>
-        </div>
+        <div class="subtitle">Visualización de tablas (multiusuario: Rafa/Caro)</div>
       </div>
 
       <div class="brand-right">
@@ -319,7 +304,17 @@
         <div class="v" id="s3v">—</div>
         <div class="s" id="s3s">—</div>
       </div>
-    </div>
+      <div class="stat">
+        <div class="k" id="s4k">—</div>
+        <div class="v" id="s4v">—</div>
+        <div class="s" id="s4s">—</div>
+      </div>
+      <div class="stat">
+        <div class="k" id="s5k">—</div>
+        <div class="v" id="s5v">—</div>
+        <div class="s" id="s5s">—</div>
+      </div>
+    </div></div>
 
     <div class="tabs">
       <div class="tab active" id="tab1">Base de datos de VCC</div>
@@ -376,8 +371,6 @@
     </div>
   </div>
 
-  <iframe id="statsBridge" title="Stats Bridge" src="./stats.html?embed=1" style="display:none"></iframe>
-
   <script>
     const $ = (id) => document.getElementById(id);
 
@@ -396,28 +389,6 @@
       tableVccId: 2,
       tableByMonthId: 3,
     };
-
-    // --- Bridge con stats.html (entubación cecal + Boston ya calculados)
-    function requestStatsRun(){
-      const fr = document.getElementById("statsBridge");
-      try{
-        fr?.contentWindow?.postMessage({ type: "endodb_stats_run" }, "*");
-      } catch {}
-    }
-
-    function setStatsPillFromStats(payload){
-      if (!payload) return;
-      if (payload.status === "OK") setStatus("ok", "Cargado");
-      else if (payload.status === "Error") setStatus("warn", "Cargado (stats error)");
-    }
-
-    window.addEventListener("message", (e) => {
-      const d = e.data;
-      if (!d || d.type !== "endodb_stats") return;
-      state.statsPayload = d.payload || null;
-      setStatsPillFromStats(state.statsPayload);
-      updateStats();
-    });
 
     async function fetchJson(url){
       const res = await fetch(url, { method: "GET" });
@@ -599,7 +570,6 @@
           t.page = 1;
           renderMonths();
           render();
-        requestStatsRun();
         };
         box.appendChild(div);
       };
@@ -644,46 +614,40 @@
     }
 
     function setStatsForVcc(){
-      // Preferimos usar las métricas ya calculadas por stats.html (evita duplicar lógica)
-      const sp = state.statsPayload;
-      const ok = sp && sp.status === "OK";
-
-      $("s1k").textContent = "Entubación cecal (Tabla 2)";
-      $("s2k").textContent = "Calidad preparación (Boston, Tabla 2)";
-      $("s3k").textContent = "VCC totales (Tabla 3)";
-
-      if (ok){
-        $("s1v").textContent = sp.cecal?.value ?? "—";
-        $("s1s").textContent = sp.cecal?.meta ?? "—";
-
-        $("s2v").textContent = sp.prep?.value ?? "—";
-        $("s2s").textContent = sp.prep?.meta ?? "—";
-
-        $("s3v").textContent = (sp.vcc ?? "—").toLocaleString ? sp.vcc.toLocaleString() : String(sp.vcc ?? "—");
-        $("s3s").textContent = (sp.total ? `Total filas Tabla 3: ${sp.total}` : "—");
-        return;
-      }
-
-      // Fallback: lo que ya hacía viewer (si stats no respondió)
-      const t = state.tables[0];
+      const t = state.tables[0]; // Tabla 2 (calidad VCC)
       const rows = getEffectiveRows(t);
 
+      const empty = () => {
+        const ids = ["1","2","3","4","5"];
+        for (const i of ids){
+          $("s"+i+"k").textContent = "—";
+          $("s"+i+"v").textContent = "—";
+          $("s"+i+"s").textContent = "—";
+        }
+      };
+
       if (!rows.length){
-        $("s1v").textContent = "—";
+        empty();
+        $("s1k").textContent = "Entubación cecal";
         $("s1s").textContent = "Sin filas para calcular";
-        $("s2v").textContent = "—";
-        $("s2s").textContent = "—";
-        $("s3v").textContent = "—";
-        $("s3s").textContent = "—";
         return;
       }
 
       const keys = Object.keys(rows[0] || {});
-      const keyProc = findKey(keys, ["procedure_type"]) || findContains(keys, ["procedure"]) || null;
+      const keyProc = findKey(keys, ["procedure_type","tipo_estudio"]) || findContains(keys, ["procedure","tipo"]) || null;
+
       const keyCecal =
         findKey(keys, ["llego_a_ciego","cecal_intubation","entubacion_cecal","entubación_cecal"]) ||
         findContains(keys, ["ciego", "cecal"]) ||
         null;
+
+      const keyBT = findKey(keys, ["boston_total","boston total"]) || findContains(keys, ["boston_total","boston"]) || null;
+      const keyBR = findKey(keys, ["boston_derecho","boston_derecha"]) || findContains(keys, ["derecho"]) || null;
+      const keyBTr = findKey(keys, ["boston_transverso"]) || findContains(keys, ["transvers"]) || null;
+      const keyBL = findKey(keys, ["boston_izquierdo"]) || findContains(keys, ["izquierdo"]) || null;
+
+      const keyAden = findKey(keys, ["adenoma","tasa_adenoma","adr"]) || findContains(keys, ["adenom"]) || null;
+      const keySal  = findKey(keys, ["tiempo_salida","tiempo de salida","withdrawal_time"]) || findContains(keys, ["salida","withdrawal"]) || null;
 
       const isVccRow = (r) => {
         if (!keyProc) return true;
@@ -694,27 +658,107 @@
       const vccRows = rows.filter(isVccRow);
       const denom = vccRows.length;
 
-      let num = 0;
+      // --- Entubación cecal ---
+      let cecal_num = 0, cecal_den = 0;
       if (keyCecal){
         for (const r of vccRows){
           const b = guessBoolean(r[keyCecal]);
-          if (b === true) num++;
+          if (b !== null){
+            cecal_den++;
+            if (b === true) cecal_num++;
+          }
         }
       }
 
-      const pct = denom > 0 ? (num/denom*100) : 0;
-      const frac = `${num.toLocaleString()} / ${denom.toLocaleString()}`;
+      // --- Boston: calidad preparación ---
+      let prep_num = 0, prep_den = 0;
+      const asNum = (x) => {
+        if (typeof x === "number" && isFinite(x)) return x;
+        if (x === null || x === undefined) return null;
+        const s = String(x).trim().replace(",", ".");
+        if (!s) return null;
+        const n = parseFloat(s);
+        return isFinite(n) ? n : null;
+      };
+      if (keyBT && keyBR && keyBTr && keyBL){
+        for (const r of vccRows){
+          const bt = asNum(r[keyBT]), br = asNum(r[keyBR]), btr = asNum(r[keyBTr]), bl = asNum(r[keyBL]);
+          const complete = [bt,br,btr,bl].every(v => v !== null);
+          if (complete){
+            prep_den++;
+            if (bt >= 6 && br >= 2 && btr >= 2 && bl >= 2) prep_num++;
+          }
+        }
+      }
 
-      $("s1v").textContent = keyCecal ? `${frac} (${pct.toFixed(1)}%)` : "—";
-      $("s1s").textContent = keyCecal ? `Campo: ${keyCecal}${keyProc ? " • procedure_type=VCC" : ""}` : "No encontré campo de ciego.";
+      // --- ADR (adenoma ≥1) ---
+      const parseAden = (v) => {
+        if (v === null || v === undefined) return null;
+        const s = String(v).trim().toLowerCase();
+        if (!s) return null;
+        if (s.includes("pend")) return "PEND";
+        if (["si","sí","true","1","y","yes"].includes(s)) return "SI";
+        if (["no","false","0","n"].includes(s)) return "NO";
+        if (s.includes("adenom")) return "SI";
+        return null;
+      };
 
-      $("s2v").textContent = "—";
-      $("s2s").textContent = "Abrí Stats para ver Boston.";
+      let adr_num = 0, adr_den = denom, adr_pend = 0;
+      if (keyAden){
+        for (const r of vccRows){
+          const st = parseAden(r[keyAden]);
+          if (st === "SI") adr_num++;
+          else if (st === "PEND") adr_pend++;
+        }
+      }
 
-      $("s3v").textContent = denom.toLocaleString();
-      $("s3s").textContent = "Denominador";
+      // --- Tiempo de salida (promedio) ---
+      const parseMin = (v) => {
+        if (v === null || v === undefined) return null;
+        if (typeof v === "number" && isFinite(v)) return v;
+        const s = String(v).trim().toLowerCase();
+        if (!s) return null;
+        const m = s.match(/(-?\d+(?:[\.,]\d+)?)/);
+        if (!m) return null;
+        const n = parseFloat(m[1].replace(",", "."));
+        return isFinite(n) ? n : null;
+      };
+      const salida_vals = [];
+      if (keySal){
+        for (const r of vccRows){
+          const n = parseMin(r[keySal]);
+          if (n !== null && n >= 0) salida_vals.push(n);
+        }
+      }
+
+      const fmtPct = (num, den) => den ? (num/den*100).toFixed(1) + "%" : "—";
+
+      $("s1k").textContent = "Entubación cecal";
+      $("s1v").textContent = keyCecal && cecal_den ? `${cecal_num}/${cecal_den} (${fmtPct(cecal_num, cecal_den)})` : "—";
+      $("s1s").textContent = keyCecal ? `Campo: ${keyCecal}` : "No encontré campo de ciego.";
+
+      $("s2k").textContent = "Calidad preparación (Boston)";
+      $("s2v").textContent = (keyBT && keyBR && keyBTr && keyBL && prep_den) ? `${prep_num}/${prep_den} (${fmtPct(prep_num, prep_den)})` : "—";
+      $("s2s").textContent = (keyBT && keyBR && keyBTr && keyBL) ? `Campos: ${[keyBT,keyBR,keyBTr,keyBL].join(", ")}` : "No encontré columnas Boston completas.";
+
+      $("s3k").textContent = "ADR (adenoma ≥1)";
+      $("s3v").textContent = keyAden && adr_den ? `${adr_num}/${adr_den} (${fmtPct(adr_num, adr_den)})` : "—";
+      $("s3s").textContent = keyAden ? `Campo: ${keyAden}${adr_pend ? ` • ${adr_pend} pendientes` : ""}` : "No encontré columna adenoma.";
+
+      $("s4k").textContent = "Tiempo de salida (promedio)";
+      if (keySal && salida_vals.length){
+        const mean = salida_vals.reduce((a,b)=>a+b,0)/salida_vals.length;
+        $("s4v").textContent = `${mean.toFixed(1)} min`;
+        $("s4s").textContent = `N=${salida_vals.length} (campo: ${keySal})`;
+      } else {
+        $("s4v").textContent = "—";
+        $("s4s").textContent = keySal ? `Sin tiempos parseables (campo: ${keySal})` : "No encontré columna tiempo_salida.";
+      }
+
+      $("s5k").textContent = "VCC totales";
+      $("s5v").textContent = denom.toLocaleString();
+      $("s5s").textContent = "Denominador ADR";
     }
-
 
     function setStatsForByMonth(){
       const t = state.tables[1];
@@ -929,7 +973,7 @@
     $("tab2").onclick = () => setActive(1);
 
     const btnRefresh = $("btnRefresh");
-    if (btnRefresh) btnRefresh.onclick = () => { loadAll(); requestStatsRun(); };
+    if (btnRefresh) btnRefresh.onclick = loadAll;
 
     $("q").addEventListener("input", (e) => {
       const t = state.tables[state.activeIdx];
