@@ -893,35 +893,31 @@
       return k === "adenoma" || k === "adr_adenoma" || k === "adenomas" || k.includes("adenoma");
     }
 
-    async function patchRow(scope, rowId, payload){
-      const baseUrl = CONFIG.baseUrl.replace(/\/+$/,"");
-      // intentos compatibles (según cómo esté implementado el worker)
-      const tries = [
-        { method:"PATCH", url:`${baseUrl}/api/${scope}/rows/${encodeURIComponent(rowId)}`, body: payload },
-        { method:"PUT",   url:`${baseUrl}/api/${scope}/rows/${encodeURIComponent(rowId)}`, body: payload },
-        { method:"POST",  url:`${baseUrl}/api/${scope}/rows/${encodeURIComponent(rowId)}`, body: payload },
-        { method:"POST",  url:`${baseUrl}/api/${scope}/update`, body: payload },
-      ];
-
-      let lastText = "";
-      for (const t of tries){
-        try{
-          const res = await fetch(t.url, {
-            method: t.method,
-            headers: { "content-type":"application/json" },
-            body: JSON.stringify(t.body),
-            credentials: "include",
-          });
-          lastText = await res.text();
-          if (res.ok){
-            return { ok:true, status:res.status, text:lastText };
-          }
-        }catch(e){
-          lastText = String(e);
-        }
+    async function patchRow(scope, rowId, updates) {
+      // scope será "calidad" o "registro"
+      const url = `/api/${scope}/update`;
+    
+      const payload = {
+        rowId: Number(rowId),
+        updates: updates
+      };
+    
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    
+      const text = await res.text();
+    
+      if (!res.ok) {
+        throw new Error(`POST ${url} -> ${res.status}: ${text}`);
       }
-      return { ok:false, status:0, text:lastText || "No pude actualizar (endpoint no disponible o sin permisos)." };
+    
+      // Puede devolver JSON o vacío; no importa, devolvemos algo útil
+      try { return JSON.parse(text); } catch { return { ok: true, raw: text }; }
     }
+
 
     async function setAdenoma(scope, cols, rowId, value){
       // 1) payload simple por nombre
