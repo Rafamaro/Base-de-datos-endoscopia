@@ -269,6 +269,25 @@
       font-size:12px;
       line-height:1.25;
     }
+  
+    .nav{ margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; }
+    .navbtn{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:8px 12px; border:1px solid var(--line);
+      border-radius:999px; text-decoration:none; color:var(--ink); background:var(--bg1);
+      font-weight:600; font-size:14px;
+    }
+    .navbtn:hover{ border-color:#cbd5e1; box-shadow:0 1px 0 rgba(15,23,42,.05); }
+    .navbtn.active{ background:rgba(29,78,216,.08); border-color:rgba(29,78,216,.35); color:var(--accent2); }
+
+    td.editable{ cursor:pointer; }
+    td.editable:hover{ background:rgba(29,78,216,.06); }
+    .cell-editor{
+      width:100%; box-sizing:border-box;
+      border:1px solid #cbd5e1; border-radius:10px;
+      padding:6px 8px; font:inherit; background:#fff;
+    }
+
   </style>
 </head>
 
@@ -278,6 +297,12 @@
       <div>
         <h1 class="title">EndoDB • Viewer</h1>
         <div class="subtitle">Visualización de tablas (multiusuario: Rafa/Caro)</div>
+        <div class="nav">
+          <a class="navbtn" href="index.html">Carga</a>
+          <a class="navbtn active" href="viewer.html">Viewer</a>
+          <a class="navbtn" href="stats.html">Stats</a>
+        </div>
+
       </div>
 
       <div class="brand-right">
@@ -850,7 +875,62 @@
       $("s3s").textContent = (keyTher || hasAgg) ? "Terapéutica por estudio" : "No detecté columna terapéutica";
     }
 
-    function updateStats(){
+    
+    // --- edición simple (Adenoma) ---
+    function normKey(x){ return (x ?? "").toString().trim().toLowerCase(); }
+    function isAdenomaColName(name){
+      const k = normKey(name);
+      return k === "adenoma" || k === "adr_adenoma" || k === "adenomas" || k.includes("adenoma");
+    }
+
+    async function patchRow(scope, rowId, payload){
+      const baseUrl = CONFIG.baseUrl.replace(/\/+$/,"");
+      // intentos compatibles (según cómo esté implementado el worker)
+      const tries = [
+        { method:"PATCH", url:`${baseUrl}/api/${scope}/rows/${encodeURIComponent(rowId)}`, body: payload },
+        { method:"PUT",   url:`${baseUrl}/api/${scope}/rows/${encodeURIComponent(rowId)}`, body: payload },
+        { method:"POST",  url:`${baseUrl}/api/${scope}/rows/${encodeURIComponent(rowId)}`, body: payload },
+        { method:"POST",  url:`${baseUrl}/api/${scope}/update`, body: payload },
+      ];
+
+      let lastText = "";
+      for (const t of tries){
+        try{
+          const res = await fetch(t.url, {
+            method: t.method,
+            headers: { "content-type":"application/json" },
+            body: JSON.stringify(t.body),
+            credentials: "include",
+          });
+          lastText = await res.text();
+          if (res.ok){
+            return { ok:true, status:res.status, text:lastText };
+          }
+        }catch(e){
+          lastText = String(e);
+        }
+      }
+      return { ok:false, status:0, text:lastText || "No pude actualizar (endpoint no disponible o sin permisos)." };
+    }
+
+    async function setAdenoma(scope, cols, rowId, value){
+      // 1) payload simple por nombre
+      let r = await patchRow(scope, rowId, { adenoma: value });
+      if (r.ok) return r;
+
+      // 2) payload tipo "updates"
+      r = await patchRow(scope, rowId, { updates: { adenoma: value } });
+      if (r.ok) return r;
+
+      // 3) payload Nextcloud-like por columnId
+      const adenomaCol = cols.find(c => isAdenomaColName(c.title));
+      if (adenomaCol){
+        r = await patchRow(scope, rowId, { data: [{ columnId: adenomaCol.id, value }] });
+        if (r.ok) return r;
+      }
+      return r;
+    }
+function updateStats(){
       if (state.activeIdx === 0) setStatsForVcc();
       else setStatsForByMonth();
     }
@@ -909,9 +989,83 @@
         const tr = document.createElement("tr");
         for (const c of colNames){
           const td = document.createElement("td");
-          td.textContent = (r[c] ?? "").toString();
-          tr.appendChild(td);
-        }
+
+          // Editable: columna Adenoma (solo en tabla "calidad")
+          const isCalidad = (state.activeIdx === 0);
+          const isAdenoma = isCalidad && isAdenomaColName(c);
+          const cellValue = (r[c] ?? "").toString();
+
+          if (isAdenoma){
+            td.classList.add("editable");
+            td.title = "Click para registrar Adenoma (Sí/No/Pendiente)";
+            td.textContent = cellValue || "—";
+
+            td.onclick = async () => {
+              // evita abrir editor si ya está abierto
+              if (td.querySelector("select")) return;
+
+              const prev = normKey(cellValue) || "pendiente";
+              const sel = document.createElement("select");
+              sel.className = "cell-editor";
+              const opts = [
+                ["Sí","Sí"],
+                ["No","No"],
+                ["Pendiente","Pendiente"],
+                ["","(vacío)"],
+              ];
+              for (const [v,label] of opts){
+                const o = document.createElement("option");
+                o.value = v; o.textContent = label;
+                sel.appendChild(o);
+              }
+              // set default
+              if (prev === "si" || prev === "sí") sel.value = "Sí";
+              else if (prev === "no") sel.value = "No";
+              else if (prev === "pendiente" || prev === "") sel.value = "Pendiente";
+              else sel.value = "Pendiente";
+
+              td.innerHTML = "";
+              td.appendChild(sel);
+              sel.focus();
+
+              const commit = async () => {
+                const v = sel.value;
+                // UI optimista
+                td.textContent = v || "—";
+
+                const scope = "calidad";
+                const t = state.tables[0];
+                const rowId = r["_row_id"];
+
+                setStatus("warn", "Guardando Adenoma…");
+                const resp = await setAdenoma(scope, t.cols, rowId, v);
+
+                if (!resp.ok){
+                  setStatus("bad", "No pude guardar Adenoma");
+                  // muestra error en debug
+                  state.lastWriteError = { rowId, value: v, resp };
+                }else{
+                  setStatus("ok", "Adenoma guardado");
+                  // actualiza valor en memoria
+                  r[c] = v;
+                }
+
+                // refresco rápido de stats
+                updateStats();
+              };
+
+              sel.onchange = commit;
+              sel.onblur = commit;
+              sel.onkeydown = (e) => {
+                if (e.key === "Enter") { e.preventDefault(); commit(); }
+                if (e.key === "Escape") { e.preventDefault(); td.textContent = cellValue || "—"; }
+              };
+            };
+          } else {
+            td.textContent = cellValue;
+          }
+
+          tr.appendChild(td);\n        }
         tbody.appendChild(tr);
       }
 
@@ -926,7 +1080,7 @@
       $("prev").disabled = t.page <= 1;
       $("next").disabled = t.page >= maxPage;
 
-      $("debug").textContent = JSON.stringify(t.raw, null, 2);
+      $("debug").textContent = JSON.stringify({ ...t.raw, lastWriteError: state.lastWriteError ?? null }, null, 2);
 
       updateStats();
     }
