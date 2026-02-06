@@ -1,527 +1,1165 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Stats • EndoDB</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Base de Datos Dr Perez • Viewer</title>
+
   <style>
     :root{
-      --bg0:#f6f9ff; --bg1:#ffffff; --card:#fff; --ink:#0f172a; --muted:#475569;
-      --line:#e2e8f0; --shadow:0 10px 30px rgba(15,23,42,.08); --r:18px;
+      --bg0:#f6f9ff;
+      --bg1:#ffffff;
+      --card:#ffffff;
+      --ink:#0f172a;
+      --muted:#475569;
+      --line:#e2e8f0;
+
+      --accent:#1d4ed8;
+      --accent2:#1e40af;
+      --accentSoft: rgba(29,78,216,.10);
+
+      --ok:#16a34a;
+      --warn:#f59e0b;
+      --bad:#ef4444;
+
+      --shadow: 0 10px 30px rgba(15,23,42,.08);
+      --radius: 18px;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
     }
+
     *{box-sizing:border-box}
+    html,body{height:100%}
     body{
-      margin:0; font-family:var(--sans); color:var(--ink);
+      margin:0;
+      font-family: var(--sans);
       background:
         radial-gradient(1100px 600px at 12% 0%, rgba(29,78,216,.12), transparent 55%),
         radial-gradient(900px 520px at 92% 8%, rgba(29,78,216,.08), transparent 60%),
         linear-gradient(180deg, var(--bg0), var(--bg1));
+      color:var(--ink);
     }
+
     .wrap{max-width:1350px;margin:0 auto;padding:22px}
+
     .header{
-      display:flex;align-items:flex-start;justify-content:space-between;gap:14px;
-      background:var(--card);border:1px solid var(--line);border-radius:var(--r);
-      padding:16px;box-shadow:var(--shadow);
+      display:flex;align-items:center;justify-content:space-between;gap:14px;
+      background: var(--card);
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      padding:16px 16px;
+      box-shadow: var(--shadow);
     }
-    h1{margin:0;font-size:20px;font-weight:900}
-    .sub{margin:6px 0 0;color:var(--muted);font-size:13px;line-height:1.45}
-    .nav{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
-    a.btn{
-      display:inline-flex;align-items:center;gap:8px;
-      padding:10px 12px;border-radius:999px;border:1px solid var(--line);
-      background:rgba(255,255,255,.75);text-decoration:none;color:var(--muted);font-weight:900;
+    .title{
+      font-size:22px;
+      font-weight:900;
+      letter-spacing:.2px;
+      margin:0;
+      line-height:1.15;
     }
-    a.btn:hover{background:rgba(29,78,216,.06);border-color:rgba(29,78,216,.25);color:var(--ink)}
-    .tag{display:inline-flex;gap:8px;align-items:center;padding:8px 10px;border-radius:999px;
-      border:1px solid var(--line);background:rgba(29,78,216,.06);font-size:12px;color:var(--muted);font-weight:900}
+    .subtitle{
+      margin:6px 0 0;
+      color:var(--muted);
+      font-size:13px;
+    }
+
+    .brand-right{display:flex;align-items:center;gap:10px;}
+
+    .pill{
+      display:flex;align-items:center;gap:8px;
+      padding:10px 12px;
+      border-radius: 999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.75);
+      font-weight:900;
+      color: var(--muted);
+      user-select:none;
+    }
+    .dot{
+      width:10px;height:10px;border-radius:999px;
+      background: var(--warn);
+      box-shadow: 0 0 0 6px rgba(245,158,11,.15);
+    }
+    .dot.ok{background: var(--ok); box-shadow: 0 0 0 6px rgba(22,163,74,.15);}
+    .dot.bad{background: var(--bad); box-shadow: 0 0 0 6px rgba(239,68,68,.15);}
+    .dot.warn{background: var(--warn); box-shadow: 0 0 0 6px rgba(245,158,11,.15);}
+
+    .stats{
+      width:100%;
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+      gap:10px;
+      margin:14px 0 14px;
+    }
+    @media (max-width: 980px){
+      .stats{grid-template-columns:1fr}
+    }
+    .stat{
+      border:1px solid var(--line);
+      background: linear-gradient(180deg, rgba(29,78,216,.06), rgba(255,255,255,1));
+      border-radius: 16px;
+      padding:12px;
+      min-height: 74px;
+    }
+    .stat .k{font-size:12px;color:var(--muted);margin-bottom:6px}
+    .stat .v{font-size:16px;font-weight:900;letter-spacing:.2px}
+    .stat .s{font-size:12px;color:var(--muted);margin-top:4px}
+
+    .tabs{ display:flex;gap:10px;flex-wrap:wrap; margin:0 0 10px; }
+    .tab{
+      padding:10px 12px;border-radius: 999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.75);
+      cursor:pointer;color: var(--muted);user-select:none;
+      font-weight:900;
+    }
+    .tab.active{
+      background: linear-gradient(180deg, rgba(29,78,216,.18), rgba(29,78,216,.06));
+      color: var(--ink);
+      border-color: rgba(29,78,216,.30);
+    }
+
+    .layout{ display:block; }
+    .layout.withSidebar{
+      display:grid;
+      grid-template-columns: 240px 1fr;
+      gap:12px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .layout.withSidebar{grid-template-columns:1fr}
+    }
+
+    .sidebar{
+      background: var(--card);
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      padding:12px;
+      box-shadow: var(--shadow);
+      height: calc(62vh + 90px);
+      overflow:auto;
+      display:none;
+    }
+    .sidebar.show{display:block}
+    .side-title{
+      margin:0 0 10px;
+      font-size:12px;
+      color: var(--muted);
+      font-weight:900;
+      letter-spacing:.3px;
+      text-transform: uppercase;
+    }
+    .month{
+      display:flex;align-items:center;justify-content:space-between;gap:10px;
+      padding:10px 10px;
+      border-radius: 12px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.85);
+      cursor:pointer;
+      margin-bottom:8px;
+      font-weight:900;
+      color: var(--ink);
+    }
+    .month small{color: var(--muted); font-weight:800}
+    .month.active{
+      border-color: rgba(29,78,216,.35);
+      background: linear-gradient(180deg, rgba(29,78,216,.16), rgba(29,78,216,.06));
+    }
+
     .panel{
-      margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);
-      padding:14px;box-shadow:var(--shadow);
+      background: var(--card);
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      padding:14px;
+      box-shadow: var(--shadow);
     }
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:12px}
-    @media (max-width:980px){.grid{grid-template-columns:1fr 1fr}}
-    @media (max-width:560px){.grid{grid-template-columns:1fr}}
-    .card{border:1px solid var(--line);border-radius:16px;background:#fff;padding:12px;box-shadow:var(--shadow)}
-    .k{font-size:12px;color:var(--muted);font-weight:900}
-    .v{font-size:22px;font-weight:950;margin-top:6px}
-    .muted{color:var(--muted);font-size:12px}
+    .panel-head{
+      display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between;
+      margin-bottom:10px;
+    }
+    .panel-head h2{margin:0;font-size:14px}
+    .tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    label{display:block;font-size:12px;color:var(--muted);margin:2px 0 6px}
+    input{
+      border-radius: 12px;
+      border:1px solid var(--line);
+      background: #fff;
+      color:var(--ink);
+      padding:10px 10px;
+      outline:none;
+      transition: box-shadow .12s ease, border-color .12s ease;
+      width:260px; max-width:100%;
+    }
+    input:focus{
+      border-color: rgba(29,78,216,.55);
+      box-shadow: 0 0 0 4px rgba(29,78,216,.12);
+    }
+    input.small{width:120px}
+    input::placeholder{color:rgba(71,85,105,.55)}
+
+    .btn{
+      border-radius: 14px;
+      border:1px solid rgba(29,78,216,.35);
+      background: rgba(255,255,255,.85);
+      color: var(--ink);
+      padding:10px 12px;
+      cursor:pointer;
+      font-weight:900;
+      display:flex;align-items:center;gap:8px;
+    }
+    .btn:hover{box-shadow: 0 0 0 4px rgba(29,78,216,.10)}
+    .btn .icon{font-family: var(--mono)}
+
     table{
-      width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--line);
-      border-radius:14px;overflow:hidden;background:#fff;
+      width:100%;
+      border-collapse:separate;border-spacing:0;
+      overflow:hidden;border-radius: 14px;
+      border:1px solid var(--line);
     }
     thead th{
-      background:rgba(15,23,42,.02);color:var(--muted);font-size:12px;text-align:left;
-      padding:10px;border-bottom:1px solid var(--line);white-space:nowrap;
-    }
-    tbody td{
-      padding:10px;border-bottom:1px solid rgba(226,232,240,.85);font-size:13px;vertical-align:top;
+      position:sticky;top:0;
+      background: linear-gradient(180deg, rgba(29,78,216,.08), rgba(255,255,255,1));
+      border-bottom:1px solid var(--line);
+      padding:10px 10px;
+      text-align:left;
+      font-size:12px;
+      color: var(--muted);
+      font-weight:900;
+      cursor:pointer;
+      user-select:none;
       white-space:nowrap;
     }
-    tbody tr:hover td{background:rgba(29,78,216,.06)}
-    details{margin-top:12px}
-    pre{margin:0;background:#0b1220;color:#e5e7eb;padding:12px;border-radius:14px;overflow:auto;font-family:var(--mono);font-size:12px}
-    button{
-      padding:11px;border-radius:12px;border:1px solid var(--line);
-      background:rgba(29,78,216,.10);font-weight:900;cursor:pointer
+    tbody td{
+      padding:10px 10px;
+      border-bottom:1px solid rgba(226,232,240,.85);
+      font-size:13px;
+      color: var(--ink);
+      vertical-align:top;
     }
-    button:hover{background:rgba(29,78,216,.14)}
-    .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+    tbody tr:hover td{background: rgba(29,78,216,.05)}
+    tbody tr:last-child td{border-bottom:none}
+
+    .footer{
+      display:flex;align-items:center;justify-content:space-between;gap:10px;
+      margin-top:10px;
+      color: var(--muted);
+      font-size:12px;
+    }
+    .pager{display:flex;gap:8px;align-items:center}
+    .pager button{
+      border-radius: 12px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.85);
+      padding:8px 10px;
+      cursor:pointer;
+      font-weight:900;
+    }
+    .pager button:disabled{opacity:.5;cursor:not-allowed}
+    details{margin-top:12px}
+    summary{cursor:pointer;color:var(--muted);font-weight:900}
+    pre{
+      background:#0b1220;
+      color:#e5e7eb;
+      padding:12px;
+      border-radius: 14px;
+      overflow:auto;
+      border:1px solid rgba(255,255,255,.12);
+      box-shadow: 0 14px 30px rgba(2,6,23,.35);
+      font-family: var(--mono);
+      font-size:12px;
+      line-height:1.25;
+    }
+  
+    .nav{ margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; }
+    .navbtn{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:8px 12px; border:1px solid var(--line);
+      border-radius:999px; text-decoration:none; color:var(--ink); background:var(--bg1);
+      font-weight:600; font-size:14px;
+    }
+    .navbtn:hover{ border-color:#cbd5e1; box-shadow:0 1px 0 rgba(15,23,42,.05); }
+    .navbtn.active{ background:rgba(29,78,216,.08); border-color:rgba(29,78,216,.35); color:var(--accent2); }
+
+    td.editable{ cursor:pointer; }
+    td.editable:hover{ background:rgba(29,78,216,.06); }
+    .cell-editor{
+      width:100%; box-sizing:border-box;
+      border:1px solid #cbd5e1; border-radius:10px;
+      padding:6px 8px; font:inherit; background:#fff;
+    }
+
   </style>
 </head>
+
 <body>
   <div class="wrap">
     <div class="header">
       <div>
-        <h1>Stats • EndoDB</h1>
-        <div class="sub">
-          Calidad (VCC) + Registro general (multi-usuario). Conteos mensuales salen de Tabla 3.
-          Métricas de calidad salen de Tabla 2 (sin cruces).
-          <div class="nav">
-            <a class="btn" href="./index.html">⬆️ Subida</a>
-            <a class="btn" href="./viewer.html">🔎 Viewer</a>
-            <a class="btn" href="./stats.html">📊 Stats</a>
-          </div>
+        <h1 class="title">EndoDB • Viewer</h1>
+        <div class="subtitle">Visualización de tablas (multiusuario: Rafa/Caro)</div>
+        <div class="nav">
+          <a class="navbtn" href="index.html">Carga</a>
+          <a class="navbtn active" href="viewer.html">Viewer</a>
+          <a class="navbtn" href="stats.html">Stats</a>
+        </div>
+
+      </div>
+
+      <div class="brand-right">
+        <div class="pill" id="statusPill">
+          <span class="dot warn"></span>
+          <span id="statusText">Cargando…</span>
         </div>
       </div>
-      <div class="tag">Worker: <span id="baseUrlText" style="font-family:var(--mono)"></span></div>
     </div>
 
-    <div class="panel">
-      <div class="bar">
-        <div class="muted" id="status">—</div>
-        <button id="btnRun">Recalcular</button>
+    <div class="stats">
+      <div class="stat">
+        <div class="k" id="s1k">—</div>
+        <div class="v" id="s1v">—</div>
+        <div class="s" id="s1s">—</div>
+      </div>
+      <div class="stat">
+        <div class="k" id="s2k">—</div>
+        <div class="v" id="s2v">—</div>
+        <div class="s" id="s2s">—</div>
+      </div>
+      <div class="stat">
+        <div class="k" id="s3k">—</div>
+        <div class="v" id="s3v">—</div>
+        <div class="s" id="s3s">—</div>
+      </div>
+      <div class="stat">
+        <div class="k" id="s4k">—</div>
+        <div class="v" id="s4v">—</div>
+        <div class="s" id="s4s">—</div>
+      </div>
+      <div class="stat">
+        <div class="k" id="s5k">—</div>
+        <div class="v" id="s5v">—</div>
+        <div class="s" id="s5s">—</div>
+      </div>
+    </div></div>
+
+    <div class="tabs">
+      <div class="tab active" id="tab1">Base de datos de VCC</div>
+      <div class="tab" id="tab2">Estudios por mes</div>
+      <div style="flex:1"></div>
+      <button class="btn" id="btnRefresh" title="Recargar datos">
+        <span class="icon">↻</span> Recargar
+      </button>
+    </div>
+
+    <div class="layout" id="layout">
+      <div class="sidebar" id="sidebar">
+        <div class="side-title">Filtrar por mes</div>
+        <div id="months"></div>
       </div>
 
-      <div class="grid">
-        <div class="card">
-          <div class="k">Entubación cecal (Tabla 2)</div>
-          <div class="v" id="kCecal">—</div>
-          <div class="muted" id="kCecalMeta">—</div>
-        </div>
-        <div class="card">
-          <div class="k">Calidad preparación (Boston, Tabla 2)</div>
-          <div class="v" id="kPrep">—</div>
-          <div class="muted" id="kPrepMeta">—</div>
-        </div>
-        <div class="card">
-          <div class="k">ADR (adenoma ≥1, Tabla 2)</div>
-          <div class="v" id="kAdr">—</div>
-          <div class="muted" id="kAdrMeta">—</div>
-        </div>
-        <div class="card">
-          <div class="k">Tiempo de salida (promedio, Tabla 2)</div>
-          <div class="v" id="kSalida">—</div>
-          <div class="muted" id="kSalidaMeta">—</div>
-        </div>
-        <div class="card">
-          <div class="k">Estudios totales (Tabla 3)</div>
-          <div class="v" id="kTotal">—</div>
-          <div class="muted">Total de filas procesadas.</div>
-        </div>
-        <div class="card">
-          <div class="k">VCC totales (Tabla 3)</div>
-          <div class="v" id="kVcc">—</div>
-          <div class="muted">Según tipo de estudio.</div>
-        </div>
-      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2 id="tableTitle">—</h2>
 
-      <div class="card" style="margin-top:12px">
-        <div class="k">Conteos por mes (Tabla 3)</div>
-        <div class="muted">Total, VCC/VEDA con/sin terapéutica.</div>
-        <div style="overflow:auto;max-height:520px;margin-top:10px">
+          <div class="tools">
+            <div>
+              <label>Buscar</label>
+              <input id="q" placeholder="texto..." />
+            </div>
+            <div>
+              <label>Filas / página</label>
+              <input id="pageSize" class="small" value="25" />
+            </div>
+          </div>
+        </div>
+
+        <div style="overflow:auto; max-height:62vh">
           <table>
-            <thead>
-              <tr>
-                <th>Mes</th>
-                <th>Total</th>
-                <th>VCC</th>
-                <th>VCC con tera</th>
-                <th>VCC sin tera</th>
-                <th>VEDA</th>
-                <th>VEDA con tera</th>
-                <th>VEDA sin tera</th>
-              </tr>
-            </thead>
-            <tbody id="tbodyMonths"></tbody>
+            <thead id="thead"></thead>
+            <tbody id="tbody"></tbody>
           </table>
         </div>
-      </div>
 
-      <details>
-        <summary style="cursor:pointer;font-weight:900;color:var(--muted)">Debug</summary>
-        <pre id="debug">(vacío)</pre>
-      </details>
+        <div class="footer">
+          <div id="meta">—</div>
+          <div class="pager">
+            <button id="prev">◀</button>
+            <span>Pág <span id="pageN">1</span> / <span id="pageMax">1</span></span>
+            <button id="next">▶</button>
+          </div>
+        </div>
+
+        <details>
+          <summary>Debug</summary>
+          <pre id="debug">(vacío)</pre>
+        </details>
+      </div>
     </div>
   </div>
 
-<script>
-  const $ = (id) => document.getElementById(id);
+  <script>
+    const $ = (id) => document.getElementById(id);
 
-  // === CONFIG ===
-  const CONFIG = {
-    baseUrl: "", // relativo para Cloudflare Access
-    scopeQuality: "calidad",
-    scopeRegistry: "registro"
-  };
+    function setStatus(kind, text){
+      const pill = $("statusPill");
+      if (!pill) return;
+      const dot = pill.querySelector(".dot");
+      dot.className = "dot " + (kind || "warn");
+      $("statusText").textContent = text;
+    }
 
-  // Mapeos “probables” (si alguna no detecta, lo vemos en Debug)
-  const AUTO = {
-    // Tabla 3
-    dateKeys: ["fecha","date","Fecha","FECHA"],
-    procKeys: ["tipo_estudio","procedure_type","tipo","estudio","Tipo estudio"],
-    therKeys: ["terapeutica","terapéutica","therapeutica","terapia"],
+    // ✅ IMPORTANTÍSIMO: baseUrl relativo para que pase por Cloudflare Access
+    // Así el fetch va a https://endodb.drperez86.com/api/... (no a workers.dev)
+    const CONFIG = {
+      baseUrl: "", // <--- clave del fix
+      tableVccId: 2,
+      tableByMonthId: 3,
+    };
 
-    // Tabla 2
-    cecalKeys: ["llego_a_ciego","llegó_a_ciego","ciego","cecal_intubation","entubacion_cecal","entubación_cecal"],
-    bTotalKeys: ["boston_total","Boston total","boston"],
-    bRKeys: ["boston_derecho","boston_derecha","derecho","right"],
-    bTKeys: ["boston_transverso","transverso","transverse"],
-    bLKeys: ["boston_izquierdo","izquierdo","left"],
-    adenomaKeys: ["adenoma","adenoma_si","adr","tasa_adenoma"],
-    salidaKeys: ["tiempo_salida","tiempo de salida","withdrawal_time","withdrawal","tiempo_salida_min"]
-  };
-
-  // === Bridge: permite que viewer consuma estas métricas sin recalcular en viewer ===
-  function publishStats(payload){
-    try{
-      if (window.parent && window.parent !== window){
-        window.parent.postMessage({ type: "endodb_stats", payload }, "*");
+    async function fetchJson(url, opts={}){
+      const timeoutMs = opts.timeoutMs ?? 20000;
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), timeoutMs);
+      let res, text = "", json = null;
+      try{
+        res = await fetch(url, { method: "GET", signal: controller.signal });
+        text = await res.text();
+        try { json = JSON.parse(text); } catch(e) {}
+        return { ok: res.ok, status: res.status, text, json };
+      } catch (e){
+        const msg = (e && (e.name === "AbortError")) ? `Timeout ${timeoutMs}ms` : String(e);
+        return { ok:false, status:0, text: msg, json: null };
+      } finally {
+        clearTimeout(t);
       }
-    } catch {}
-  }
+    }
 
-  window.addEventListener("message", (e) => {
-    const d = e.data;
-    if (!d || d.type !== "endodb_stats_run") return;
-    run();
-  });
+    function normalizeColumns(colsJson){
+      if (Array.isArray(colsJson)) return colsJson.map(c => ({
+        id: c.id ?? c.columnId ?? c._id ?? c,
+        title: c.title ?? c.name ?? c.label ?? String(c.id ?? c.columnId ?? c),
+      }));
+      if (colsJson && Array.isArray(colsJson.data)) return colsJson.data.map(c => ({
+        id: c.id ?? c.columnId ?? c._id ?? c,
+        title: c.title ?? c.name ?? c.label ?? String(c.id ?? c.columnId ?? c),
+      }));
+      return [];
+    }
 
-
-  function normBaseUrl(u){
-    u = (u||"").trim().replace(/\/+$/,"");
-    if (!/^https?:\/\//i.test(u)) u = "https://" + u;
-    return u;
-  }
-
-  async function fetchJson(url){
-    const res = await fetch(url, {method:"GET"});
-    const text = await res.text();
-    let json = null;
-    try { json = JSON.parse(text); } catch(e) {}
-    return { ok: res.ok, status: res.status, text, json, url };
-  }
-
-  function normalizeColumns(colsJson){
-    const arr = Array.isArray(colsJson) ? colsJson : (colsJson && Array.isArray(colsJson.data) ? colsJson.data : []);
-    return arr.map(c => ({
-      id: c.id ?? c.columnId ?? c._id ?? c,
-      title: c.title ?? c.name ?? c.label ?? String(c.id ?? c.columnId ?? c),
-    }));
-  }
-
-  function normalizeRows(rowsJson, cols){
-    const colById = new Map(cols.map(c => [String(c.id), c.title]));
-    const arr = Array.isArray(rowsJson) ? rowsJson : (rowsJson && Array.isArray(rowsJson.data) ? rowsJson.data : []);
-    const out = [];
-    for (const r of arr){
-      const obj = {};
-      const cells = r.data ?? r.values ?? r.cells ?? [];
-      if (Array.isArray(cells)){
-        for (const cell of cells){
-          const cid = String(cell.columnId ?? cell.id ?? "");
-          const key = colById.get(cid) || (cid ? `col_${cid}` : "col");
-          obj[key] = cell.value ?? cell.value_json ?? cell.displayValue ?? cell.text ?? "";
+    // Nextcloud Tables devuelve celdas como [{columnId, value}]
+    function normalizeRows(rowsJson, cols){
+      const colById = new Map(cols.map(c => [String(c.id), c.title]));
+      const unwrap = (x) => Array.isArray(x) ? x : (x && Array.isArray(x.data) ? x.data : []);
+      const rowsArr = unwrap(rowsJson);
+      const out = [];
+      for (const r of rowsArr){
+        const obj = {};
+        obj["_row_id"] = r.id ?? r.rowId ?? r._id ?? "";
+        const cells = r.data ?? r.values ?? r.cells ?? [];
+        if (Array.isArray(cells)){
+          for (const cell of cells){
+            const cid = String(cell.columnId ?? cell.id ?? "");
+            const key = colById.get(cid) || (cid ? `col_${cid}` : "col");
+            obj[key] = cell.value ?? cell.value_json ?? cell.displayValue ?? cell.text ?? "";
+          }
         }
+        out.push(obj);
       }
-      out.push(obj);
+      return out;
     }
-    return out;
-  }
 
-  function guessBool(v){
-    if (typeof v === "boolean") return v;
-    if (v === null || v === undefined) return null;
-    const s = String(v).trim().toLowerCase();
-    if (["true","1","si","sí","y","yes"].includes(s)) return true;
-    if (["false","0","no","n"].includes(s)) return false;
-    return null;
-  }
-
-
-  function parseAdenoma(v){
-    if (v === null || v === undefined) return null;
-    const s = String(v).trim().toLowerCase();
-    if (!s) return null;
-    if (s.includes("pend")) return "PENDIENTE";
-    if (["si","sí","true","1","y","yes"].includes(s)) return "SI";
-    if (["no","false","0","n"].includes(s)) return "NO";
-    // Si alguien escribe "adenoma" a secas, lo tomamos como sí.
-    if (s.includes("adenom")) return "SI";
-    return null;
-  }
-
-  function parseMinutes(v){
-    if (v === null || v === undefined) return null;
-    if (typeof v === "number" && isFinite(v)) return v;
-    const s = String(v).trim().toLowerCase();
-    if (!s) return null;
-
-    // formatos tipo "10", "10.5", "10 min", "10 minutos"
-    const m = s.match(/(-?\d+(?:[\.,]\d+)?)/);
-    if (m){
-      const num = parseFloat(m[1].replace(",", "."));
-      return isFinite(num) ? num : null;
+    function guessBoolean(v){
+      if (typeof v === "boolean") return v;
+      if (v === null || v === undefined) return null;
+      const s = String(v).trim().toLowerCase();
+      if (["true","1","si","sí","y","yes"].includes(s)) return true;
+      if (["false","0","no","n"].includes(s)) return false;
+      return null;
     }
-    return null;
-  }
 
-  function parseMonth(v){
-    if (v === null || v === undefined) return null;
-    const s = String(v).trim();
-    if (!s) return null;
-    const m1 = s.match(/^(\d{4})[-/](\d{1,2})/);
-    if (m1){
-      const y = m1[1];
-      const mm = String(Math.max(1, Math.min(12, parseInt(m1[2],10)))).padStart(2,"0");
-      return `${y}-${mm}`;
+    function findKey(keys, wanted){
+      const low = keys.map(k => [k, k.toLowerCase()]);
+      for (const w of wanted){
+        const wl = w.toLowerCase();
+        const exact = low.find(([k, kl]) => kl === wl);
+        if (exact) return exact[0];
+      }
+      return null;
     }
-    const d = new Date(s);
-    if (!Number.isNaN(d.getTime())){
-      const y = d.getFullYear();
-      const mm = String(d.getMonth()+1).padStart(2,"0");
-      return `${y}-${mm}`;
+
+    function findContains(keys, substrs){
+      const low = keys.map(k => [k, k.toLowerCase()]);
+      for (const s of substrs){
+        const sl = s.toLowerCase();
+        const hit = low.find(([k, kl]) => kl.includes(sl));
+        if (hit) return hit[0];
+      }
+      return null;
     }
-    return null;
-  }
 
-  function findKey(keys, candidates){
-    const low = keys.map(k => [k, k.toLowerCase()]);
-    for (const c of candidates){
-      const cl = c.toLowerCase();
-      const exact = low.find(([k, kl]) => kl === cl);
-      if (exact) return exact[0];
+    function parseMonth(value){
+      if (value === null || value === undefined) return null;
+      const s = String(value).trim();
+      if (!s) return null;
+
+      const m1 = s.match(/^(\d{4})[-/](\d{1,2})/);
+      if (m1){
+        const y = m1[1];
+        const mm = String(Math.max(1, Math.min(12, parseInt(m1[2],10)))).padStart(2,"0");
+        return `${y}-${mm}`;
+      }
+
+      const d = new Date(s);
+      if (!Number.isNaN(d.getTime())){
+        const y = d.getFullYear();
+        const mm = String(d.getMonth()+1).padStart(2,"0");
+        return `${y}-${mm}`;
+      }
+
+      const m2 = s.match(/^(\d{1,2})[-/](\d{4})$/);
+      if (m2){
+        const mm = String(Math.max(1, Math.min(12, parseInt(m2[1],10)))).padStart(2,"0");
+        const y = m2[2];
+        return `${y}-${mm}`;
+      }
+
+      return null;
     }
-    for (const c of candidates){
-      const cl = c.toLowerCase();
-      const hit = low.find(([k, kl]) => kl.includes(cl));
-      if (hit) return hit[0];
+
+    const state = {
+      activeIdx: 0,
+      tables: [
+        { id: CONFIG.tableVccId, name: "Base de datos de VCC", cols: [], rows: [], raw: {}, q:"", page:1, pageSize:25 },
+        { id: CONFIG.tableByMonthId, name: "Estudios por mes", cols: [], rows: [], raw: {}, q:"", page:1, pageSize:25, monthKey: null, monthSelected: "ALL", months: [] },
+      ],
+      sortKey: null,
+      sortDir: "asc",
+    };
+
+    function setHeaderTitle(){
+      const t = state.tables[state.activeIdx];
+      $("tableTitle").textContent = `${t.name}`;
     }
-    return null;
-  }
 
-  function pct(n, d){
-    if (!d) return "—";
-    return (100 * (n/d)).toFixed(1) + "%";
-  }
+    function setActive(idx){
+      const prev = state.tables[state.activeIdx];
+      prev.q = $("q").value || "";
+      prev.pageSize = parseInt($("pageSize").value || "25", 10) || prev.pageSize;
 
-  function asNum(v){
-    const n = Number(String(v).replace(",", "."));
-    return Number.isFinite(n) ? n : null;
-  }
+      state.activeIdx = idx;
+      state.sortKey = null;
+      state.sortDir = "asc";
 
-  async function loadScope(scope){
-    const baseUrl = (CONFIG.baseUrl || "").replace(/\/+$/,"");
-    // Multi-usuario: el Worker decide tabla según email (Cloudflare Access)
-    const urlCols = `${baseUrl}/api/${scope}/columns`;
-    const urlRows = `${baseUrl}/api/${scope}/rows`;
+      $("tab1").classList.toggle("active", idx===0);
+      $("tab2").classList.toggle("active", idx===1);
 
-    const [cRes, rRes] = await Promise.all([fetchJson(urlCols), fetchJson(urlRows)]);
-    if (!cRes.ok || !rRes.ok){
-      throw new Error(`Scope ${scope}: cols=${cRes.status} rows=${rRes.status}`);
+      const t = state.tables[idx];
+      $("q").value = t.q || "";
+      $("pageSize").value = String(t.pageSize || 25);
+
+      $("sidebar").classList.toggle("show", idx===1);
+      $("layout").classList.toggle("withSidebar", idx===1);
+
+      setHeaderTitle();
+      renderMonths();
+      render();
     }
-    const cols = normalizeColumns(cRes.json);
-    const rows = normalizeRows(rRes.json, cols);
-    return { scope, cols, rows, urlCols, urlRows };
-  }
 
-  function renderMonths(monthAgg){
-    const tbody = $("tbodyMonths");
-    tbody.innerHTML = "";
-    const months = Array.from(monthAgg.keys()).sort();
-    for (const m of months){
-      const x = monthAgg.get(m);
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${m}</td>
-        <td>${x.total}</td>
-        <td>${x.vcc}</td>
-        <td>${x.vcc_t}</td>
-        <td>${x.vcc_nt}</td>
-        <td>${x.veda}</td>
-        <td>${x.veda_t}</td>
-        <td>${x.veda_nt}</td>
-      `;
-      tbody.appendChild(tr);
-    }
-  }
+    function buildMonths(){
+      const t = state.tables[1];
+      const rows = t.rows || [];
+      if (!rows.length){ t.months = []; t.monthKey = null; return; }
 
-  async function run(){
-    $("status").textContent = "Cargando tablas…";
-    $("debug").textContent = "(cargando)";
+      const keys = Object.keys(rows[0] || {}).filter(k => k !== "_row_id");
+      const key =
+        findContains(keys, ["mes", "month"]) ||
+        findContains(keys, ["fecha", "date"]) ||
+        null;
 
-    try{
-      const [t2, t3] = await Promise.all([
-        loadScope(CONFIG.scopeQuality),
-        loadScope(CONFIG.scopeRegistry)
-      ]);
+      t.monthKey = key;
 
-      const keys2 = Object.keys(t2.rows[0] || {});
-      const keys3 = Object.keys(t3.rows[0] || {});
-
-      // Detectar columnas principales (Tabla 3)
-      const kDate = findKey(keys3, AUTO.dateKeys);
-      const kProc = findKey(keys3, AUTO.procKeys);
-      const kTher = findKey(keys3, AUTO.therKeys);
-
-      // Detectar columnas de calidad (Tabla 2)
-      const kCecal = findKey(keys2, AUTO.cecalKeys);
-      const kBT   = findKey(keys2, AUTO.bTotalKeys);
-      const kBR   = findKey(keys2, AUTO.bRKeys);
-      const kBTr  = findKey(keys2, AUTO.bTKeys);
-      const kBL   = findKey(keys2, AUTO.bLKeys);
-      const kAden = findKey(keys2, AUTO.adenomaKeys);
-      const kSal  = findKey(keys2, AUTO.salidaKeys);
-
-      // === Tabla 3: conteos por mes ===
-      const monthAgg = new Map();
-      let total = 0, vcc = 0;
-
-      const isVcc = (v) => String(v||"").trim().toUpperCase() === "VCC";
-      const isVeda = (v) => String(v||"").trim().toUpperCase() === "VEDA";
-      const isTher = (v) => guessBool(v) === true || String(v||"").trim().toLowerCase() === "sí" || String(v||"").trim().toLowerCase() === "si";
-
-      for (const r of t3.rows){
-        total++;
-        const m = kDate ? (parseMonth(r[kDate]) || "Sin mes") : "Sin mes";
-        if (!monthAgg.has(m)){
-          monthAgg.set(m, { total:0, vcc:0, vcc_t:0, vcc_nt:0, veda:0, veda_t:0, veda_nt:0 });
-        }
-        const a = monthAgg.get(m);
-        a.total++;
-
-        const proc = kProc ? r[kProc] : "";
-        const ther = kTher ? r[kTher] : "";
-
-        if (isVcc(proc)){
-          vcc++; a.vcc++;
-          if (isTher(ther)) a.vcc_t++; else a.vcc_nt++;
-        } else if (isVeda(proc)){
-          a.veda++;
-          if (isTher(ther)) a.veda_t++; else a.veda_nt++;
+      const map = new Map();
+      if (key){
+        for (const r of rows){
+          const m = parseMonth(r[key]);
+          if (!m) continue;
+          map.set(m, (map.get(m) || 0) + 1);
         }
       }
 
-      // ✅ CAMBIO: Tabla 2 se calcula SOLO con Tabla 2 (sin cruces)
+      t.months = [...map.entries()].sort((a,b) => b[0].localeCompare(a[0]));
+    }
+
+    function renderMonths(){
+      const t = state.tables[1];
+      const box = $("months");
+      box.innerHTML = "";
+
+      if (state.activeIdx !== 1) return;
+
+      const mkBtn = (label, value, count=null) => {
+        const div = document.createElement("div");
+        div.className = "month" + (t.monthSelected === value ? " active" : "");
+        div.innerHTML = `<span>${label}</span>${count!==null ? `<small>${count}</small>` : `<small> </small>`}`;
+        div.onclick = () => {
+          t.monthSelected = value;
+          t.page = 1;
+          renderMonths();
+          render();
+        };
+        box.appendChild(div);
+      };
+
+      const total = (t.rows || []).length;
+      mkBtn("Todos", "ALL", total);
+
+      if (!t.monthKey || !t.months.length){
+        const note = document.createElement("div");
+        note.style.color = "var(--muted)";
+        note.style.fontSize = "12px";
+        note.style.marginTop = "8px";
+        note.textContent = "No pude detectar una columna de fecha/mes para agrupar.";
+        box.appendChild(note);
+        return;
+      }
+
+      for (const [m, c] of t.months){
+        const y = m.slice(0,4);
+        const mm = m.slice(5,7);
+        const nombres = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+        const lbl = `${nombres[parseInt(mm,10)-1] || mm} ${y}`;
+        mkBtn(lbl, m, c);
+      }
+    }
+
+    function getEffectiveRows(t){
+      let rows = t.rows || [];
+
+      if (state.activeIdx === 1 && t.monthSelected && t.monthSelected !== "ALL" && t.monthKey){
+        rows = rows.filter(r => parseMonth(r[t.monthKey]) === t.monthSelected);
+      }
+
+      const q = (t.q || "").trim().toLowerCase();
+      if (q){
+        rows = rows.filter(r =>
+          Object.keys(r).some(k => (r[k] ?? "").toString().toLowerCase().includes(q))
+        );
+      }
+
+      return rows;
+    }
+
+    function setStatsForVcc(){
+      const t = state.tables[0]; // Tabla 2 (calidad VCC)
+      const rows = getEffectiveRows(t);
+
+      const empty = () => {
+        const ids = ["1","2","3","4","5"];
+        for (const i of ids){
+          $("s"+i+"k").textContent = "—";
+          $("s"+i+"v").textContent = "—";
+          $("s"+i+"s").textContent = "—";
+        }
+      };
+
+      if (!rows.length){
+        empty();
+        $("s1k").textContent = "Entubación cecal";
+        $("s1s").textContent = "Sin filas para calcular";
+        return;
+      }
+
+      const keys = Object.keys(rows[0] || {});
+      const keyProc = findKey(keys, ["procedure_type","tipo_estudio"]) || findContains(keys, ["procedure","tipo"]) || null;
+
+      const keyCecal =
+        findKey(keys, ["llego_a_ciego","cecal_intubation","entubacion_cecal","entubación_cecal"]) ||
+        findContains(keys, ["ciego", "cecal"]) ||
+        null;
+
+      const keyBT = findKey(keys, ["boston_total","boston total"]) || findContains(keys, ["boston_total","boston"]) || null;
+      const keyBR = findKey(keys, ["boston_derecho","boston_derecha"]) || findContains(keys, ["derecho"]) || null;
+      const keyBTr = findKey(keys, ["boston_transverso"]) || findContains(keys, ["transvers"]) || null;
+      const keyBL = findKey(keys, ["boston_izquierdo"]) || findContains(keys, ["izquierdo"]) || null;
+
+      const keyAden = findKey(keys, ["adenoma","tasa_adenoma","adr"]) || findContains(keys, ["adenom"]) || null;
+      const keySal  = findKey(keys, ["tiempo_salida","tiempo de salida","withdrawal_time"]) || findContains(keys, ["salida","withdrawal"]) || null;
+
+      const isVccRow = (r) => {
+        if (!keyProc) return true;
+        const v = (r[keyProc] ?? "").toString().trim().toUpperCase();
+        return v === "VCC";
+      };
+
+      const vccRows = rows.filter(isVccRow);
+      const denom = vccRows.length;
+
+      // --- Entubación cecal ---
       let cecal_num = 0, cecal_den = 0;
-      let prep_num  = 0, prep_den  = 0;
-      let adr_num   = 0, adr_den   = 0, adr_pend = 0;
-      const salida_vals = [];
-
-      for (const r2 of t2.rows){
-
-        // Cecal
-        if (kCecal){
-          const b = guessBool(r2[kCecal]);
+      if (keyCecal){
+        for (const r of vccRows){
+          const b = guessBoolean(r[keyCecal]);
           if (b !== null){
             cecal_den++;
             if (b === true) cecal_num++;
           }
         }
+      }
 
-        // Boston calidad: total>=6 AND seg>=2
-        if (kBT && kBR && kBTr && kBL){
-          const bt  = asNum(r2[kBT]);
-          const br  = asNum(r2[kBR]);
-          const btr = asNum(r2[kBTr]);
-          const bl  = asNum(r2[kBL]);
-
-          const complete = [bt,br,btr,bl].every(x => x !== null);
+      // --- Boston: calidad preparación ---
+      let prep_num = 0, prep_den = 0;
+      const asNum = (x) => {
+        if (typeof x === "number" && isFinite(x)) return x;
+        if (x === null || x === undefined) return null;
+        const s = String(x).trim().replace(",", ".");
+        if (!s) return null;
+        const n = parseFloat(s);
+        return isFinite(n) ? n : null;
+      };
+      if (keyBT && keyBR && keyBTr && keyBL){
+        for (const r of vccRows){
+          const bt = asNum(r[keyBT]), br = asNum(r[keyBR]), btr = asNum(r[keyBTr]), bl = asNum(r[keyBL]);
+          const complete = [bt,br,btr,bl].every(v => v !== null);
           if (complete){
             prep_den++;
             if (bt >= 6 && br >= 2 && btr >= 2 && bl >= 2) prep_num++;
           }
         }
+      }
 
-        // ADR (adenoma ≥1): se calcula con Tabla 2 (VCC)
-        adr_den++;
-        if (kAden){
-          const st = parseAdenoma(r2[kAden]);
+      // --- ADR (adenoma ≥1) ---
+      const parseAden = (v) => {
+        if (v === null || v === undefined) return null;
+        const s = String(v).trim().toLowerCase();
+        if (!s) return null;
+        if (s.includes("pend")) return "PEND";
+        if (["si","sí","true","1","y","yes"].includes(s)) return "SI";
+        if (["no","false","0","n"].includes(s)) return "NO";
+        if (s.includes("adenom")) return "SI";
+        return null;
+      };
+
+      let adr_num = 0, adr_den = denom, adr_pend = 0;
+      if (keyAden){
+        for (const r of vccRows){
+          const st = parseAden(r[keyAden]);
           if (st === "SI") adr_num++;
-          else if (st === "PENDIENTE") adr_pend++;
-        }
-
-        // Tiempo de salida: minutos (Tabla 2)
-        if (kSal){
-          const min = parseMinutes(r2[kSal]);
-          if (min !== null && isFinite(min) && min >= 0) salida_vals.push(min);
+          else if (st === "PEND") adr_pend++;
         }
       }
 
-      // Render
-      $("kTotal").textContent = total.toLocaleString();
-      $("kVcc").textContent = vcc.toLocaleString();
+      // --- Tiempo de salida (promedio) ---
+      const parseMin = (v) => {
+        if (v === null || v === undefined) return null;
+        if (typeof v === "number" && isFinite(v)) return v;
+        const s = String(v).trim().toLowerCase();
+        if (!s) return null;
+        const m = s.match(/(-?\d+(?:[\.,]\d+)?)/);
+        if (!m) return null;
+        const n = parseFloat(m[1].replace(",", "."));
+        return isFinite(n) ? n : null;
+      };
+      const salida_vals = [];
+      if (keySal){
+        for (const r of vccRows){
+          const n = parseMin(r[keySal]);
+          if (n !== null && n >= 0) salida_vals.push(n);
+        }
+      }
 
-      $("kCecal").textContent = pct(cecal_num, cecal_den);
-      $("kCecalMeta").textContent = cecal_den ? `${cecal_num}/${cecal_den} filas con dato válido` : "Sin datos parseables para ciego";
+      const fmtPct = (num, den) => den ? (num/den*100).toFixed(1) + "%" : "—";
 
-      $("kPrep").textContent = pct(prep_num, prep_den);
-      $("kPrepMeta").textContent = prep_den ? `${prep_num}/${prep_den} filas con Boston completo` : "Sin Boston completo (total + 3 segmentos)";
+      $("s1k").textContent = "Entubación cecal";
+      $("s1v").textContent = keyCecal && cecal_den ? `${cecal_num}/${cecal_den} (${fmtPct(cecal_num, cecal_den)})` : "—";
+      $("s1s").textContent = keyCecal ? `Campo: ${keyCecal}` : "No encontré campo de ciego.";
 
-      $("kAdr").textContent = pct(adr_num, adr_den);
-      $("kAdrMeta").textContent = adr_den ? `${adr_num}/${adr_den} VCC con adenoma${adr_pend ? ` • ${adr_pend} pendientes` : ""}` : "Sin VCC para calcular";
+      $("s2k").textContent = "Calidad preparación (Boston)";
+      $("s2v").textContent = (keyBT && keyBR && keyBTr && keyBL && prep_den) ? `${prep_num}/${prep_den} (${fmtPct(prep_num, prep_den)})` : "—";
+      $("s2s").textContent = (keyBT && keyBR && keyBTr && keyBL) ? `Campos: ${[keyBT,keyBR,keyBTr,keyBL].join(", ")}` : "No encontré columnas Boston completas.";
 
-      if (salida_vals.length){
+      $("s3k").textContent = "ADR (adenoma ≥1)";
+      $("s3v").textContent = keyAden && adr_den ? `${adr_num}/${adr_den} (${fmtPct(adr_num, adr_den)})` : "—";
+      $("s3s").textContent = keyAden ? `Campo: ${keyAden}${adr_pend ? ` • ${adr_pend} pendientes` : ""}` : "No encontré columna adenoma.";
+
+      $("s4k").textContent = "Tiempo de salida (promedio)";
+      if (keySal && salida_vals.length){
         const mean = salida_vals.reduce((a,b)=>a+b,0)/salida_vals.length;
-        $("kSalida").textContent = `${mean.toFixed(1)} min`;
-        $("kSalidaMeta").textContent = `${salida_vals.length} filas con tiempo parseable`;
+        $("s4v").textContent = `${mean.toFixed(1)} min`;
+        $("s4s").textContent = `N=${salida_vals.length} (campo: ${keySal})`;
       } else {
-        $("kSalida").textContent = "—";
-        $("kSalidaMeta").textContent = "Sin tiempos parseables";
+        $("s4v").textContent = "—";
+        $("s4s").textContent = keySal ? `Sin tiempos parseables (campo: ${keySal})` : "No encontré columna tiempo_salida.";
       }
 
-      renderMonths(monthAgg);
-
-      $("status").textContent = "OK";
-
-      publishStats({
-        cecal: { num: cecal_num, den: cecal_den },
-        prep: { num: prep_num, den: prep_den },
-        adr:  { num: adr_num, den: adr_den, pending: adr_pend },
-        salida: { n: salida_vals.length, mean: salida_vals.length ? (salida_vals.reduce((a,b)=>a+b,0)/salida_vals.length) : null }
-      });
-
-      $("debug").textContent = JSON.stringify({
-        config: CONFIG,
-        detected: {
-          table3: { date: kDate, proc: kProc, ther: kTher },
-          table2: { cecal: kCecal, boston_total: kBT, boston_derecho: kBR, boston_transverso: kBTr, boston_izquierdo: kBL, adenoma: kAden, tiempo_salida: kSal }
-        },
-        counts: {
-          table2_rows: t2.rows.length,
-          table3_rows: t3.rows.length
-        },
-        quality: { cecal_num, cecal_den, prep_num, prep_den }
-      }, null, 2);
-
-      // Publicar a parent (viewer)
-
-    } catch(err){
-      $("status").textContent = "Error (ver debug)";
-      const errText = String(err && err.stack ? err.stack : err);
-      $("debug").textContent = errText;
-      publishStats({ status: "Error", error: errText });
+      $("s5k").textContent = "VCC totales";
+      $("s5v").textContent = denom.toLocaleString();
+      $("s5s").textContent = "Denominador ADR";
     }
-  }
 
-  function boot(){
-    $("baseUrlText").textContent = (window.location.origin || "");
-    $("btnRun").onclick = run;
-    run();
-  }
+    function setStatsForByMonth(){
+      const t = state.tables[1];
+      const rows = getEffectiveRows(t);
+      const monthLabel = (t.monthSelected && t.monthSelected !== "ALL") ? `Mes: ${t.monthSelected}` : "Todos los meses";
 
-  boot();
-</script>
+      if (!rows.length){
+        $("s1k").textContent = "Total de estudios";
+        $("s1v").textContent = "—";
+        $("s1s").textContent = monthLabel;
+
+        $("s2k").textContent = "VCC";
+        $("s2v").textContent = "—";
+        $("s2s").textContent = "Sin datos";
+
+        $("s3k").textContent = "VEDA";
+        $("s3v").textContent = "—";
+        $("s3s").textContent = "Sin datos";
+        return;
+      }
+
+      const keys = Object.keys(rows[0] || {});
+      const keyProc =
+        findKey(keys, ["procedure_type"]) ||
+        findContains(keys, ["procedure", "proc", "tipo", "estudio"]) ||
+        null;
+
+      const keyTher =
+        findKey(keys, ["terapeutica","terapéutica","therapeutica","therapeutic","therapeutics"]) ||
+        findContains(keys, ["terapeut"]) ||
+        null;
+
+      const hasAgg =
+        keys.some(k => k.toLowerCase().includes("veda")) &&
+        keys.some(k => k.toLowerCase().includes("vcc")) &&
+        (keys.some(k => k.toLowerCase().includes("sin")) || keys.some(k => k.toLowerCase().includes("con")));
+
+      const sumNum = (arr, key) => arr.reduce((acc,r) => {
+        const v = r[key];
+        const n = Number(String(v ?? "").replace(",", "."));
+        return acc + (Number.isFinite(n) ? n : 0);
+      }, 0);
+
+      let vedaNo = 0, vccNo = 0, vedaYes = 0, vccYes = 0;
+      let totalStudies = rows.length;
+
+      if (hasAgg){
+        const kVedaSin = keys.find(k => k.toLowerCase().includes("veda") && k.toLowerCase().includes("sin")) || null;
+        const kVccSin  = keys.find(k => k.toLowerCase().includes("vcc")  && k.toLowerCase().includes("sin")) || null;
+        const kVedaCon = keys.find(k => k.toLowerCase().includes("veda") && k.toLowerCase().includes("con")) || null;
+        const kVccCon  = keys.find(k => k.toLowerCase().includes("vcc")  && k.toLowerCase().includes("con")) || null;
+
+        vedaNo  = kVedaSin ? sumNum(rows, kVedaSin) : 0;
+        vccNo   = kVccSin  ? sumNum(rows, kVccSin)  : 0;
+        vedaYes = kVedaCon ? sumNum(rows, kVedaCon) : 0;
+        vccYes  = kVccCon  ? sumNum(rows, kVccCon)  : 0;
+
+        const kTotal = keys.find(k => k.toLowerCase() === "total" || k.toLowerCase().includes("total_est")) || null;
+        totalStudies = kTotal ? sumNum(rows, kTotal) : (vedaNo + vccNo + vedaYes + vccYes);
+      } else {
+        const proc = (r) => (keyProc ? (r[keyProc] ?? "").toString().trim().toUpperCase() : "");
+        const ther = (r) => (keyTher ? guessBoolean(r[keyTher]) : null);
+
+        for (const r of rows){
+          const p = proc(r);
+          const th = ther(r);
+
+          if (p === "VEDA"){
+            if (th === true) vedaYes++;
+            else vedaNo++;
+          } else if (p === "VCC"){
+            if (th === true) vccYes++;
+            else vccNo++;
+          }
+        }
+        totalStudies = rows.length;
+      }
+
+      $("s1k").textContent = "Total de estudios";
+      $("s1v").textContent = totalStudies.toLocaleString();
+      $("s1s").textContent = monthLabel;
+
+      $("s2k").textContent = "VCC";
+      $("s2v").textContent = `${vccNo.toLocaleString()} sin • ${vccYes.toLocaleString()} con`;
+      $("s2s").textContent = (keyTher || hasAgg) ? "Terapéutica por estudio" : "No detecté columna terapéutica";
+
+      $("s3k").textContent = "VEDA";
+      $("s3v").textContent = `${vedaNo.toLocaleString()} sin • ${vedaYes.toLocaleString()} con`;
+      $("s3s").textContent = (keyTher || hasAgg) ? "Terapéutica por estudio" : "No detecté columna terapéutica";
+    }
+
+    
+    // --- edición simple (Adenoma) ---
+    function normKey(x){ return (x ?? "").toString().trim().toLowerCase(); }
+    function isAdenomaColName(name){
+      const k = normKey(name);
+      return k === "adenoma" || k === "adr_adenoma" || k === "adenomas" || k.includes("adenoma");
+    }
+
+    async function patchRow(scope, rowId, payload){
+      const baseUrl = CONFIG.baseUrl.replace(/\/+$/,"");
+      // intentos compatibles (según cómo esté implementado el worker)
+      const tries = [
+        { method:"PATCH", url:`${baseUrl}/api/${scope}/rows/${encodeURIComponent(rowId)}`, body: payload },
+        { method:"PUT",   url:`${baseUrl}/api/${scope}/rows/${encodeURIComponent(rowId)}`, body: payload },
+        { method:"POST",  url:`${baseUrl}/api/${scope}/rows/${encodeURIComponent(rowId)}`, body: payload },
+        { method:"POST",  url:`${baseUrl}/api/${scope}/update`, body: payload },
+      ];
+
+      let lastText = "";
+      for (const t of tries){
+        try{
+          const res = await fetch(t.url, {
+            method: t.method,
+            headers: { "content-type":"application/json" },
+            body: JSON.stringify(t.body),
+            credentials: "include",
+          });
+          lastText = await res.text();
+          if (res.ok){
+            return { ok:true, status:res.status, text:lastText };
+          }
+        }catch(e){
+          lastText = String(e);
+        }
+      }
+      return { ok:false, status:0, text:lastText || "No pude actualizar (endpoint no disponible o sin permisos)." };
+    }
+
+    async function setAdenoma(scope, cols, rowId, value){
+      // 1) payload simple por nombre
+      let r = await patchRow(scope, rowId, { adenoma: value });
+      if (r.ok) return r;
+
+      // 2) payload tipo "updates"
+      r = await patchRow(scope, rowId, { updates: { adenoma: value } });
+      if (r.ok) return r;
+
+      // 3) payload Nextcloud-like por columnId
+      const adenomaCol = cols.find(c => isAdenomaColName(c.title));
+      if (adenomaCol){
+        r = await patchRow(scope, rowId, { data: [{ columnId: adenomaCol.id, value }] });
+        if (r.ok) return r;
+      }
+      return r;
+    }
+function updateStats(){
+      if (state.activeIdx === 0) setStatsForVcc();
+      else setStatsForByMonth();
+    }
+
+    function render(){
+      const t = state.tables[state.activeIdx];
+      const rows0 = getEffectiveRows(t);
+      const cols0 = t.cols || [];
+      const colNames = ["_row_id", ...cols0.map(c => c.title)].filter((v, i, a) => a.indexOf(v) === i);
+
+      let rows = rows0;
+
+      if (state.sortKey){
+        const k = state.sortKey;
+        const dir = state.sortDir === "asc" ? 1 : -1;
+        rows = [...rows].sort((a,b) => {
+          const av = a[k] ?? "";
+          const bv = b[k] ?? "";
+          const an = Number(av), bn = Number(bv);
+          const aNum = !Number.isNaN(an) && String(av).trim() !== "";
+          const bNum = !Number.isNaN(bn) && String(bv).trim() !== "";
+          if (aNum && bNum) return (an - bn) * dir;
+          return String(av).localeCompare(String(bv), undefined, {numeric:true, sensitivity:"base"}) * dir;
+        });
+      }
+
+      const ps = Math.max(1, t.pageSize|0);
+      const total = rows.length;
+      const maxPage = Math.max(1, Math.ceil(total / ps));
+      t.page = Math.min(t.page, maxPage);
+      const start = (t.page - 1) * ps;
+      const pageRows = rows.slice(start, start + ps);
+
+      const thead = $("thead");
+      thead.innerHTML = "";
+      const trh = document.createElement("tr");
+      for (const c of colNames){
+        const th = document.createElement("th");
+        th.textContent = c === "_row_id" ? "row_id" : c;
+        th.onclick = () => {
+          if (state.sortKey === c){
+            state.sortDir = (state.sortDir === "asc") ? "desc" : "asc";
+          } else {
+            state.sortKey = c;
+            state.sortDir = "asc";
+          }
+          render();
+        };
+        trh.appendChild(th);
+      }
+      thead.appendChild(trh);
+
+      const tbody = $("tbody");
+      tbody.innerHTML = "";
+      for (const r of pageRows){
+        const tr = document.createElement("tr");
+        for (const c of colNames){
+          const td = document.createElement("td");
+
+          // Editable: columna Adenoma (solo en tabla "calidad")
+          const isCalidad = (state.activeIdx === 0);
+          const isAdenoma = isCalidad && isAdenomaColName(c);
+          const cellValue = (r[c] ?? "").toString();
+
+          if (isAdenoma){
+            td.classList.add("editable");
+            td.title = "Click para registrar Adenoma (Sí/No/Pendiente)";
+            td.textContent = cellValue || "—";
+
+            td.onclick = async () => {
+              // evita abrir editor si ya está abierto
+              if (td.querySelector("select")) return;
+
+              const prev = normKey(cellValue) || "pendiente";
+              const sel = document.createElement("select");
+              sel.className = "cell-editor";
+              const opts = [
+                ["Sí","Sí"],
+                ["No","No"],
+                ["Pendiente","Pendiente"],
+                ["","(vacío)"],
+              ];
+              for (const [v,label] of opts){
+                const o = document.createElement("option");
+                o.value = v; o.textContent = label;
+                sel.appendChild(o);
+              }
+              // set default
+              if (prev === "si" || prev === "sí") sel.value = "Sí";
+              else if (prev === "no") sel.value = "No";
+              else if (prev === "pendiente" || prev === "") sel.value = "Pendiente";
+              else sel.value = "Pendiente";
+
+              td.innerHTML = "";
+              td.appendChild(sel);
+              sel.focus();
+
+              const commit = async () => {
+                const v = sel.value;
+                // UI optimista
+                td.textContent = v || "—";
+
+                const scope = "calidad";
+                const t = state.tables[0];
+                const rowId = r["_row_id"];
+
+                setStatus("warn", "Guardando Adenoma…");
+                const resp = await setAdenoma(scope, t.cols, rowId, v);
+
+                if (!resp.ok){
+                  setStatus("bad", "No pude guardar Adenoma");
+                  // muestra error en debug
+                  state.lastWriteError = { rowId, value: v, resp };
+                }else{
+                  setStatus("ok", "Adenoma guardado");
+                  // actualiza valor en memoria
+                  r[c] = v;
+                }
+
+                // refresco rápido de stats
+                updateStats();
+              };
+
+              sel.onchange = commit;
+              sel.onblur = commit;
+              sel.onkeydown = (e) => {
+                if (e.key === "Enter") { e.preventDefault(); commit(); }
+                if (e.key === "Escape") { e.preventDefault(); td.textContent = cellValue || "—"; }
+              };
+            };
+          } else {
+            td.textContent = cellValue;
+          }
+
+          tr.appendChild(td);\n        }
+        tbody.appendChild(tr);
+      }
+
+      $("meta").textContent =
+        `${total.toLocaleString()} filas` +
+        (t.q ? ` (filtradas por "${t.q}")` : "") +
+        (state.activeIdx===1 && t.monthSelected!=="ALL" ? ` • mes: ${t.monthSelected}` : "") +
+        (state.sortKey ? ` • orden: ${state.sortKey} (${state.sortDir})` : "");
+
+      $("pageN").textContent = String(t.page);
+      $("pageMax").textContent = String(maxPage);
+      $("prev").disabled = t.page <= 1;
+      $("next").disabled = t.page >= maxPage;
+
+      $("debug").textContent = JSON.stringify({ ...t.raw, lastWriteError: state.lastWriteError ?? null }, null, 2);
+
+      updateStats();
+    }
+
+    async function loadAll(){
+      setStatus("warn", "Cargando…");
+      try{
+        for (let i=0;i<2;i++){
+          const baseUrl = CONFIG.baseUrl.replace(/\/+$/,"");
+
+          // Multi-usuario: el Worker decide tabla según email (Cloudflare Access)
+          const scope = (i === 0) ? "calidad" : "registro";
+          const urlCols = `${baseUrl}/api/${scope}/columns`;
+          const urlRows = `${baseUrl}/api/${scope}/rows`;
+
+          const rCols = await fetchJson(urlCols);
+          const rRows = await fetchJson(urlRows);
+
+          state.tables[i].raw = {
+            columns: { url: urlCols, ok: rCols.ok, status: rCols.status, json: rCols.json ?? rCols.text },
+            rows:    { url: urlRows, ok: rRows.ok, status: rRows.status, json: rRows.json ?? rRows.text },
+          };
+
+          const cols = rCols.ok ? normalizeColumns(rCols.json) : [];
+          const rows = rRows.ok ? normalizeRows(rRows.json, cols) : [];
+
+          state.tables[i].cols = cols;
+          state.tables[i].rows = rows;
+        }
+
+        buildMonths();
+        renderMonths();
+        setHeaderTitle();
+        setStatus("ok", "Cargado");
+        render();
+      } catch (e){
+        console.error(e);
+        setStatus("bad", "Error al cargar");
+        $("debug").textContent = "Error cargando datos. Mirá consola del navegador.";
+      }
+    }
+
+    $("tab1").onclick = () => setActive(0);
+    $("tab2").onclick = () => setActive(1);
+
+    const btnRefresh = $("btnRefresh");
+    if (btnRefresh) btnRefresh.onclick = loadAll;
+
+    $("q").addEventListener("input", (e) => {
+      const t = state.tables[state.activeIdx];
+      t.q = e.target.value || "";
+      t.page = 1;
+      render();
+    });
+
+    $("pageSize").addEventListener("input", (e) => {
+      const t = state.tables[state.activeIdx];
+      const n = parseInt(e.target.value || "25", 10);
+      t.pageSize = Number.isFinite(n) && n > 0 ? n : 25;
+      t.page = 1;
+      render();
+    });
+
+    $("prev").onclick = () => { const t=state.tables[state.activeIdx]; t.page = Math.max(1, t.page - 1); render(); };
+    $("next").onclick = () => { const t=state.tables[state.activeIdx]; t.page = t.page + 1; render(); };
+
+    $("pageSize").value = "25";
+    setActive(0);
+    loadAll();
+  </script>
 </body>
 </html>
