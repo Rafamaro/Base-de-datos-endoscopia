@@ -455,7 +455,17 @@
   let queue = [];
   let uploading = false;
 
-  const allowed = (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  const allowed = (file) => {
+  const t = (file.type || "").toLowerCase();
+  const n = (file.name || "").toLowerCase();
+
+  if (t === "application/pdf" || n.endsWith(".pdf")) return true;
+  if (t.startsWith("image/")) return true; // jpg/png/webp/heic (según navegador)
+  if (n.endsWith(".heic")) return true;    // backup por si el navegador no pone mimeType
+
+  return false;
+};
+
 
   const fmtSize = (n) => {
     const u = ["B","KB","MB","GB"];
@@ -872,4 +882,5 @@
 </script>
 </body>
 </html>
+
 
