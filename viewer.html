@@ -893,13 +893,12 @@
       return k === "adenoma" || k === "adr_adenoma" || k === "adenomas" || k.includes("adenoma");
     }
 
-    async function patchRow(scope, rowId, updates) {
-      // scope será "calidad" o "registro"
+    async function patchRow(scope, rowId, updatesObj) {
       const url = `/api/${scope}/update`;
     
       const payload = {
         rowId: Number(rowId),
-        updates: updates
+        updates: updatesObj && updatesObj.updates ? updatesObj.updates : updatesObj
       };
     
       const res = await fetch(url, {
@@ -909,33 +908,24 @@
       });
     
       const text = await res.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch { data = null; }
     
       if (!res.ok) {
+        // esto te deja el motivo exacto en consola y en debug si lo usás
         throw new Error(`POST ${url} -> ${res.status}: ${text}`);
       }
     
-      // Puede devolver JSON o vacío; no importa, devolvemos algo útil
-      try { return JSON.parse(text); } catch { return { ok: true, raw: text }; }
+      return data ?? { ok: true };
     }
 
 
-    async function setAdenoma(scope, cols, rowId, value){
-      // 1) payload simple por nombre
-      let r = await patchRow(scope, rowId, { adenoma: value });
-      if (r.ok) return r;
 
-      // 2) payload tipo "updates"
-      r = await patchRow(scope, rowId, { updates: { adenoma: value } });
-      if (r.ok) return r;
-
-      // 3) payload Nextcloud-like por columnId
-      const adenomaCol = cols.find(c => isAdenomaColName(c.title));
-      if (adenomaCol){
-        r = await patchRow(scope, rowId, { data: [{ columnId: adenomaCol.id, value }] });
-        if (r.ok) return r;
-      }
-      return r;
+    async function setAdenoma(scope, cols, rowId, value) {
+      // Con tu Worker: SIEMPRE se actualiza por /api/{scope}/update y field por nombre
+      return await patchRow(scope, rowId, { adenoma: value });
     }
+
 function updateStats(){
       if (state.activeIdx === 0) setStatsForVcc();
       else setStatsForByMonth();
