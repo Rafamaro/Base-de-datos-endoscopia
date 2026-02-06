@@ -40,7 +40,7 @@
       margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);
       padding:14px;box-shadow:var(--shadow);
     }
-    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:12px}
     @media (max-width:980px){.grid{grid-template-columns:1fr 1fr}}
     @media (max-width:560px){.grid{grid-template-columns:1fr}}
     .card{border:1px solid var(--line);border-radius:16px;background:#fff;padding:12px;box-shadow:var(--shadow)}
@@ -76,7 +76,7 @@
       <div>
         <h1>Stats • EndoDB</h1>
         <div class="sub">
-          Tabla 2 (Calidad VCC) + Tabla 3 (Registro general). Conteos mensuales salen de Tabla 3.
+          Calidad (VCC) + Registro general (multi-usuario). Conteos mensuales salen de Tabla 3.
           Métricas de calidad salen de Tabla 2 (sin cruces).
           <div class="nav">
             <a class="btn" href="./index.html">⬆️ Subida</a>
@@ -104,6 +104,16 @@
           <div class="k">Calidad preparación (Boston, Tabla 2)</div>
           <div class="v" id="kPrep">—</div>
           <div class="muted" id="kPrepMeta">—</div>
+        </div>
+        <div class="card">
+          <div class="k">ADR (adenoma ≥1, Tabla 2)</div>
+          <div class="v" id="kAdr">—</div>
+          <div class="muted" id="kAdrMeta">—</div>
+        </div>
+        <div class="card">
+          <div class="k">Tiempo de salida (promedio, Tabla 2)</div>
+          <div class="v" id="kSalida">—</div>
+          <div class="muted" id="kSalidaMeta">—</div>
         </div>
         <div class="card">
           <div class="k">Estudios totales (Tabla 3)</div>
@@ -151,9 +161,9 @@
 
   // === CONFIG ===
   const CONFIG = {
-    baseUrl: "https://endodb.drperez86.com",
-    tableQualityId: 2, // Tabla 2 (calidad VCC)
-    tableRegistryId: 3 // Tabla 3 (registro general)
+    baseUrl: "", // relativo para Cloudflare Access
+    scopeQuality: "calidad",
+    scopeRegistry: "registro"
   };
 
   // Mapeos “probables” (si alguna no detecta, lo vemos en Debug)
@@ -168,7 +178,9 @@
     bTotalKeys: ["boston_total","Boston total","boston"],
     bRKeys: ["boston_derecho","boston_derecha","derecho","right"],
     bTKeys: ["boston_transverso","transverso","transverse"],
-    bLKeys: ["boston_izquierdo","izquierdo","left"]
+    bLKeys: ["boston_izquierdo","izquierdo","left"],
+    adenomaKeys: ["adenoma","adenoma_si","adr","tasa_adenoma"],
+    salidaKeys: ["tiempo_salida","tiempo de salida","withdrawal_time","withdrawal","tiempo_salida_min"]
   };
 
   // === Bridge: permite que viewer consuma estas métricas sin recalcular en viewer ===
@@ -237,6 +249,34 @@
     return null;
   }
 
+
+  function parseAdenoma(v){
+    if (v === null || v === undefined) return null;
+    const s = String(v).trim().toLowerCase();
+    if (!s) return null;
+    if (s.includes("pend")) return "PENDIENTE";
+    if (["si","sí","true","1","y","yes"].includes(s)) return "SI";
+    if (["no","false","0","n"].includes(s)) return "NO";
+    // Si alguien escribe "adenoma" a secas, lo tomamos como sí.
+    if (s.includes("adenom")) return "SI";
+    return null;
+  }
+
+  function parseMinutes(v){
+    if (v === null || v === undefined) return null;
+    if (typeof v === "number" && isFinite(v)) return v;
+    const s = String(v).trim().toLowerCase();
+    if (!s) return null;
+
+    // formatos tipo "10", "10.5", "10 min", "10 minutos"
+    const m = s.match(/(-?\d+(?:[\.,]\d+)?)/);
+    if (m){
+      const num = parseFloat(m[1].replace(",", "."));
+      return isFinite(num) ? num : null;
+    }
+    return null;
+  }
+
   function parseMonth(v){
     if (v === null || v === undefined) return null;
     const s = String(v).trim();
@@ -281,18 +321,19 @@
     return Number.isFinite(n) ? n : null;
   }
 
-  async function loadTable(tableId){
-    const baseUrl = normBaseUrl(CONFIG.baseUrl);
-    const urlCols = `${baseUrl}/nc/tables/${tableId}/columns`;
-    const urlRows = `${baseUrl}/nc/tables/${tableId}/rows`;
+  async function loadScope(scope){
+    const baseUrl = (CONFIG.baseUrl || "").replace(/\/+$/,"");
+    // Multi-usuario: el Worker decide tabla según email (Cloudflare Access)
+    const urlCols = `${baseUrl}/api/${scope}/columns`;
+    const urlRows = `${baseUrl}/api/${scope}/rows`;
 
     const [cRes, rRes] = await Promise.all([fetchJson(urlCols), fetchJson(urlRows)]);
     if (!cRes.ok || !rRes.ok){
-      throw new Error(`Tabla ${tableId}: cols=${cRes.status} rows=${rRes.status}`);
+      throw new Error(`Scope ${scope}: cols=${cRes.status} rows=${rRes.status}`);
     }
     const cols = normalizeColumns(cRes.json);
     const rows = normalizeRows(rRes.json, cols);
-    return { tableId, cols, rows, urlCols, urlRows };
+    return { scope, cols, rows, urlCols, urlRows };
   }
 
   function renderMonths(monthAgg){
@@ -322,8 +363,8 @@
 
     try{
       const [t2, t3] = await Promise.all([
-        loadTable(CONFIG.tableQualityId),
-        loadTable(CONFIG.tableRegistryId)
+        loadScope(CONFIG.scopeQuality),
+        loadScope(CONFIG.scopeRegistry)
       ]);
 
       const keys2 = Object.keys(t2.rows[0] || {});
@@ -340,6 +381,8 @@
       const kBR   = findKey(keys2, AUTO.bRKeys);
       const kBTr  = findKey(keys2, AUTO.bTKeys);
       const kBL   = findKey(keys2, AUTO.bLKeys);
+      const kAden = findKey(keys2, AUTO.adenomaKeys);
+      const kSal  = findKey(keys2, AUTO.salidaKeys);
 
       // === Tabla 3: conteos por mes ===
       const monthAgg = new Map();
@@ -373,6 +416,8 @@
       // ✅ CAMBIO: Tabla 2 se calcula SOLO con Tabla 2 (sin cruces)
       let cecal_num = 0, cecal_den = 0;
       let prep_num  = 0, prep_den  = 0;
+      let adr_num   = 0, adr_den   = 0, adr_pend = 0;
+      const salida_vals = [];
 
       for (const r2 of t2.rows){
 
@@ -398,6 +443,20 @@
             if (bt >= 6 && br >= 2 && btr >= 2 && bl >= 2) prep_num++;
           }
         }
+
+        // ADR (adenoma ≥1): se calcula con Tabla 2 (VCC)
+        adr_den++;
+        if (kAden){
+          const st = parseAdenoma(r2[kAden]);
+          if (st === "SI") adr_num++;
+          else if (st === "PENDIENTE") adr_pend++;
+        }
+
+        // Tiempo de salida: minutos (Tabla 2)
+        if (kSal){
+          const min = parseMinutes(r2[kSal]);
+          if (min !== null && isFinite(min) && min >= 0) salida_vals.push(min);
+        }
       }
 
       // Render
@@ -410,15 +469,34 @@
       $("kPrep").textContent = pct(prep_num, prep_den);
       $("kPrepMeta").textContent = prep_den ? `${prep_num}/${prep_den} filas con Boston completo` : "Sin Boston completo (total + 3 segmentos)";
 
+      $("kAdr").textContent = pct(adr_num, adr_den);
+      $("kAdrMeta").textContent = adr_den ? `${adr_num}/${adr_den} VCC con adenoma${adr_pend ? ` • ${adr_pend} pendientes` : ""}` : "Sin VCC para calcular";
+
+      if (salida_vals.length){
+        const mean = salida_vals.reduce((a,b)=>a+b,0)/salida_vals.length;
+        $("kSalida").textContent = `${mean.toFixed(1)} min`;
+        $("kSalidaMeta").textContent = `${salida_vals.length} filas con tiempo parseable`;
+      } else {
+        $("kSalida").textContent = "—";
+        $("kSalidaMeta").textContent = "Sin tiempos parseables";
+      }
+
       renderMonths(monthAgg);
 
       $("status").textContent = "OK";
+
+      publishStats({
+        cecal: { num: cecal_num, den: cecal_den },
+        prep: { num: prep_num, den: prep_den },
+        adr:  { num: adr_num, den: adr_den, pending: adr_pend },
+        salida: { n: salida_vals.length, mean: salida_vals.length ? (salida_vals.reduce((a,b)=>a+b,0)/salida_vals.length) : null }
+      });
 
       $("debug").textContent = JSON.stringify({
         config: CONFIG,
         detected: {
           table3: { date: kDate, proc: kProc, ther: kTher },
-          table2: { cecal: kCecal, boston_total: kBT, boston_derecho: kBR, boston_transverso: kBTr, boston_izquierdo: kBL }
+          table2: { cecal: kCecal, boston_total: kBT, boston_derecho: kBR, boston_transverso: kBTr, boston_izquierdo: kBL, adenoma: kAden, tiempo_salida: kSal }
         },
         counts: {
           table2_rows: t2.rows.length,
@@ -428,13 +506,6 @@
       }, null, 2);
 
       // Publicar a parent (viewer)
-      publishStats({
-        status: "OK",
-        cecal: { value: $("kCecal").textContent, meta: $("kCecalMeta").textContent },
-        prep:  { value: $("kPrep").textContent,  meta: $("kPrepMeta").textContent },
-        total,
-        vcc
-      });
 
     } catch(err){
       $("status").textContent = "Error (ver debug)";
@@ -445,7 +516,7 @@
   }
 
   function boot(){
-    $("baseUrlText").textContent = CONFIG.baseUrl;
+    $("baseUrlText").textContent = (window.location.origin || "");
     $("btnRun").onclick = run;
     run();
   }
