@@ -325,7 +325,7 @@
       <div>
         <h1 class="title">Base de Datos Dr Perez</h1>
         <div class="subtitle">
-          Subida de informes (PDF). Se envía <b>1 request por PDF</b> al webhook de n8n (1 ejecución por estudio).
+          Subida de informes (PDF, TXT o JSON). Se envía <b>1 request por archivo</b> al webhook de n8n. El flujo clasifica automáticamente VEDA/VCC y anonimiza antes de DeepSeek.
           <br/>
           <div class="navlinks">
             <a class="navbtn" href="./index.html" title="Subida">⬆️ Subida</a>
@@ -347,9 +347,9 @@
       <div class="grid">
         <div>
           <label for="endpoint">Webhook n8n (Production)</label>
-          <input id="endpoint" placeholder="https://n8n.drperez86.com/webhook/endodb/process-exam" inputmode="url" />
+          <input id="endpoint" placeholder="https://n8n.drperez86.com/webhook/endodb/process-exam-directus" inputmode="url" />
           <div class="hint">
-            Se envía <code>multipart/form-data</code> con <code>file</code> (PDF) + metadatos.
+            Se envía <code>multipart/form-data</code> con <code>file</code> (PDF, TXT o JSON) + metadatos mínimos. La identidad se extrae desde el archivo.
             <br/>
             Si ves “Procesando” sin respuesta, es normal: la subida terminó pero el servidor tarda (Cloudflare a veces corta la respuesta).
           </div>
@@ -362,25 +362,16 @@
         </div>
 
         <div>
-          <label for="procedure_type">Tipo de procedimiento</label>
-          <select id="procedure_type">
-            <option value="VCC">VCC</option>
-            <option value="VEDA">VEDA</option>
-          </select>
-          <div class="hint">Se aplica al lote actual (todos los PDFs seleccionados).</div>
-        </div>
-
-        <div>
           <label for="notes">Notas internas (opcional)</label>
           <textarea id="notes" placeholder="Ej: control post polipectomía, anticoagulación, etc. (sin datos identificatorios)"></textarea>
-          <div class="hint">Se envían las mismas notas para todos los PDFs del lote.</div>
+          <div class="hint">Se envían las mismas notas para todos los archivos del lote. No incluir datos identificatorios.</div>
         </div>
 
         <div>
           <label>Acciones</label>
           <div class="row">
-            <input  id="filepicker"  type="file"  accept="application/pdf,image/jpeg,image/png,image/heic,image/webp"  multiple  style="display:none"/>
-            <button class="btn" id="btnPick" type="button">Elegir PDFs</button>
+            <input  id="filepicker"  type="file"  accept=".pdf,.txt,.json,application/pdf,text/plain,application/json"  multiple  style="display:none"/>
+            <button class="btn" id="btnPick" type="button">Elegir archivos</button>
             <button class="btn primary" id="btnUpload" type="button" disabled>Subir y procesar</button>
             <button class="btn" id="btnClear" type="button" disabled>Limpiar</button>
           </div>
@@ -398,15 +389,13 @@
           <label>Estado</label>
           <div class="hint" id="statusLine">—</div>
           <div class="hint" style="margin-top:10px">
-            Campos enviados por cada PDF:
+            Campos enviados por cada archivo:
             <br/>
-            • <code>file</code> (binario PDF)
+            • <code>file</code> (binario PDF/TXT/JSON)
             <br/>
             • <code>exam_id</code> (UUID generado por el navegador)
             <br/>
-            • <code>patient_code</code> (seudónimo)
-            <br/>
-            • <code>procedure_type</code> (VCC/VEDA)
+            • <code>patient_code</code> (seudónimo, solo si lo completás)
             <br/>
             • <code>client_filename</code> (opcional)
             <br/>
@@ -417,7 +406,7 @@
 
       <div class="drop" id="drop">
         <div class="dropTitle">Arrastrá y soltá aquí</div>
-        <div class="dropSub">Podés soltar varios PDFs. Se enviarán uno por uno.</div>
+        <div class="dropSub">Podés soltar varios archivos PDF, TXT o JSON. Permitidos: PDF, TXT y JSON. Se enviarán uno por uno; el flujo/IA clasificará VEDA/VCC automáticamente.</div>
         <div class="files" id="files"></div>
       </div>
 
@@ -427,7 +416,7 @@
 
 <script>
 (() => {
-  const DEFAULT_ENDPOINT = "https://n8n.drperez86.com/webhook/endodb/process-exam";
+  const DEFAULT_ENDPOINT = "https://n8n.drperez86.com/webhook/endodb/process-exam-directus";
 
   // Si Cloudflare corta la respuesta por tardanza, acá lo convertimos en "Procesando" (no error).
   // Se activa SOLO cuando el upload ya terminó y la respuesta no llega a tiempo.
@@ -435,7 +424,6 @@
 
   const elEndpoint = document.getElementById("endpoint");
   const elPatient = document.getElementById("patient_code");
-  const elProc = document.getElementById("procedure_type");
   const elNotes = document.getElementById("notes");
 
   const elDrop = document.getElementById("drop");
@@ -455,16 +443,16 @@
   let queue = [];
   let uploading = false;
 
-  const allowed = (file) => {
-  const t = (file.type || "").toLowerCase();
-  const n = (file.name || "").toLowerCase();
+  const fileKind = (file) => {
+    const t = (file.type || "").toLowerCase();
+    const n = (file.name || "").toLowerCase();
+    if (t === "application/pdf" || n.endsWith(".pdf")) return "PDF";
+    if (t === "text/plain" || n.endsWith(".txt")) return "TXT";
+    if (t === "application/json" || t === "text/json" || n.endsWith(".json")) return "JSON";
+    return "No permitido";
+  };
 
-  if (t === "application/pdf" || n.endsWith(".pdf")) return true;
-  if (t.startsWith("image/")) return true; // jpg/png/webp/heic (según navegador)
-  if (n.endsWith(".heic")) return true;    // backup por si el navegador no pone mimeType
-
-  return false;
-};
+  const allowed = (file) => fileKind(file) !== "No permitido";
 
 
   const fmtSize = (n) => {
@@ -532,7 +520,7 @@
 
       const tagType = document.createElement("span");
       tagType.className = "tag " + (allowed(it.file) ? "ok" : "bad");
-      tagType.textContent = allowed(it.file) ? "PDF" : "Solo PDF";
+      tagType.textContent = fileKind(it.file);
 
       const tagStatus = statusPill(it.status);
 
@@ -633,15 +621,14 @@
     const url = (elEndpoint.value || "").trim();
     const notes = (elNotes.value || "").trim();
     const patient_code = (elPatient.value || "").trim();
-    const procedure_type = (elProc.value || "VCC").trim();
 
     const bad = queue.filter(it => !allowed(it.file));
     if (bad.length) {
-      setResult(`<div><b>Hay archivos no permitidos.</b> Solo PDF.</div>`);
+      setResult(`<div><b>Hay archivos no permitidos.</b> Permitidos: PDF, TXT y JSON.</div>`);
       return;
     }
     if (!queue.length) {
-      setResult(`<div><b>No hay archivos.</b> Elegí uno o varios PDFs.</div>`);
+      setResult(`<div><b>No hay archivos.</b> Elegí uno o varios archivos PDF, TXT o JSON.</div>`);
       return;
     }
 
@@ -674,7 +661,6 @@
         const payload = await uploadOne(url, it.file, {
           exam_id: it.exam_id,
           patient_code,
-          procedure_type,
           notes,
         }, (loaded) => {
           const p = totalBytes ? ((doneBytes + loaded) / totalBytes) * 100 : 0;
@@ -721,13 +707,34 @@
         <div class="hint">
           Si queda en <b>Procesando</b>, el upload ya se completó pero el servidor tardó en responder. Revisá luego en el Viewer.
         </div>
-        <details>
-          <summary style="cursor:pointer;font-weight:900;color:var(--muted)">Ver respuestas</summary>
-          <pre>${escapeHtml(JSON.stringify(responses, null, 2))}</pre>
-        </details>
+        ${renderResponses(responses)}
       </div>
     `);
   });
+
+  function renderResponses(responses){
+    return responses.map((r) => {
+      const payload = r.response || {};
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
+      const itemHtml = items.length ? items.map((it) => `
+        <div class="file" style="align-items:flex-start">
+          <div>
+            <div class="fileName">Item ${escapeHtml(it.numero_item ?? "—")} • ${escapeHtml(it.procedure_type ?? "Sin tipo")}</div>
+            <div class="fileMeta">estudio_id: <code>${escapeHtml(it.estudio_id ?? "—")}</code> • fecha: ${escapeHtml(it.fecha_estudio ?? "—")} • estado: ${escapeHtml(it.status ?? "—")}</div>
+            <div class="fileMeta">lugar: ${escapeHtml(it.lugar_estudio ?? "—")} • endoscopista: ${escapeHtml(it.endoscopista ?? "—")}</div>
+            ${(it.warnings || []).length ? `<div class="fileMeta">warnings: ${escapeHtml((it.warnings || []).join("; "))}</div>` : ""}
+          </div>
+        </div>`).join("") : `<div class="hint">Sin items detallados en la respuesta.</div>`;
+      return `
+        <div class="panel" style="box-shadow:none">
+          <div><b>${escapeHtml(r.file)}</b> • ${r.ok ? (r.processing ? "Procesando" : "OK") : "Error"}</div>
+          ${warnings.length ? `<div class="hint">Warnings generales: ${escapeHtml(warnings.join("; "))}</div>` : ""}
+          ${r.error ? `<div class="hint" style="color:var(--bad)">${escapeHtml(r.error)}</div>` : itemHtml}
+          <details style="margin-top:8px"><summary style="cursor:pointer;font-weight:900;color:var(--muted)">JSON crudo</summary><pre>${escapeHtml(JSON.stringify(r.response || r.error || r, null, 2))}</pre></details>
+        </div>`;
+    }).join("");
+  }
 
   function uploadOne(url, file, meta, onProgress){
     return new Promise((resolve, reject) => {
@@ -738,7 +745,6 @@
       // Metadatos (para tu workflow)
       if (meta && meta.exam_id) form.append("exam_id", meta.exam_id);
       if (meta && meta.patient_code) form.append("patient_code", meta.patient_code);
-      if (meta && meta.procedure_type) form.append("procedure_type", meta.procedure_type);
       if (meta && meta.notes) form.append("notes", meta.notes);
 
       const xhr = new XMLHttpRequest();
