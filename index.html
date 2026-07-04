@@ -325,7 +325,7 @@
       <div>
         <h1 class="title">Base de Datos Dr Perez</h1>
         <div class="subtitle">
-          Subida de informes (PDF, TXT o JSON). Se envía <b>1 request por archivo</b> al webhook de n8n. El flujo clasifica automáticamente VEDA/VCC y anonimiza antes de DeepSeek.
+          Subida de informes PDF, TXT o JSON. Se envía <b>1 request por archivo</b> al webhook de n8n.<br/>Workflow V2: segmentación, anonimización local y extracción con DeepSeek.
           <br/>
           <div class="navlinks">
             <a class="navbtn" href="./index.html" title="Subida">⬆️ Subida</a>
@@ -347,7 +347,7 @@
       <div class="grid">
         <div>
           <label for="endpoint">Webhook n8n (Production)</label>
-          <input id="endpoint" placeholder="https://n8n.drperez86.com/webhook/endodb/process-exam-directus" inputmode="url" />
+          <input id="endpoint" placeholder="https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v2" inputmode="url" />
           <div class="hint">
             Se envía <code>multipart/form-data</code> con <code>file</code> (PDF, TXT o JSON) + metadatos mínimos. La identidad se extrae desde el archivo.
             <br/>
@@ -356,15 +356,9 @@
         </div>
 
         <div>
-          <label for="patient_code">Paciente seudónimo</label>
-          <input id="patient_code" placeholder="Paciente_001" />
-          <div class="hint">No pongas DNI/nombre. Esto viaja como texto al workflow.</div>
-        </div>
-
-        <div>
           <label for="notes">Notas internas (opcional)</label>
-          <textarea id="notes" placeholder="Ej: control post polipectomía, anticoagulación, etc. (sin datos identificatorios)"></textarea>
-          <div class="hint">Se envían las mismas notas para todos los archivos del lote. No incluir datos identificatorios.</div>
+          <textarea id="notes" placeholder="Ej: control post polipectomía, anticoagulación, etc. (sin DNI/nombre)"></textarea>
+          <div class="hint">Se envían las mismas notas para todos los archivos del lote. No escribir DNI/nombre manualmente en notas.</div>
         </div>
 
         <div>
@@ -395,8 +389,6 @@
             <br/>
             • <code>exam_id</code> (UUID generado por el navegador)
             <br/>
-            • <code>patient_code</code> (seudónimo, solo si lo completás)
-            <br/>
             • <code>client_filename</code> (opcional)
             <br/>
             • <code>notes</code> (opcional)
@@ -406,7 +398,7 @@
 
       <div class="drop" id="drop">
         <div class="dropTitle">Arrastrá y soltá aquí</div>
-        <div class="dropSub">Podés soltar varios archivos PDF, TXT o JSON. Permitidos: PDF, TXT y JSON. Se enviarán uno por uno; el flujo/IA clasificará VEDA/VCC automáticamente.</div>
+        <div class="dropSub">Podés soltar varios archivos PDF, TXT o JSON. Se enviarán uno por uno; el workflow V2 segmentará, anonimizará localmente y extraerá con DeepSeek.</div>
         <div class="files" id="files"></div>
       </div>
 
@@ -416,14 +408,14 @@
 
 <script>
 (() => {
-  const DEFAULT_ENDPOINT = "https://n8n.drperez86.com/webhook/endodb/process-exam-directus";
+  const DEFAULT_ENDPOINT = "https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v2";
+  // Repositorio estático: este frontend llama directo a n8n. Para evitar CORS, n8n debe responder OPTIONS y POST con los headers documentados en README.md.
 
   // Si Cloudflare corta la respuesta por tardanza, acá lo convertimos en "Procesando" (no error).
   // Se activa SOLO cuando el upload ya terminó y la respuesta no llega a tiempo.
   const POST_UPLOAD_GRACE_MS = 85000; // ~85s: típico umbral antes del “corte” en proxies/CDN
 
   const elEndpoint = document.getElementById("endpoint");
-  const elPatient = document.getElementById("patient_code");
   const elNotes = document.getElementById("notes");
 
   const elDrop = document.getElementById("drop");
@@ -620,7 +612,6 @@
 
     const url = (elEndpoint.value || "").trim();
     const notes = (elNotes.value || "").trim();
-    const patient_code = (elPatient.value || "").trim();
 
     const bad = queue.filter(it => !allowed(it.file));
     if (bad.length) {
@@ -660,7 +651,6 @@
       try {
         const payload = await uploadOne(url, it.file, {
           exam_id: it.exam_id,
-          patient_code,
           notes,
         }, (loaded) => {
           const p = totalBytes ? ((doneBytes + loaded) / totalBytes) * 100 : 0;
@@ -683,7 +673,7 @@
       } catch (err) {
         it.status = "error";
         it.error = err;
-        responses.push({ file: it.file.name, ok: false, error: String(err && err.message ? err.message : err) });
+        responses.push({ file: it.file.name, ok: false, error: String(err && err.message ? err.message : err), errorDetails: normalizeUploadError(err, url) });
 
         doneBytes += it.file.size;
         setProgress(totalBytes ? (doneBytes / totalBytes) * 100 : 100);
@@ -715,23 +705,43 @@
   function renderResponses(responses){
     return responses.map((r) => {
       const payload = r.response || {};
-      const items = Array.isArray(payload.items) ? payload.items : [];
-      const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
-      const itemHtml = items.length ? items.map((it) => `
+      const resultados = Array.isArray(payload.resultados)
+        ? payload.resultados
+        : (Array.isArray(payload.items) ? payload.items : []);
+      const generalWarnings = Array.isArray(payload.warnings) ? payload.warnings : [];
+      const requiresReview = payload.requiere_revision === true || resultados.some(it => it && it.requiere_revision === true);
+      const summary = [];
+      if (payload.items_procesados !== undefined) summary.push(`items_procesados: <code>${escapeHtml(payload.items_procesados)}</code>`);
+      if (Array.isArray(payload.ingesta_ids)) summary.push(`ingesta_ids: <code>${escapeHtml(payload.ingesta_ids.join(", "))}</code>`);
+      if (payload.requiere_revision !== undefined) summary.push(`requiere_revision: <code>${escapeHtml(payload.requiere_revision)}</code>`);
+
+      const itemHtml = resultados.length ? resultados.map((it, idx) => {
+        const itemWarnings = Array.isArray(it.warnings) ? it.warnings : [];
+        const itemRequiresReview = it.requiere_revision === true;
+        return `
         <div class="file" style="align-items:flex-start">
           <div>
-            <div class="fileName">Item ${escapeHtml(it.numero_item ?? "—")} • ${escapeHtml(it.procedure_type ?? "Sin tipo")}</div>
-            <div class="fileMeta">estudio_id: <code>${escapeHtml(it.estudio_id ?? "—")}</code> • fecha: ${escapeHtml(it.fecha_estudio ?? "—")} • estado: ${escapeHtml(it.status ?? "—")}</div>
-            <div class="fileMeta">lugar: ${escapeHtml(it.lugar_estudio ?? "—")} • endoscopista: ${escapeHtml(it.endoscopista ?? "—")}</div>
-            ${(it.warnings || []).length ? `<div class="fileMeta">warnings: ${escapeHtml((it.warnings || []).join("; "))}</div>` : ""}
+            <div class="fileName">Resultado ${escapeHtml(idx + 1)} • ${escapeHtml(it.procedure_type ?? "Sin tipo")}${itemRequiresReview ? ' • <span class="tag warn">Requiere revisión</span>' : ''}</div>
+            <div class="fileMeta">estudio_id: <code>${escapeHtml(it.estudio_id ?? "—")}</code> • segmento_id: <code>${escapeHtml(it.segmento_id ?? "—")}</code> • paciente_id: <code>${escapeHtml(it.paciente_id ?? "—")}</code></div>
+            <div class="fileMeta">procedure_type: <code>${escapeHtml(it.procedure_type ?? "—")}</code> • fecha: ${escapeHtml(it.fecha ?? it.fecha_estudio ?? "—")} • exam_id: <code>${escapeHtml(it.exam_id ?? "—")}</code></div>
+            <div class="fileMeta">lugar_codigo: <code>${escapeHtml(it.lugar_codigo ?? it.lugar_estudio ?? "—")}</code> • endoscopista_id: <code>${escapeHtml(it.endoscopista_id ?? it.endoscopista ?? "—")}</code> • requiere_revision: <code>${escapeHtml(it.requiere_revision ?? "—")}</code></div>
+            <div class="fileMeta">warnings: <code>${escapeHtml(JSON.stringify(itemWarnings))}</code></div>
           </div>
-        </div>`).join("") : `<div class="hint">Sin items detallados en la respuesta.</div>`;
+        </div>`;
+      }).join("") : `<div class="hint">Sin resultados/items detallados en la respuesta.</div>`;
+
+      const errorDetails = r.errorDetails || (r.error && typeof r.error === "object" ? r.error : null);
+      const rawForDetails = errorDetails?.payload ?? r.response ?? r.error ?? r;
       return `
         <div class="panel" style="box-shadow:none">
-          <div><b>${escapeHtml(r.file)}</b> • ${r.ok ? (r.processing ? "Procesando" : "OK") : "Error"}</div>
-          ${warnings.length ? `<div class="hint">Warnings generales: ${escapeHtml(warnings.join("; "))}</div>` : ""}
-          ${r.error ? `<div class="hint" style="color:var(--bad)">${escapeHtml(r.error)}</div>` : itemHtml}
-          <details style="margin-top:8px"><summary style="cursor:pointer;font-weight:900;color:var(--muted)">JSON crudo</summary><pre>${escapeHtml(JSON.stringify(r.response || r.error || r, null, 2))}</pre></details>
+          <div><b>${escapeHtml(r.file)}</b> • ${r.ok ? (r.processing ? "Procesando" : "OK") : "Error"}${requiresReview ? ' • <span class="tag warn">Requiere revisión</span>' : ''}</div>
+          ${payload.message ? `<div class="hint">${escapeHtml(payload.message)}</div>` : ""}
+          ${summary.length ? `<div class="hint">${summary.join(" • ")}</div>` : ""}
+          ${generalWarnings.length ? `<div class="hint">Warnings generales: ${escapeHtml(generalWarnings.join("; "))}</div>` : ""}
+          ${errorDetails?.url ? `<div class="hint">URL usada: <code>${escapeHtml(errorDetails.url)}</code></div>` : ""}
+          ${errorDetails?.status !== undefined ? `<div class="hint">Status HTTP: <code>${escapeHtml(errorDetails.status)}</code></div>` : ""}
+          ${r.error ? `<div class="hint" style="color:var(--bad)">${escapeHtml(errorDetails?.message || r.error)}</div>` : itemHtml}
+          <details style="margin-top:8px"><summary style="cursor:pointer;font-weight:900;color:var(--muted)">JSON crudo</summary><pre>${escapeHtml(JSON.stringify(rawForDetails, null, 2))}</pre></details>
         </div>`;
     }).join("");
   }
@@ -744,7 +754,6 @@
 
       // Metadatos (para tu workflow)
       if (meta && meta.exam_id) form.append("exam_id", meta.exam_id);
-      if (meta && meta.patient_code) form.append("patient_code", meta.patient_code);
       if (meta && meta.notes) form.append("notes", meta.notes);
 
       const xhr = new XMLHttpRequest();
@@ -819,7 +828,7 @@
             });
             return;
           }
-          settleErr(new Error(`HTTP ${xhr.status} - ${safeShort(payload)}`));
+          settleErr(makeUploadError(`HTTP ${xhr.status} - ${safeShort(payload)}`, xhr.status, payload, url));
           return;
         }
 
@@ -832,7 +841,7 @@
           settleOk({ pending: true, note: "Upload completado; error de red durante la espera de respuesta." });
           return;
         }
-        settleErr(new Error("Falló la conexión (network error)."));
+        settleErr(makeUploadError("El navegador bloqueó la solicitud por CORS o no pudo conectar con n8n. Verificar endpoint V2 y preflight OPTIONS.", 0, null, url));
       };
 
       xhr.onabort = () => {
@@ -844,6 +853,26 @@
 
       xhr.send(form);
     });
+  }
+
+  function makeUploadError(message, status, payload, url){
+    const err = new Error(message);
+    err.status = status;
+    err.payload = payload;
+    err.url = url;
+    return err;
+  }
+
+  function normalizeUploadError(err, fallbackUrl){
+    if (!err || typeof err !== "object") {
+      return { message: String(err), url: fallbackUrl };
+    }
+    return {
+      message: err.message || String(err),
+      status: err.status,
+      payload: err.payload,
+      url: err.url || fallbackUrl,
+    };
   }
 
   function safeShort(obj){
