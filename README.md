@@ -17,14 +17,32 @@ Endpoints sugeridos:
 
 Cada endpoint puede responder un array directo o un objeto con `data`, `rows` o `items`.
 
-## Carga n8n
+## Carga n8n V2
 
-`index.html` envía `multipart/form-data` al webhook `https://n8n.drperez86.com/webhook/endodb/process-exam-directus` con:
+`index.html` envía `multipart/form-data` al webhook V2 `https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v2` con:
 
 - `file`
 - `client_filename`
 - `exam_id`
-- `patient_code` solo si el usuario lo completa
 - `notes` solo si existen
 
-El frontend acepta PDF, TXT y JSON. La clasificación VEDA/VCC y la extracción/anonimización de identidad quedan a cargo del flujo n8n `Flujo_BD_Endoscopia_Directus_DeepSeek_Anonimizacion`.
+El frontend acepta PDF, TXT y JSON. El workflow V2 realiza segmentación, anonimización local y extracción con DeepSeek. La identidad se extrae desde el archivo o el nombre del archivo; no se debe escribir DNI/nombre manualmente en notas.
+
+## CORS para hosting estático
+
+Este repositorio no incluye Cloudflare Pages Functions, Worker, API routes ni backend propio para crear un proxy same-origin. Por eso el frontend mantiene la llamada directa al webhook n8n V2 y n8n debe responder el preflight `OPTIONS` y el `POST` con headers CORS.
+
+En n8n debe existir un webhook `OPTIONS` para:
+
+`/webhook/endodb/process-exam-directus-v2`
+
+con estos headers:
+
+```http
+Access-Control-Allow-Origin: https://endodb.drperez86.com
+Access-Control-Allow-Methods: POST, OPTIONS
+Access-Control-Allow-Headers: Content-Type
+Access-Control-Max-Age: 86400
+```
+
+El `POST` del webhook V2 también debe devolver `Access-Control-Allow-Origin: https://endodb.drperez86.com` para que el navegador permita leer la respuesta JSON.
