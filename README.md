@@ -8,16 +8,19 @@ No incluye backend, secretos, credenciales ni dependencias externas. Está pensa
 
 `index.html` mantiene la carga directa al webhook de n8n:
 
-`https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v2`
+`https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v3`
+
+Este endpoint corresponde al flujo n8n V3 “BD Endoscopia v3 — Directus + DeepSeek — mínimo anonimizado” (`endodb/process-exam-directus-v3`).
 
 La página envía `multipart/form-data` con:
 
-- `file`: archivo PDF, TXT, JSON o CSV.
+- `file`: archivo PDF, TXT, JSON, CSS o FOTO/imagen.
+- `document_text` / `ocr_text`: texto OCR/manual opcional para pruebas de FOTO o PDF escaneado cuando todavía no está configurado OCR local en n8n.
 - `client_filename`: nombre del archivo fuente.
 - `exam_id`: UUID generado por el navegador.
 - `notes`: notas internas opcionales.
 
-n8n recibe el archivo, procesa PDF/TXT/JSON/CSV, anonimiza localmente, consulta DeepSeek para la extracción estructurada y guarda los resultados en Directus.
+n8n recibe el archivo, procesa PDF/TXT/JSON/CSS/FOTO, separa PII en `bd_pacientes`, crea `bd_ingestas`, anonimiza el texto antes de DeepSeek y guarda los estudios en `bd_estudios`.
 
 ## Modelo Directus mínimo
 
