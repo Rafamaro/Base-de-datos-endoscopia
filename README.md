@@ -1,69 +1,70 @@
 # Base de datos endoscopia
 
-Frontend estático para cargar informes endoscópicos hacia n8n y consultar variables clínicas expuestas por un proxy seguro de Directus.
+Frontend estático para cargar informes endoscópicos hacia n8n y consultar en Directus un modelo mínimo de conteo VEDA/VCC y métricas básicas de calidad de VCC.
 
-## Schema Directus “solo Rafa”
+No incluye backend, secretos, credenciales ni dependencias externas. Está pensado para funcionar como HTML/CSS/JS simple en hosting estático o GitHub Pages.
 
-La base ya no maneja múltiples endoscopistas: todos los estudios pertenecen implícitamente al Dr. Rafael Pérez. Por eso el frontend y la documentación no piden, muestran ni consultan campos de endoscopista, y el flujo de extracción no debe emitir motivos de revisión por endoscopista no detectado.
+## Flujo de carga
 
-El tiempo de retirada en VCC es un dato documental explícito de `bd_vcc_calidad`; no se calcula desde horarios o duración del estudio y no se consulta desde `bd_estudios`. Si el informe no lo menciona, queda como no informado y sin minutos/texto.
+`index.html` mantiene la carga directa al webhook de n8n:
 
-Campos de tiempo de retirada en `bd_vcc_calidad`:
+`https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v2`
 
-- `tiempo_retirada_informado`: booleano. `true` solo si el informe menciona explícitamente el tiempo de retirada.
-- `tiempo_retirada_minutos`: entero nullable. Minutos reportados explícitamente; no inferir ni calcular.
-- `tiempo_retirada_texto`: texto nullable. Frase original o texto soporte del informe.
+La página envía `multipart/form-data` con:
 
-Reglas de extracción:
+- `file`: archivo PDF, TXT, JSON o CSV.
+- `client_filename`: nombre del archivo fuente.
+- `exam_id`: UUID generado por el navegador.
+- `notes`: notas internas opcionales.
 
-- No calcular tiempo de retirada a partir de hora de ingreso/salida ni duración total.
-- No usar horarios de salida o campos similares como sustitutos del tiempo de retirada.
-- Si el informe dice `tiempo de retirada: 8 minutos`, guardar `tiempo_retirada_informado = true`, `tiempo_retirada_minutos = 8` y `tiempo_retirada_texto = "tiempo de retirada: 8 minutos"`.
-- Si el informe dice `retirada mayor a 6 minutos` sin número exacto reportable, guardar `tiempo_retirada_informado = true`, `tiempo_retirada_minutos = null` y `tiempo_retirada_texto = "retirada mayor a 6 minutos"`.
-- Si no se menciona, guardar `tiempo_retirada_informado = false`, `tiempo_retirada_minutos = null` y `tiempo_retirada_texto = null`.
+n8n recibe el archivo, procesa PDF/TXT/JSON/CSV, anonimiza localmente, consulta DeepSeek para la extracción estructurada y guarda los resultados en Directus.
 
-## Endpoints relativos esperados
+## Modelo Directus mínimo
 
-La webapp está preparada para hosting estático/GitHub Pages y no incluye secretos en el frontend. Las páginas `viewer.html` y `stats.html` esperan que un backend/proxy seguro (por ejemplo Cloudflare Worker detrás de control de acceso) exponga endpoints relativos que consulten Directus con las credenciales del servidor, nunca desde el navegador.
+El frontend solo consulta estas colecciones mediante endpoints relativos expuestos por un proxy seguro:
 
-Endpoints sugeridos:
-
-- `/api/directus/bd_estudios`
-- `/api/directus/bd_vcc_calidad`
-- `/api/directus/bd_identificaciones` (solo con control de acceso; puede responder `403`)
-- `/api/directus/bd_lugares`
 - `/api/directus/bd_ingestas`
-- `/api/directus/bd_ingesta_items`
-- `/api/directus/bd_revisiones`
+- `/api/directus/bd_estudios`
 
-Cada endpoint puede responder un array directo o un objeto con `data`, `rows` o `items`.
+`bd_ingestas` representa un archivo subido/procesado. `bd_estudios` representa cada procedimiento real detectado dentro del archivo.
 
-## Carga n8n V2
+Si un archivo contiene solo VEDA, se espera una fila VEDA. Si contiene solo VCC, se espera una fila VCC. Si contiene VEDA + VCC, n8n debe crear dos filas en `bd_estudios`: una VEDA y una VCC; el viewer las mostrará como dos registros separados.
 
-`index.html` envía `multipart/form-data` al webhook V2 `https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v2` con:
+Campos esperados en `bd_estudios`:
 
-- `file`
-- `client_filename`
+- `id`
+- `ingesta`
 - `exam_id`
-- `notes` solo si existen
+- `source_file_name`
+- `procedure_type`: `VEDA`, `VCC`, `OTRO` o `INDETERMINADO`
+- `fecha`
+- `lugar_estudio`
+- `indicacion`
+- `llego_a_ciego`
+- `llego_a_ileon`
+- `boston_total`
+- `boston_derecho`
+- `boston_transverso`
+- `boston_izquierdo`
+- `polipos`
+- `created_at`
 
-El frontend acepta PDF, TXT y JSON. El workflow V2 realiza segmentación, anonimización local y extracción con DeepSeek. La identidad se extrae desde el archivo o el nombre del archivo; no se debe escribir DNI/nombre manualmente en notas. En el schema “solo Rafa” no se extrae ni se muestra endoscopista.
+Las respuestas de los endpoints pueden ser un array directo o un objeto con `data`, `rows` o `items`.
 
-## CORS para hosting estático
+## Reglas de visualización
 
-Este repositorio no incluye Cloudflare Pages Functions, Worker, API routes ni backend propio para crear un proxy same-origin. Por eso el frontend mantiene la llamada directa al webhook n8n V2 y n8n debe responder el preflight `OPTIONS` y el `POST` con headers CORS.
+- VEDA solo se cuenta como procedimiento realizado; las métricas de VCC se muestran como `No aplica`.
+- VCC muestra llegada a ciego, llegada a íleon, Boston total/segmentario y pólipos.
+- Si `llego_a_ileon` es verdadero, se considera que también llegó a ciego aunque el campo de ciego venga vacío o falso.
+- Boston adecuado significa `boston_total >= 6` y cada segmento (`derecho`, `transverso`, `izquierdo`) `>= 2`.
+- `lugar_estudio` se muestra tal como llega desde Directus. La inferencia de lugar la resuelve n8n: lunes suele ser Santa Isabel; otros días, principalmente viernes, Sanatorio de la Providencia; si el informe trae un lugar explícito confiable, n8n puede usarlo.
 
-En n8n debe existir un webhook `OPTIONS` para:
+## Páginas
 
-`/webhook/endodb/process-exam-directus-v2`
+- `index.html`: carga archivos al webhook n8n y resume la respuesta de procesamiento.
+- `viewer.html`: consulta solo `/api/directus/bd_estudios` y muestra una tabla filtrable.
+- `stats.html`: calcula estadísticas y resumen mensual usando solo `/api/directus/bd_estudios`.
 
-con estos headers:
+## CORS
 
-```http
-Access-Control-Allow-Origin: https://endodb.drperez86.com
-Access-Control-Allow-Methods: POST, OPTIONS
-Access-Control-Allow-Headers: Content-Type
-Access-Control-Max-Age: 86400
-```
-
-El `POST` del webhook V2 también debe devolver `Access-Control-Allow-Origin: https://endodb.drperez86.com` para que el navegador permita leer la respuesta JSON.
+Como la carga al webhook es directa desde el navegador, n8n debe responder `OPTIONS` y `POST` con headers CORS apropiados para el dominio público del frontend.
