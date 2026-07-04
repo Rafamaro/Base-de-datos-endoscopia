@@ -325,7 +325,7 @@
       <div>
         <h1 class="title">Base de Datos Dr Perez</h1>
         <div class="subtitle">
-          Subida de informes PDF, TXT o JSON. Se envía <b>1 request por archivo</b> al webhook de n8n.<br/>Workflow V2: segmentación, anonimización local y extracción con DeepSeek.
+          Carga de informes PDF, TXT, JSON o CSV para conteo VEDA/VCC y métricas mínimas de VCC. Se envía <b>1 request por archivo</b> al webhook de n8n.<br/>n8n anonimiza localmente, consulta DeepSeek y guarda en Directus.
           <br/>
           <div class="navlinks">
             <a class="navbtn" href="./index.html" title="Subida">⬆️ Subida</a>
@@ -336,7 +336,7 @@
       </div>
 
       <div class="brand-right">
-        <div class="pill"><span class="dot"></span> Modo seguro: seudónimos</div>
+        <div class="pill"><span class="dot"></span> Modelo mínimo VEDA/VCC</div>
         <img class="logo"
           alt="Logo"
           src="https://raw.githubusercontent.com/Rafamaro/Base-de-datos-endoscopia/main/WhatsApp%20Image%202026-02-03%20at%2022.23.15.jpeg">
@@ -349,7 +349,7 @@
           <label for="endpoint">Webhook n8n (Production)</label>
           <input id="endpoint" placeholder="https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v2" inputmode="url" />
           <div class="hint">
-            Se envía <code>multipart/form-data</code> con <code>file</code> (PDF, TXT o JSON) + metadatos mínimos. La identidad se extrae desde el archivo.
+            Se envía <code>multipart/form-data</code> con <code>file</code> (PDF, TXT, JSON o CSV) + metadatos mínimos. n8n procesa y guarda una fila por procedimiento detectado.
             <br/>
             Si ves “Procesando” sin respuesta, es normal: la subida terminó pero el servidor tarda (Cloudflare a veces corta la respuesta).
           </div>
@@ -357,14 +357,14 @@
 
         <div>
           <label for="notes">Notas internas (opcional)</label>
-          <textarea id="notes" placeholder="Ej: control post polipectomía, anticoagulación, etc. (sin DNI/nombre)"></textarea>
-          <div class="hint">Se envían las mismas notas para todos los archivos del lote. No escribir DNI/nombre manualmente en notas.</div>
+          <textarea id="notes" placeholder="Notas internas opcionales para el lote"></textarea>
+          <div class="hint">Se envían las mismas notas para todos los archivos del lote.</div>
         </div>
 
         <div>
           <label>Acciones</label>
           <div class="row">
-            <input  id="filepicker"  type="file"  accept=".pdf,.txt,.json,application/pdf,text/plain,application/json"  multiple  style="display:none"/>
+            <input  id="filepicker"  type="file"  accept=".pdf,.txt,.json,.csv,application/pdf,text/plain,application/json,text/csv"  multiple  style="display:none"/>
             <button class="btn" id="btnPick" type="button">Elegir archivos</button>
             <button class="btn primary" id="btnUpload" type="button" disabled>Subir y procesar</button>
             <button class="btn" id="btnClear" type="button" disabled>Limpiar</button>
@@ -385,7 +385,7 @@
           <div class="hint" style="margin-top:10px">
             Campos enviados por cada archivo:
             <br/>
-            • <code>file</code> (binario PDF/TXT/JSON)
+            • <code>file</code> (binario PDF/TXT/JSON/CSV)
             <br/>
             • <code>exam_id</code> (UUID generado por el navegador)
             <br/>
@@ -398,7 +398,7 @@
 
       <div class="drop" id="drop">
         <div class="dropTitle">Arrastrá y soltá aquí</div>
-        <div class="dropSub">Podés soltar varios archivos PDF, TXT o JSON. Se enviarán uno por uno; el workflow V2 segmentará, anonimizará localmente y extraerá con DeepSeek.</div>
+        <div class="dropSub">Podés soltar varios archivos PDF, TXT, JSON o CSV. Se enviarán uno por uno; n8n anonimizará localmente, extraerá con DeepSeek y guardará en Directus.</div>
         <div class="files" id="files"></div>
       </div>
 
@@ -441,6 +441,7 @@
     if (t === "application/pdf" || n.endsWith(".pdf")) return "PDF";
     if (t === "text/plain" || n.endsWith(".txt")) return "TXT";
     if (t === "application/json" || t === "text/json" || n.endsWith(".json")) return "JSON";
+    if (t === "text/csv" || t === "application/csv" || n.endsWith(".csv")) return "CSV";
     return "No permitido";
   };
 
@@ -615,11 +616,11 @@
 
     const bad = queue.filter(it => !allowed(it.file));
     if (bad.length) {
-      setResult(`<div><b>Hay archivos no permitidos.</b> Permitidos: PDF, TXT y JSON.</div>`);
+      setResult(`<div><b>Hay archivos no permitidos.</b> Permitidos: PDF, TXT, JSON y CSV.</div>`);
       return;
     }
     if (!queue.length) {
-      setResult(`<div><b>No hay archivos.</b> Elegí uno o varios archivos PDF, TXT o JSON.</div>`);
+      setResult(`<div><b>No hay archivos.</b> Elegí uno o varios archivos PDF, TXT, JSON o CSV.</div>`);
       return;
     }
 
@@ -702,42 +703,46 @@
     `);
   });
 
+  function listFromPayload(payload){
+    if (Array.isArray(payload?.estudios)) return payload.estudios;
+    if (Array.isArray(payload?.resultados)) return payload.resultados;
+    if (Array.isArray(payload?.items)) return payload.items;
+    if (Array.isArray(payload?.data)) return payload.data;
+    return [];
+  }
+
+  function firstDefined(...values){
+    return values.find(v => v !== undefined && v !== null && v !== "") ?? "—";
+  }
+
   function renderResponses(responses){
     return responses.map((r) => {
       const payload = r.response || {};
-      const resultados = Array.isArray(payload.resultados)
-        ? payload.resultados
-        : (Array.isArray(payload.items) ? payload.items : []);
+      const estudios = listFromPayload(payload);
+      const procedures = estudios.map(it => firstDefined(it.procedure_type, it.tipo)).filter(v => v !== "—");
       const generalWarnings = Array.isArray(payload.warnings) ? payload.warnings : [];
-      const requiresReview = payload.requiere_revision === true || resultados.some(it => it && it.requiere_revision === true);
       const summary = [];
-      if (payload.items_procesados !== undefined) summary.push(`items_procesados: <code>${escapeHtml(payload.items_procesados)}</code>`);
-      if (Array.isArray(payload.ingesta_ids)) summary.push(`ingesta_ids: <code>${escapeHtml(payload.ingesta_ids.join(", "))}</code>`);
-      if (payload.requiere_revision !== undefined) summary.push(`requiere_revision: <code>${escapeHtml(payload.requiere_revision)}</code>`);
+      summary.push(`ingesta_id: <code>${escapeHtml(firstDefined(payload.ingesta_id, payload.ingesta?.id))}</code>`);
+      summary.push(`estudios_creados: <code>${escapeHtml(firstDefined(payload.estudios_creados, payload.created_count, estudios.length || undefined))}</code>`);
+      summary.push(`procedimientos: <code>${escapeHtml(procedures.length ? procedures.join(", ") : "—")}</code>`);
 
-      const itemHtml = resultados.length ? resultados.map((it, idx) => {
-        const itemWarnings = Array.isArray(it.warnings) ? it.warnings : [];
-        const itemRequiresReview = it.requiere_revision === true;
-        return `
+      const itemHtml = estudios.length ? estudios.map((it, idx) => `
         <div class="file" style="align-items:flex-start">
           <div>
-            <div class="fileName">Resultado ${escapeHtml(idx + 1)} • ${escapeHtml(it.procedure_type ?? "Sin tipo")}${itemRequiresReview ? ' • <span class="tag warn">Requiere revisión</span>' : ''}</div>
-            <div class="fileMeta">estudio_id: <code>${escapeHtml(it.estudio_id ?? "—")}</code> • segmento_id: <code>${escapeHtml(it.segmento_id ?? "—")}</code> • paciente_id: <code>${escapeHtml(it.paciente_id ?? "—")}</code></div>
-            <div class="fileMeta">procedure_type: <code>${escapeHtml(it.procedure_type ?? "—")}</code> • fecha: ${escapeHtml(it.fecha ?? it.fecha_estudio ?? "—")} • exam_id: <code>${escapeHtml(it.exam_id ?? "—")}</code></div>
-            <div class="fileMeta">lugar_codigo: <code>${escapeHtml(it.lugar_codigo ?? it.lugar_estudio ?? "—")}</code> • requiere_revision: <code>${escapeHtml(it.requiere_revision ?? "—")}</code></div>
-            ${it.tiempo_retirada_informado !== undefined || it.tiempo_retirada_minutos !== undefined || it.tiempo_retirada_texto !== undefined ? `<div class="fileMeta">tiempo_retirada_informado: <code>${escapeHtml(it.tiempo_retirada_informado ?? "—")}</code> • tiempo_retirada_minutos: <code>${escapeHtml(it.tiempo_retirada_minutos ?? "—")}</code> • tiempo_retirada_texto: <code>${escapeHtml(it.tiempo_retirada_texto ?? "—")}</code></div>` : ""}
-            <div class="fileMeta">warnings: <code>${escapeHtml(JSON.stringify(itemWarnings))}</code></div>
+            <div class="fileName">Estudio ${escapeHtml(idx + 1)} • ${escapeHtml(firstDefined(it.procedure_type, it.tipo))}</div>
+            <div class="fileMeta">estudio_id: <code>${escapeHtml(firstDefined(it.estudio_id, it.id))}</code> • procedure_type: <code>${escapeHtml(firstDefined(it.procedure_type, it.tipo))}</code> • fecha: ${escapeHtml(firstDefined(it.fecha, it.fecha_estudio))}</div>
+            <div class="fileMeta">lugar_estudio: <code>${escapeHtml(firstDefined(it.lugar_estudio, it.lugar))}</code> • exam_id: <code>${escapeHtml(firstDefined(it.exam_id, payload.exam_id))}</code></div>
+            <div class="fileMeta">llego_a_ciego: <code>${escapeHtml(firstDefined(it.llego_a_ciego))}</code> • llego_a_ileon: <code>${escapeHtml(firstDefined(it.llego_a_ileon))}</code> • boston_total: <code>${escapeHtml(firstDefined(it.boston_total))}</code> • polipos: <code>${escapeHtml(firstDefined(it.polipos))}</code></div>
           </div>
-        </div>`;
-      }).join("") : `<div class="hint">Sin resultados/items detallados en la respuesta.</div>`;
+        </div>`).join("") : `<div class="hint">Sin estudios detallados en la respuesta. Revisá luego en el Viewer.</div>`;
 
       const errorDetails = r.errorDetails || (r.error && typeof r.error === "object" ? r.error : null);
       const rawForDetails = errorDetails?.payload ?? r.response ?? r.error ?? r;
       return `
         <div class="panel" style="box-shadow:none">
-          <div><b>${escapeHtml(r.file)}</b> • ${r.ok ? (r.processing ? "Procesando" : "OK") : "Error"}${requiresReview ? ' • <span class="tag warn">Requiere revisión</span>' : ''}</div>
+          <div><b>${escapeHtml(r.file)}</b> • ${r.ok ? (r.processing ? "Procesando" : "OK") : "Error"}</div>
           ${payload.message ? `<div class="hint">${escapeHtml(payload.message)}</div>` : ""}
-          ${summary.length ? `<div class="hint">${summary.join(" • ")}</div>` : ""}
+          <div class="hint">${summary.join(" • ")}</div>
           ${generalWarnings.length ? `<div class="hint">Warnings generales: ${escapeHtml(generalWarnings.join("; "))}</div>` : ""}
           ${errorDetails?.url ? `<div class="hint">URL usada: <code>${escapeHtml(errorDetails.url)}</code></div>` : ""}
           ${errorDetails?.status !== undefined ? `<div class="hint">Status HTTP: <code>${escapeHtml(errorDetails.status)}</code></div>` : ""}
@@ -753,7 +758,7 @@
       form.append("file", file, file.name);
       form.append("client_filename", file.name);
 
-      // Metadatos (para tu workflow)
+      // Metadatos mínimos para n8n
       if (meta && meta.exam_id) form.append("exam_id", meta.exam_id);
       if (meta && meta.notes) form.append("notes", meta.notes);
 
@@ -791,7 +796,7 @@
         if (POST_UPLOAD_GRACE_MS > 0) {
           graceTimer = setTimeout(() => {
             // Si todavía no hay respuesta, abortamos para que el front no lo marque como error,
-            // y lo dejamos como "Procesando". El workflow puede seguir corriendo del lado del servidor.
+            // y lo dejamos como "Procesando". n8n puede seguir corriendo del lado del servidor.
             if (settled) return;
             try { xhr.abort(); } catch {}
             settleOk({
