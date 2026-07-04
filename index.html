@@ -724,7 +724,8 @@
             <div class="fileName">Resultado ${escapeHtml(idx + 1)} • ${escapeHtml(it.procedure_type ?? "Sin tipo")}${itemRequiresReview ? ' • <span class="tag warn">Requiere revisión</span>' : ''}</div>
             <div class="fileMeta">estudio_id: <code>${escapeHtml(it.estudio_id ?? "—")}</code> • segmento_id: <code>${escapeHtml(it.segmento_id ?? "—")}</code> • paciente_id: <code>${escapeHtml(it.paciente_id ?? "—")}</code></div>
             <div class="fileMeta">procedure_type: <code>${escapeHtml(it.procedure_type ?? "—")}</code> • fecha: ${escapeHtml(it.fecha ?? it.fecha_estudio ?? "—")} • exam_id: <code>${escapeHtml(it.exam_id ?? "—")}</code></div>
-            <div class="fileMeta">lugar_codigo: <code>${escapeHtml(it.lugar_codigo ?? it.lugar_estudio ?? "—")}</code> • endoscopista_id: <code>${escapeHtml(it.endoscopista_id ?? it.endoscopista ?? "—")}</code> • requiere_revision: <code>${escapeHtml(it.requiere_revision ?? "—")}</code></div>
+            <div class="fileMeta">lugar_codigo: <code>${escapeHtml(it.lugar_codigo ?? it.lugar_estudio ?? "—")}</code> • requiere_revision: <code>${escapeHtml(it.requiere_revision ?? "—")}</code></div>
+            ${it.tiempo_retirada_informado !== undefined || it.tiempo_retirada_minutos !== undefined || it.tiempo_retirada_texto !== undefined ? `<div class="fileMeta">tiempo_retirada_informado: <code>${escapeHtml(it.tiempo_retirada_informado ?? "—")}</code> • tiempo_retirada_minutos: <code>${escapeHtml(it.tiempo_retirada_minutos ?? "—")}</code> • tiempo_retirada_texto: <code>${escapeHtml(it.tiempo_retirada_texto ?? "—")}</code></div>` : ""}
             <div class="fileMeta">warnings: <code>${escapeHtml(JSON.stringify(itemWarnings))}</code></div>
           </div>
         </div>`;
