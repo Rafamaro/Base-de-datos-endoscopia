@@ -325,7 +325,7 @@
       <div>
         <h1 class="title">Base de Datos Dr Perez</h1>
         <div class="subtitle">
-          Carga de informes PDF, TXT, JSON o CSV para conteo VEDA/VCC y métricas mínimas de VCC. Se envía <b>1 request por archivo</b> al webhook de n8n.<br/>n8n anonimiza localmente, consulta DeepSeek y guarda en Directus.
+          Carga de informes PDF, TXT, JSON, CSS o FOTO para probar el flujo n8n V3. Se envía <b>1 request por archivo</b>. n8n separa PII en Directus, anonimiza el texto antes de DeepSeek y guarda los estudios en bd_estudios.
           <br/>
           <div class="navlinks">
             <a class="navbtn" href="./index.html" title="Subida">⬆️ Subida</a>
@@ -347,9 +347,9 @@
       <div class="grid">
         <div>
           <label for="endpoint">Webhook n8n (Production)</label>
-          <input id="endpoint" placeholder="https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v2" inputmode="url" />
+          <input id="endpoint" placeholder="https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v3" inputmode="url" />
           <div class="hint">
-            Se envía <code>multipart/form-data</code> con <code>file</code> (PDF, TXT, JSON o CSV) + metadatos mínimos. n8n procesa y guarda una fila por procedimiento detectado.
+            Se envía <code>multipart/form-data</code> con <code>file</code> (PDF, TXT, JSON, CSS o FOTO) + metadatos mínimos. n8n V3 procesa, separa PII en Directus y guarda una fila por procedimiento detectado.
             <br/>
             Si ves “Procesando” sin respuesta, es normal: la subida terminó pero el servidor tarda (Cloudflare a veces corta la respuesta).
           </div>
@@ -362,9 +362,16 @@
         </div>
 
         <div>
+          <label for="ocrText">Texto OCR/manual para prueba de FOTO (opcional)</label>
+          <textarea id="ocrText" placeholder="Pegá acá texto OCR/manual para probar fotos o PDF escaneado cuando todavía no está configurado OCR local en n8n"></textarea>
+          <div class="hint">Si tiene contenido, se envía como <code>document_text</code> y <code>ocr_text</code> junto con el archivo.</div>
+          <div class="hint" style="margin-top:8px">Para FOTO o PDF escaneado, el flujo necesita OCR local configurado en n8n o texto OCR enviado como <code>document_text</code>/<code>ocr_text</code>. Esto evita mandar imágenes con PII directamente a una IA externa antes de anonimizar.</div>
+        </div>
+
+        <div>
           <label>Acciones</label>
           <div class="row">
-            <input  id="filepicker"  type="file"  accept=".pdf,.txt,.json,.csv,application/pdf,text/plain,application/json,text/csv"  multiple  style="display:none"/>
+            <input  id="filepicker"  type="file"  accept=".pdf,.txt,.json,.css,.jpg,.jpeg,.png,.webp,.heic,.tif,.tiff,application/pdf,text/plain,application/json,text/css,image/jpeg,image/png,image/webp,image/heic,image/tiff"  multiple  style="display:none"/>
             <button class="btn" id="btnPick" type="button">Elegir archivos</button>
             <button class="btn primary" id="btnUpload" type="button" disabled>Subir y procesar</button>
             <button class="btn" id="btnClear" type="button" disabled>Limpiar</button>
@@ -385,20 +392,22 @@
           <div class="hint" style="margin-top:10px">
             Campos enviados por cada archivo:
             <br/>
-            • <code>file</code> (binario PDF/TXT/JSON/CSV)
+            • <code>file</code> (binario PDF/TXT/JSON/CSS/FOTO)
             <br/>
             • <code>exam_id</code> (UUID generado por el navegador)
             <br/>
             • <code>client_filename</code> (opcional)
             <br/>
             • <code>notes</code> (opcional)
+            <br/>
+            • <code>document_text</code> y <code>ocr_text</code> (opcionales, si completás el texto OCR/manual)
           </div>
         </div>
       </div>
 
       <div class="drop" id="drop">
         <div class="dropTitle">Arrastrá y soltá aquí</div>
-        <div class="dropSub">Podés soltar varios archivos PDF, TXT, JSON o CSV. Se enviarán uno por uno; n8n anonimizará localmente, extraerá con DeepSeek y guardará en Directus.</div>
+        <div class="dropSub">Podés soltar varios archivos PDF, TXT, JSON, CSS o FOTO. Se enviarán uno por uno; n8n anonimizará antes de DeepSeek y guardará en Directus.</div>
         <div class="files" id="files"></div>
       </div>
 
@@ -408,7 +417,7 @@
 
 <script>
 (() => {
-  const DEFAULT_ENDPOINT = "https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v2";
+  const DEFAULT_ENDPOINT = "https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v3";
   // Repositorio estático: este frontend llama directo a n8n. Para evitar CORS, n8n debe responder OPTIONS y POST con los headers documentados en README.md.
 
   // Si Cloudflare corta la respuesta por tardanza, acá lo convertimos en "Procesando" (no error).
@@ -417,6 +426,7 @@
 
   const elEndpoint = document.getElementById("endpoint");
   const elNotes = document.getElementById("notes");
+  const elOcrText = document.getElementById("ocrText");
 
   const elDrop = document.getElementById("drop");
   const elFiles = document.getElementById("files");
@@ -439,9 +449,10 @@
     const t = (file.type || "").toLowerCase();
     const n = (file.name || "").toLowerCase();
     if (t === "application/pdf" || n.endsWith(".pdf")) return "PDF";
-    if (t === "text/plain" || n.endsWith(".txt")) return "TXT";
-    if (t === "application/json" || t === "text/json" || n.endsWith(".json")) return "JSON";
-    if (t === "text/csv" || t === "application/csv" || n.endsWith(".csv")) return "CSV";
+    if (t.startsWith("text/plain") || n.endsWith(".txt") || n.endsWith(".text") || n.endsWith(".log") || n.endsWith(".md")) return "TXT";
+    if (t.includes("json") || n.endsWith(".json")) return "JSON";
+    if (t === "text/css" || n.endsWith(".css")) return "CSS";
+    if (t.startsWith("image/") || n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".webp") || n.endsWith(".heic") || n.endsWith(".tif") || n.endsWith(".tiff")) return "FOTO";
     return "No permitido";
   };
 
@@ -613,14 +624,15 @@
 
     const url = (elEndpoint.value || "").trim();
     const notes = (elNotes.value || "").trim();
+    const ocrText = (elOcrText.value || "").trim();
 
     const bad = queue.filter(it => !allowed(it.file));
     if (bad.length) {
-      setResult(`<div><b>Hay archivos no permitidos.</b> Permitidos: PDF, TXT, JSON y CSV.</div>`);
+      setResult(`<div><b>Hay archivos no permitidos.</b> Permitidos: PDF, TXT, JSON, CSS o FOTO.</div>`);
       return;
     }
     if (!queue.length) {
-      setResult(`<div><b>No hay archivos.</b> Elegí uno o varios archivos PDF, TXT, JSON o CSV.</div>`);
+      setResult(`<div><b>No hay archivos.</b> Elegí uno o varios archivos PDF, TXT, JSON, CSS o FOTO.</div>`);
       return;
     }
 
@@ -653,6 +665,7 @@
         const payload = await uploadOne(url, it.file, {
           exam_id: it.exam_id,
           notes,
+          ocrText,
         }, (loaded) => {
           const p = totalBytes ? ((doneBytes + loaded) / totalBytes) * 100 : 0;
           setProgress(p);
@@ -720,21 +733,29 @@
       const payload = r.response || {};
       const estudios = listFromPayload(payload);
       const procedures = estudios.map(it => firstDefined(it.procedure_type, it.tipo)).filter(v => v !== "—");
+      const ingestaIds = Array.isArray(payload.ingesta_ids) ? payload.ingesta_ids : [firstDefined(payload.ingesta_id, payload.ingesta?.id)].filter(v => v !== "—");
       const generalWarnings = Array.isArray(payload.warnings) ? payload.warnings : [];
       const summary = [];
-      summary.push(`ingesta_id: <code>${escapeHtml(firstDefined(payload.ingesta_id, payload.ingesta?.id))}</code>`);
-      summary.push(`estudios_creados: <code>${escapeHtml(firstDefined(payload.estudios_creados, payload.created_count, estudios.length || undefined))}</code>`);
+
+      if (payload.message) summary.push(`message: <code>${escapeHtml(payload.message)}</code>`);
+      summary.push(`ingesta_ids: <code>${escapeHtml(ingestaIds.length ? ingestaIds.join(", ") : "—")}</code>`);
+      summary.push(`items_procesados: <code>${escapeHtml(firstDefined(payload.items_procesados, payload.estudios_creados, payload.created_count, estudios.length || undefined))}</code>`);
+      summary.push(`requiere_revision: <code>${escapeHtml(firstDefined(payload.requiere_revision))}</code>`);
       summary.push(`procedimientos: <code>${escapeHtml(procedures.length ? procedures.join(", ") : "—")}</code>`);
 
-      const itemHtml = estudios.length ? estudios.map((it, idx) => `
+      const itemHtml = estudios.length ? estudios.map((it, idx) => {
+        const warnings = Array.isArray(it.warnings) ? it.warnings : [];
+        return `
         <div class="file" style="align-items:flex-start">
           <div>
-            <div class="fileName">Estudio ${escapeHtml(idx + 1)} • ${escapeHtml(firstDefined(it.procedure_type, it.tipo))}</div>
-            <div class="fileMeta">estudio_id: <code>${escapeHtml(firstDefined(it.estudio_id, it.id))}</code> • procedure_type: <code>${escapeHtml(firstDefined(it.procedure_type, it.tipo))}</code> • fecha: ${escapeHtml(firstDefined(it.fecha, it.fecha_estudio))}</div>
-            <div class="fileMeta">lugar_estudio: <code>${escapeHtml(firstDefined(it.lugar_estudio, it.lugar))}</code> • exam_id: <code>${escapeHtml(firstDefined(it.exam_id, payload.exam_id))}</code></div>
-            <div class="fileMeta">llego_a_ciego: <code>${escapeHtml(firstDefined(it.llego_a_ciego))}</code> • llego_a_ileon: <code>${escapeHtml(firstDefined(it.llego_a_ileon))}</code> • boston_total: <code>${escapeHtml(firstDefined(it.boston_total))}</code> • polipos: <code>${escapeHtml(firstDefined(it.polipos))}</code></div>
+            <div class="fileName">Resultado ${escapeHtml(idx + 1)} • ${escapeHtml(firstDefined(it.procedure_type, it.tipo))}</div>
+            <div class="fileMeta">estudio_id: <code>${escapeHtml(firstDefined(it.estudio_id, it.id))}</code> • procedure_type: <code>${escapeHtml(firstDefined(it.procedure_type, it.tipo))}</code> • exam_id: <code>${escapeHtml(firstDefined(it.exam_id, payload.exam_id))}</code></div>
+            <div class="fileMeta">fecha_estudio: <code>${escapeHtml(firstDefined(it.fecha_estudio, it.fecha))}</code> • entubacion_cecal: <code>${escapeHtml(firstDefined(it.entubacion_cecal, it.llego_a_ciego))}</code> • llego_a_ileon: <code>${escapeHtml(firstDefined(it.llego_a_ileon))}</code></div>
+            <div class="fileMeta">boston_total: <code>${escapeHtml(firstDefined(it.boston_total))}</code> • polipos: <code>${escapeHtml(firstDefined(it.polipos))}</code> • tipo_preparacion: <code>${escapeHtml(firstDefined(it.tipo_preparacion))}</code></div>
+            <div class="fileMeta">requiere_revision: <code>${escapeHtml(firstDefined(it.requiere_revision))}</code>${warnings.length ? ` • warnings: <code>${escapeHtml(warnings.join("; "))}</code>` : ""}</div>
           </div>
-        </div>`).join("") : `<div class="hint">Sin estudios detallados en la respuesta. Revisá luego en el Viewer.</div>`;
+        </div>`;
+      }).join("") : `<div class="hint">Sin resultados detallados en la respuesta. Revisá luego en el Viewer.</div>`;
 
       const errorDetails = r.errorDetails || (r.error && typeof r.error === "object" ? r.error : null);
       const rawForDetails = errorDetails?.payload ?? r.response ?? r.error ?? r;
@@ -761,6 +782,10 @@
       // Metadatos mínimos para n8n
       if (meta && meta.exam_id) form.append("exam_id", meta.exam_id);
       if (meta && meta.notes) form.append("notes", meta.notes);
+      if (meta && meta.ocrText) {
+        form.append("document_text", meta.ocrText);
+        form.append("ocr_text", meta.ocrText);
+      }
 
       const xhr = new XMLHttpRequest();
       xhr.open("POST", url, true);
@@ -847,7 +872,7 @@
           settleOk({ pending: true, note: "Upload completado; error de red durante la espera de respuesta." });
           return;
         }
-        settleErr(makeUploadError("El navegador bloqueó la solicitud por CORS o no pudo conectar con n8n. Verificar endpoint V2 y preflight OPTIONS.", 0, null, url));
+        settleErr(makeUploadError("El navegador bloqueó la solicitud por CORS o no pudo conectar con n8n. Verificar endpoint V3 y preflight OPTIONS.", 0, null, url));
       };
 
       xhr.onabort = () => {
