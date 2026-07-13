@@ -356,6 +356,18 @@
         </div>
 
         <div>
+          <label for="lugarCodigo">Sitio de realización</label>
+          <select id="lugarCodigo" required>
+            <option value="">Seleccionar sitio…</option>
+            <option value="SANTA_ISABEL">Clínica Santa Isabel</option>
+            <option value="PROVIDENCIA">Sanatorio de la Providencia</option>
+            <option value="HOSPITAL_CLINICAS">Hospital de Clínicas</option>
+            <option value="OTRO">Otro</option>
+          </select>
+          <div class="hint">Obligatorio para cargas nuevas. Se envía a n8n como metadato administrativo (<code>lugar_codigo</code>), no como texto clínico para IA.</div>
+        </div>
+
+        <div>
           <label for="notes">Notas internas (opcional)</label>
           <textarea id="notes" placeholder="Notas internas opcionales para el lote"></textarea>
           <div class="hint">Se envían las mismas notas para todos los archivos del lote.</div>
@@ -400,6 +412,8 @@
             <br/>
             • <code>notes</code> (opcional)
             <br/>
+            • <code>lugar_codigo</code> (sitio de realización obligatorio)
+            <br/>
             • <code>document_text</code> y <code>ocr_text</code> (opcionales, si completás el texto OCR/manual)
           </div>
         </div>
@@ -426,6 +440,7 @@
 
   const elEndpoint = document.getElementById("endpoint");
   const elNotes = document.getElementById("notes");
+  const elLugarCodigo = document.getElementById("lugarCodigo");
   const elOcrText = document.getElementById("ocrText");
 
   const elDrop = document.getElementById("drop");
@@ -485,9 +500,10 @@
     btnClear.disabled = !hasFiles || uploading;
     btnPick.disabled = uploading;
     const endpointOk = (elEndpoint.value || "").trim().length > 0;
+    const lugarOk = (elLugarCodigo.value || "").trim().length > 0;
 
     const bad = queue.some(x => !allowed(x.file));
-    btnUpload.disabled = !(hasFiles && endpointOk && !bad && !uploading);
+    btnUpload.disabled = !(hasFiles && endpointOk && lugarOk && !bad && !uploading);
   };
 
   const statusPill = (status) => {
@@ -616,6 +632,7 @@
   });
 
   elEndpoint.addEventListener("input", refreshButtons);
+  elLugarCodigo.addEventListener("input", () => { resetResult(); refreshButtons(); });
 
   // Upload sequentially (1 request por archivo)
   btnUpload.addEventListener("click", async () => {
@@ -624,6 +641,7 @@
 
     const url = (elEndpoint.value || "").trim();
     const notes = (elNotes.value || "").trim();
+    const lugarCodigo = (elLugarCodigo.value || "").trim();
     const ocrText = (elOcrText.value || "").trim();
 
     const bad = queue.filter(it => !allowed(it.file));
@@ -633,6 +651,11 @@
     }
     if (!queue.length) {
       setResult(`<div><b>No hay archivos.</b> Elegí uno o varios archivos PDF, TXT, JSON, CSS o FOTO.</div>`);
+      return;
+    }
+    if (!lugarCodigo) {
+      setResult(`<div><b>Falta el sitio de realización.</b> Seleccioná el sitio antes de subir el informe.</div>`);
+      elLugarCodigo.focus();
       return;
     }
 
@@ -665,6 +688,7 @@
         const payload = await uploadOne(url, it.file, {
           exam_id: it.exam_id,
           notes,
+          lugarCodigo,
           ocrText,
         }, (loaded) => {
           const p = totalBytes ? ((doneBytes + loaded) / totalBytes) * 100 : 0;
@@ -782,6 +806,8 @@
       // Metadatos mínimos para n8n
       if (meta && meta.exam_id) form.append("exam_id", meta.exam_id);
       if (meta && meta.notes) form.append("notes", meta.notes);
+      // Sitio elegido por el usuario; n8n lo resuelve contra bd_lugares.
+      if (meta && meta.lugarCodigo) form.append("lugar_codigo", meta.lugarCodigo);
       if (meta && meta.ocrText) {
         form.append("document_text", meta.ocrText);
         form.append("ocr_text", meta.ocrText);
