@@ -1,9 +1,9 @@
 FROM nginx:alpine
 
-# Copiamos tu HTML al directorio por defecto de nginx
-COPY index.html /usr/share/nginx/html/index.html
+ENV DIRECTUS_URL=https://directus.drperez86.com
 
-# (Opcional) Si después agregás assets (css/js/img), podés copiar todo el directorio:
-# COPY . /usr/share/nginx/html
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY index.html viewer.html stats.html /usr/share/nginx/html/
+COPY CNAME /usr/share/nginx/html/CNAME
 
 EXPOSE 80

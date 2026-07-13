@@ -1,0 +1,47 @@
+server {
+  listen 80;
+  server_name _;
+
+  root /usr/share/nginx/html;
+  index index.html;
+
+  location / {
+    try_files $uri $uri/ =404;
+  }
+
+  # Secure Directus read proxy for studies. The Directus token remains only in
+  # the server environment. Requests for arbitrary fields are rejected unless
+  # they match the non-sensitive public whitelist used by the frontend.
+  location = /api/directus/bd_estudios {
+    set $public_fields "id,ingesta,exam_id,source_file_name,procedure_type,fecha_estudio,lugar_estudio.id,lugar_estudio.codigo,lugar_estudio.nombre,lugar_estudio.nombre_corto,indicacion,llego_a_ciego,entubacion_cecal,llego_a_ileon,boston_total,boston_derecho,boston_transverso,boston_izquierdo,polipos,tipo_preparacion,created_at";
+    if ($arg_fields !~ "^$|^id,ingesta,exam_id,source_file_name,procedure_type,fecha_estudio,lugar_estudio.id,lugar_estudio.codigo,lugar_estudio.nombre,lugar_estudio.nombre_corto,indicacion,llego_a_ciego,entubacion_cecal,llego_a_ileon,boston_total,boston_derecho,boston_transverso,boston_izquierdo,polipos,tipo_preparacion,created_at$") {
+      return 400 '{"error":"Fields not allowed"}';
+    }
+    proxy_pass ${DIRECTUS_URL}/items/bd_estudios?fields=$public_fields&$args;
+    proxy_http_version 1.1;
+    proxy_set_header Host $proxy_host;
+    proxy_set_header Accept "application/json";
+    proxy_set_header Authorization "Bearer ${DIRECTUS_TOKEN}";
+    proxy_hide_header X-Powered-By;
+  }
+
+  # Secure Directus read proxy for study sites only.
+  location = /api/directus/bd_lugares {
+    set $public_fields "id,codigo,nombre,nombre_corto,activo,orden";
+    if ($arg_fields !~ "^$|^id,codigo,nombre,nombre_corto,activo,orden$") {
+      return 400 '{"error":"Fields not allowed"}';
+    }
+    proxy_pass ${DIRECTUS_URL}/items/bd_lugares?fields=$public_fields&$args;
+    proxy_http_version 1.1;
+    proxy_set_header Host $proxy_host;
+    proxy_set_header Accept "application/json";
+    proxy_set_header Authorization "Bearer ${DIRECTUS_TOKEN}";
+    proxy_hide_header X-Powered-By;
+  }
+
+  # Deny every other Directus collection, including bd_pacientes.
+  location ^~ /api/directus/ {
+    add_header Content-Type application/json always;
+    return 403 '{"error":"Collection not allowed"}';
+  }
+}
