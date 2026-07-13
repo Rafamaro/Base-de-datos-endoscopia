@@ -2,7 +2,7 @@
 
 Frontend estático para cargar informes endoscópicos hacia n8n y consultar en Directus un modelo mínimo de conteo VEDA/VCC y métricas básicas de calidad de VCC.
 
-No incluye backend, secretos, credenciales ni dependencias externas. Está pensado para funcionar como HTML/CSS/JS simple en hosting estático o GitHub Pages.
+Incluye HTML/CSS/JS simple y una configuración nginx mínima para exponer un proxy seguro de lectura hacia Directus cuando se despliega con el Dockerfile. No se deben publicar secretos en el frontend.
 
 ## Flujo de carga
 
@@ -26,8 +26,8 @@ n8n recibe el archivo, procesa PDF/TXT/JSON/CSS/FOTO, separa PII en `bd_paciente
 
 El frontend solo consulta estas colecciones mediante endpoints relativos expuestos por un proxy seguro:
 
-- `/api/directus/bd_ingestas`
 - `/api/directus/bd_estudios`
+- `/api/directus/bd_lugares`
 
 `bd_ingestas` representa un archivo subido/procesado. `bd_estudios` representa cada procedimiento real detectado dentro del archivo.
 
@@ -40,16 +40,17 @@ Campos esperados en `bd_estudios`:
 - `exam_id`
 - `source_file_name`
 - `procedure_type`: `VEDA`, `VCC`, `OTRO` o `INDETERMINADO`
-- `fecha`
+- `fecha_estudio`
 - `lugar_estudio`
 - `indicacion`
-- `llego_a_ciego`
+- `llego_a_ciego` o `entubacion_cecal`
 - `llego_a_ileon`
 - `boston_total`
 - `boston_derecho`
 - `boston_transverso`
 - `boston_izquierdo`
 - `polipos`
+- `tipo_preparacion`
 - `created_at`
 
 Las respuestas de los endpoints pueden ser un array directo o un objeto con `data`, `rows` o `items`.
@@ -67,6 +68,22 @@ Las respuestas de los endpoints pueden ser un array directo o un objeto con `dat
 - `index.html`: carga archivos al webhook n8n y resume la respuesta de procesamiento.
 - `viewer.html`: consulta solo `/api/directus/bd_estudios` y muestra una tabla filtrable.
 - `stats.html`: calcula estadísticas y resumen mensual usando solo `/api/directus/bd_estudios`.
+
+## Proxy Directus seguro
+
+El contenedor nginx expone únicamente:
+
+- `/api/directus/bd_estudios`
+- `/api/directus/bd_lugares`
+
+Estas rutas se traducen internamente a `${DIRECTUS_URL}/items/<coleccion>`. `DIRECTUS_URL` tiene valor por defecto `https://directus.drperez86.com` y `DIRECTUS_TOKEN` debe configurarse como variable de entorno del servidor/contenedor. El token se inyecta solo en nginx mediante el header `Authorization` y nunca aparece en `viewer.html` ni `stats.html`. Cualquier otra colección bajo `/api/directus/`, incluyendo `bd_pacientes`, responde 403. El proxy además fuerza/restringe una lista de campos públicos para evitar que el navegador pida datos identificatorios o metadatos sensibles.
+
+Ejemplo de prueba:
+
+```txt
+/api/directus/bd_estudios?limit=1
+/api/directus/bd_lugares?fields=id,codigo,nombre,nombre_corto,activo,orden&filter[activo][_eq]=true&sort[]=orden
+```
 
 ## CORS
 
