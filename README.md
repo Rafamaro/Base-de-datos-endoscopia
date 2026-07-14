@@ -92,7 +92,15 @@ DIRECTUS_TOKEN=<SECRET>
 ENDODB_PUBLIC_URL=https://endodb.example.com
 ```
 
-En esta etapa el código no utiliza `DIRECTUS_URL` ni `DIRECTUS_TOKEN`. Las credenciales de Directus se configurarán como variables del servidor en una etapa posterior y nunca deben escribirse con valores reales dentro del repositorio.
+En despliegues de Coolify, estas variables deben configurarse exclusivamente como variables de entorno de runtime del servicio/contenedor, no como build arguments:
+
+```env
+DIRECTUS_URL=https://directus.drperez86.com
+DIRECTUS_TOKEN=<TOKEN_REAL>
+ENDODB_PUBLIC_URL=https://endodb.drperez86.com
+```
+
+No deben copiarse al `Dockerfile`, no deben guardarse en GitHub, no deben configurarse como argumentos de build y no deben tener prefijo `NEXT_PUBLIC_`. El build Docker no necesita conocer credenciales de Directus; el código server-side debe leer `DIRECTUS_URL` y `DIRECTUS_TOKEN` desde `process.env` únicamente durante la ejecución.
 
 ## Docker
 
