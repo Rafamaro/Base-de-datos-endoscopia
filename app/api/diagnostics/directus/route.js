@@ -1,44 +1,12 @@
-function getDirectusConfig() {
-  const directusUrl = process.env.DIRECTUS_URL;
-  const directusToken = process.env.DIRECTUS_TOKEN;
+import { DirectusConfigurationError, listDirectusItems } from "../../../../lib/directus/client.js";
+import { configurationError, jsonResponse, upstreamError } from "../../../../lib/http/jsonResponse.js";
 
-  if (!directusUrl || !directusToken) {
-    return null;
+export async function GET() {
+  try {
+    const data = await listDirectusItems("bd_lugares", { fields: ["id", "codigo", "nombre"], limit: 1 });
+    return jsonResponse({ ok: true, service: "endodb", dataSource: "directus", directusConfigured: true, connection: "reachable", collection: "bd_lugares", sampleReceived: Array.isArray(data) && data.length > 0, timestamp: new Date().toISOString() });
+  } catch (error) {
+    if (error instanceof DirectusConfigurationError || error?.code === "DIRECTUS_CONFIGURATION_ERROR") return configurationError();
+    return upstreamError(error);
   }
-
-  return { directusUrl, directusToken };
-}
-
-export function GET() {
-  const config = getDirectusConfig();
-
-  if (!config) {
-    return Response.json(
-      {
-        ok: false,
-        error: 'DIRECTUS_CONFIGURATION_MISSING',
-        message: 'DIRECTUS_URL and DIRECTUS_TOKEN must be configured as runtime environment variables.',
-      },
-      {
-        status: 503,
-        headers: {
-          'Cache-Control': 'no-store',
-        },
-      },
-    );
-  }
-
-  return Response.json(
-    {
-      ok: true,
-      configured: true,
-      directusUrl: config.directusUrl,
-    },
-    {
-      status: 200,
-      headers: {
-        'Cache-Control': 'no-store',
-      },
-    },
-  );
 }
