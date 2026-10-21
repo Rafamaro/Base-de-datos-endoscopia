@@ -1,228 +1,45 @@
-# EndoDB
+# EndoDB · Directus
 
-EndoDB es la base de datos de endoscopia del repositorio `Rafamaro/Base-de-datos-endoscopia`. La migración actual mantiene los HTML heredados en `public/` y agrega una capa Next.js server-side para consultar Directus de forma controlada.
+Este repositorio sirve `index.html` (carga), `viewer.html` (consulta) y `stats.html` (indicadores) desde Next.js. El navegador consulta `/api/locations` y `/api/studies`; el token de lectura de Directus permanece en el servidor. Los archivos se envían al webhook n8n, que separa identidad y datos clínicos antes de llamar a DeepSeek.
 
-## Requisitos
+## Requisitos y ejecución
 
-- Node.js 20
-- npm
-
-## Instalación local
+Node.js 20+, las colecciones `bd_lugares`, `bd_estudios`, `bd_ingestas` y `bd_pacientes` del esquema actual, y un flujo n8n configurado. Las versiones del esquema de Directus deben incluir los campos de VCC incompleta usados por `/api/studies`.
 
 ```bash
 npm ci
-```
-
-## Ejecución en desarrollo
-
-```bash
+cp .env.example .env.local
 npm run dev
 ```
 
-Luego abrir:
+En `.env.local`, reemplazá `DIRECTUS_TOKEN` por un token de **solo lectura** de `bd_lugares` (`id,codigo,nombre,nombre_corto,tipo,activo,orden`) y `bd_estudios` (los campos clínicos de `lib/endodb/studies.js`, con expansión de `lugar_estudio`). No concedas lectura de `bd_pacientes`, `bd_ingestas`, `raw_ai_json`, `exam_id`, `observaciones` ni escrituras. `DIRECTUS_URL` apunta a `https://directus.drperez86.com`; nunca uses `NEXT_PUBLIC_` para secretos.
 
-- `http://localhost:3000/`
-- `http://localhost:3000/index.html`
-- `http://localhost:3000/viewer.html`
-- `http://localhost:3000/stats.html`
-- `http://localhost:3000/api/health`
-- `http://localhost:3000/api/diagnostics/directus`
-- `http://localhost:3000/api/locations`
-- `http://localhost:3000/api/studies`
+Abrí `http://localhost:3000/index.html`, `/viewer.html` o `/stats.html`. El contenedor `Dockerfile` ejecuta Next.js con los mismos valores de entorno. El sitio **requiere un servidor Next.js**: una publicación estática en GitHub Pages no puede responder a `/api/*`. `nginx.conf.template` del despliegue antiguo no forma parte del contenedor.
 
-La ruta `/` redirige del lado servidor a `/index.html`.
+## Rutas de lectura
 
-## Variables de entorno
+- `GET /api/locations`: sedes activas ordenadas por `orden,nombre`.
+- `GET /api/studies?limit=500&page=1`: página de estudios; acepta además `procedure_type`, `location_id`, `year` y `requires_review`. El navegador solicita las páginas sucesivas y calcula los indicadores con el conjunto completo.
+- `GET /api/diagnostics/directus`: verifica la conexión sin devolver filas.
+- `GET /api/health`: salud local de Next.js.
 
-Configurar en el servidor, sin prefijo `NEXT_PUBLIC_`:
+La API pública devuelve solo el conjunto clínico definido en `STUDY_FIELDS`. Omite `paciente`, nombres de archivo, `exam_id`, `legacy_row_id`, texto libre, JSON crudo de IA y relaciones privadas. No ofrece escritura ni proxy genérico. Sigue exponiendo variables clínicas y fechas; antes de usar datos de pacientes en una instalación accesible desde Internet, configurá autenticación y permisos de lectura por usuario o en el proxy de acceso. El esquema actual **no tiene todavía aislamiento multiusuario por organización**.
 
-```env
-DIRECTUS_URL=https://directus.drperez86.com
-DIRECTUS_TOKEN=<TOKEN_DE_LECTURA_ENDODB>
-ENDODB_PUBLIC_URL=https://endodb.drperez86.com
-```
+## Ingesta n8n
 
-`DIRECTUS_URL` y `DIRECTUS_TOKEN` son variables server-only. No deben exponerse en HTML, JavaScript cliente, respuestas JSON, logs, headers ni `next.config.mjs`.
+`workflows/endodb_directus_v3.json` es una copia de trabajo del flujo V3 adjunto, preparada para importar en n8n. Conserva el webhook `endodb/process-exam-directus-v3`, la separación local de identidad y la llamada a DeepSeek. La versión incluye:
 
-El token de Directus debe pertenecer a un rol de solo lectura con acceso únicamente a:
+- `lugar_codigo` en entradas binarias y de texto; verifica una sede activa por código antes de escribir.
+- `bd_ingestas.lugar_estudio` y `bd_estudios.lugar_estudio`, con `lugar_fuente=frontend`.
+- Detención antes de DeepSeek si la comprobación local encuentra identificadores residuales.
 
-- `bd_estudios`
-- `bd_ingestas`
-- `bd_lugares`
+Tras importar, seleccioná la credencial DeepSeek del nodo HTTP Request y configurá el token Directus en el nodo CONFIG (o trasladalo a una credencial n8n antes de activar). El JSON del repositorio solo contiene el marcador de posición; no guardes tokens reales en Git. La detección automática de PII no garantiza anonimización perfecta: revisá el flujo con documentos de prueba y mantené la salida privada. El OCR de imágenes/PDF escaneados debe ser local o propio antes de pasar texto a DeepSeek. Importar el archivo **no actualiza ni activa** el flujo actualmente en producción.
 
-El rol no debe tener acceso a:
-
-- `bd_pacientes`
-- colecciones de sistema de Directus
-- operaciones de escritura
-- operaciones de eliminación
-- administración de schema
-
-## Endpoints
-
-Todos los endpoints devuelven `Cache-Control: no-store` y no exponen credenciales.
-
-### `GET /api/health`
-
-Endpoint local de salud de la aplicación Next.js.
-
-```bash
-curl -i http://localhost:3000/api/health
-```
-
-### `GET /api/diagnostics/directus`
-
-Valida la configuración server-side y consulta como máximo un registro de `bd_lugares` solicitando solo `id,codigo,nombre`. La respuesta indica si Directus está alcanzable y si se recibió una muestra, sin devolver el registro completo.
-
-```bash
-curl -i http://localhost:3000/api/diagnostics/directus
-```
-
-### `GET /api/locations`
-
-Consulta exclusivamente `bd_lugares`, filtra `activo = true`, ordena por `orden,nombre` y devuelve hasta 100 registros normalizados. Solo retorna:
-
-- `id`
-- `codigo`
-- `nombre`
-- `nombre_corto`
-- `tipo`
-- `orden`
-
-```bash
-curl -i http://localhost:3000/api/locations
-```
-
-### `GET /api/studies`
-
-Consulta exclusivamente `bd_estudios` con filtros construidos en el servidor. Parámetros aceptados:
-
-- `limit`: entero entre 1 y 500; default 100
-- `page`: entero positivo; default 1
-- `procedure_type`: `VEDA` o `VCC`
-- `location_id`: entero positivo
-- `year`: entero entre 2000 y el año actual + 1
-- `requires_review`: `true` o `false`
-
-Ejemplos:
-
-```bash
-curl -i 'http://localhost:3000/api/studies?limit=50&page=1'
-curl -i 'http://localhost:3000/api/studies?procedure_type=VCC&year=2026&requires_review=false'
-curl -i 'http://localhost:3000/api/studies?location_id=1'
-```
-
-Campos solicitados a Directus para estudios:
-
-- `id`
-- `numero_en_archivo`
-- `exam_id`
-- `legacy_row_id`
-- `procedure_type`
-- `fecha_estudio`
-- `entubacion_cecal`
-- `boston_total`
-- `boston_derecho`
-- `boston_transverso`
-- `boston_izquierdo`
-- `polipos`
-- `tipo_preparacion`
-- `preparacion_texto`
-- `requiere_revision`
-- `observaciones`
-- `created_at`
-- `updated_at`
-- `lugar_fuente`
-- `lugar_estudio.id`
-- `lugar_estudio.codigo`
-- `lugar_estudio.nombre`
-- `lugar_estudio.nombre_corto`
-- `ingesta.id`
-- `ingesta.source_file_name`
-- `ingesta.source_file_kind`
-- `ingesta.status`
-
-Campos expresamente excluidos de estudios:
-
-- `paciente`
-- `raw_ai_json`
-- cualquier campo de `bd_pacientes`
-- `llego_a_ciego`
-- `llego_a_ileon`
-- `indicacion`
-- `source_file_name` directamente en `bd_estudios`
-
-No existe un proxy genérico a Directus ni endpoints de escritura.
-
-## Compilación
-
-```bash
-npm run build
-```
-
-La configuración de Next.js usa `output: "standalone"` para generar una salida adecuada para despliegue en contenedor.
-
-## Tests
+## Verificación
 
 ```bash
 npm test
+npm run build
 ```
 
-Las pruebas unitarias cubren validaciones de filtros, normalización de estudios y allowlist de colecciones sin llamar a Directus.
-
-## Ejecución de producción
-
-Con Next.js estándar:
-
-```bash
-npm run start
-```
-
-Con la salida standalone después de compilar:
-
-```bash
-npm run start:standalone
-```
-
-## HTML existentes
-
-Los archivos heredados se sirven desde `public/`:
-
-- `public/index.html`
-- `public/viewer.html`
-- `public/stats.html`
-
-Las páginas mantienen sus formularios, navegación y referencias de recursos actuales. En esta etapa no se modifican `public/viewer.html` ni `public/stats.html`.
-
-## Docker
-
-Construir la imagen:
-
-```bash
-docker build -t endodb:next .
-```
-
-Ejecutar el contenedor:
-
-```bash
-docker run --rm -p 3000:3000 \
-  -e PORT=3000 \
-  -e HOSTNAME=0.0.0.0 \
-  -e DIRECTUS_URL=https://directus.drperez86.com \
-  -e DIRECTUS_TOKEN=<TOKEN_DE_LECTURA_ENDODB> \
-  -e ENDODB_PUBLIC_URL=https://endodb.drperez86.com \
-  endodb:next
-```
-
-Verificar:
-
-```bash
-curl -i http://localhost:3000/
-curl -i http://localhost:3000/index.html
-curl -i http://localhost:3000/viewer.html
-curl -i http://localhost:3000/stats.html
-curl -i http://localhost:3000/api/health
-curl -i http://localhost:3000/api/diagnostics/directus
-curl -i http://localhost:3000/api/locations
-curl -i http://localhost:3000/api/studies
-```
+Para probar la integración real, configurá Directus y verificá `/api/diagnostics/directus`, `/api/locations` y varias páginas de `/api/studies`. Luego ejecutá un informe sintético VEDA+VCC por el webhook y confirmá dos registros con la misma ingesta y sede en Directus. No uses datos de pacientes para pruebas.

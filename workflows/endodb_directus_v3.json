@@ -1,0 +1,347 @@
+{
+  "name": "BD Endoscopia v3 — Directus con sede y bloqueo de PII residual",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "endodb/process-exam-directus-v3",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        300
+      ],
+      "id": "b782f418-6c85-4d88-a676-f38ac0dad861",
+      "name": "Webhook — endodb index.html"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ============================================================\n// BD Endoscopia v3 — CONFIG\n// ============================================================\n// 1) Pegá el token Directus del usuario de n8n, SIN \"Bearer\".\n// 2) DeepSeek usa la credencial configurada en el nodo HTTP Request.\n// 3) FOTO / PDF escaneado: para NO mandar PII a una IA antes de anonimizar,\n//    la extracción OCR debe ser local o de un servicio propio.\n//    Si tenés un OCR local, poné su endpoint en OCR_LOCAL_ENDPOINT.\n//    Contrato esperado: POST JSON { file_name, mime_type, data_base64 }\n//    Respuesta esperada: { text: \"...\" } o texto plano.\n\nconst DIRECTUS_URL = \"https://directus.drperez86.com\";\nconst DIRECTUS_TOKEN = \"PEGAR_DIRECTUS_TOKEN_AQUI\";\n\nconst DEEPSEEK_MODEL = \"deepseek-chat\"; // Cambiar si tu credencial usa otro modelo.\nconst DEEPSEEK_MAX_CHARS = 60000;\n\n// Dejar vacío si todavía no está instalado el OCR local.\nconst OCR_LOCAL_ENDPOINT = \"\"; // ej: \"http://host.docker.internal:8011/ocr\"\n\nif (!DIRECTUS_TOKEN || DIRECTUS_TOKEN.includes(\"PEGAR_DIRECTUS_TOKEN_AQUI\")) {\n  throw new Error(\"Pegá el token Directus en el nodo CONFIG — BD Endoscopia v3.\");\n}\n\nreturn {\n  json: {\n    ...$json,\n    DIRECTUS_URL: DIRECTUS_URL.replace(/\\/+$/, \"\"),\n    DIRECTUS_TOKEN,\n    DEEPSEEK_MODEL,\n    DEEPSEEK_MAX_CHARS,\n    OCR_LOCAL_ENDPOINT,\n    PROMPT_VERSION: \"bd-endoscopia-v3-minimo-2026-07-04\"\n  },\n  binary: $binary\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        300
+      ],
+      "id": "d6041839-dab7-49fc-89a4-b6defd55bd96",
+      "name": "CONFIG — BD Endoscopia v3"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const inputJson = $json || {};\nconst inputBinary = $binary || {};\n\nfunction cfgValue(name, fallback = \"\") {\n  return inputJson[name] ?? fallback;\n}\nfunction asString(v) {\n  if (v === null || v === undefined) return \"\";\n  if (typeof v === \"string\") return v;\n  return JSON.stringify(v, null, 2);\n}\nfunction extFromName(name) {\n  const m = String(name || \"\").match(/\\.([a-zA-Z0-9]+)$/);\n  return m ? m[1].toLowerCase() : \"\";\n}\nfunction kindFrom(ext, mime) {\n  const mt = String(mime || \"\").toLowerCase();\n  if (mt === \"application/pdf\" || ext === \"pdf\") return \"pdf\";\n  if (mt.startsWith(\"image/\") || [\"jpg\",\"jpeg\",\"png\",\"webp\",\"heic\",\"tif\",\"tiff\"].includes(ext)) return \"image\";\n  if (mt.includes(\"json\") || ext === \"json\") return \"json\";\n  if (mt === \"text/css\" || ext === \"css\") return \"css\";\n  if (mt.startsWith(\"text/\") || [\"txt\",\"text\",\"log\",\"md\"].includes(ext)) return \"txt\";\n  return \"unsupported\";\n}\nfunction firstNonEmpty(...vals) {\n  for (const v of vals) {\n    const s = asString(v).trim();\n    if (s) return s;\n  }\n  return \"\";\n}\nasync function localOcrFromBinary(buffer, fileName, mimeType) {\n  const endpoint = String(cfgValue(\"OCR_LOCAL_ENDPOINT\", \"\")).trim();\n  if (!endpoint) {\n    throw new Error(\"Se recibió una FOTO/imagen, pero no hay OCR local configurado. Para cumplir anonimización previa, instalá OCR local o enviá document_text/ocr_text desde index.html. No conviene mandar la imagen con PII directo a una IA externa.\");\n  }\n  const httpRequest = this.helpers.httpRequest.bind(this);\n  const res = await httpRequest({\n    method: \"POST\",\n    url: endpoint,\n    headers: { \"Content-Type\": \"application/json\", \"Accept\": \"application/json,text/plain\" },\n    body: {\n      file_name: fileName || \"imagen\",\n      mime_type: mimeType || \"application/octet-stream\",\n      data_base64: buffer.toString(\"base64\")\n    },\n    json: true,\n    timeout: 180000\n  });\n  if (typeof res === \"string\") return res;\n  return asString(res?.text ?? res?.data?.text ?? res?.ocr_text ?? res?.markdown ?? \"\");\n}\n\nconst body = inputJson.body ?? {};\nconst query = inputJson.query ?? {};\nconst binaryNames = Object.keys(inputBinary || {});\n\nif (binaryNames.length > 0) {\n  const chosen = binaryNames.includes(\"file\") ? \"file\" : binaryNames[0];\n  const b = inputBinary[chosen];\n  const fileName = firstNonEmpty(b.fileName, body.client_filename, body.filename, query.filename, `archivo_${Date.now()}`);\n  const ext = extFromName(fileName);\n  const mimeType = String(b.mimeType || body.mime_type || query.mime_type || \"\").toLowerCase();\n  const fileKind = kindFrom(ext, mimeType);\n\n  if (fileKind === \"unsupported\") {\n    throw new Error(`Tipo no soportado: mimeType=${mimeType || \"sin mimeType\"}, archivo=${fileName}. Permitidos: PDF, TXT, JSON, CSS y FOTO/imagen.`);\n  }\n\n  const base = {\n    ok: true,\n    fileKind,\n    fileName,\n    ext: ext || fileKind,\n    mimeType,\n    binaryPropertyName: \"file\",\n    fileSize: b.fileSize ?? b.fileSizeBytes ?? null,\n    form: {\n      client_filename: firstNonEmpty(body.client_filename, query.client_filename, fileName),\n      exam_id: firstNonEmpty(body.exam_id, query.exam_id),\n      notes: firstNonEmpty(body.notes, query.notes),\n      lugar_codigo: firstNonEmpty(body.lugar_codigo, query.lugar_codigo)\n    }\n  };\n\n  if (fileKind === \"pdf\") return { json: base, binary: { file: b } };\n\n  const buffer = await this.helpers.getBinaryDataBuffer($itemIndex, chosen);\n  let documentText = \"\";\n\n  if (fileKind === \"image\") {\n    documentText = firstNonEmpty(body.document_text, body.ocr_text, query.document_text, query.ocr_text);\n    if (!documentText) documentText = await localOcrFromBinary.call(this, buffer, fileName, mimeType);\n  } else {\n    documentText = buffer.toString(\"utf8\");\n    if (fileKind === \"json\") {\n      try { documentText = JSON.stringify(JSON.parse(documentText), null, 2); } catch (e) {}\n    }\n  }\n\n  if (!documentText.trim()) throw new Error(`No se pudo obtener texto del archivo ${fileName}.`);\n  return { json: { ...base, document_text: documentText }, binary: { file: b } };\n}\n\n// POST directo sin binario: acepta body.document_text, body.text, body.json, body.css o el body completo.\nconst direct = inputJson.body ?? inputJson;\nlet documentText = firstNonEmpty(direct.document_text, direct.ocr_text, direct.text, direct.informe, direct.css, direct.content);\nif (!documentText) documentText = asString(direct);\nconst trimmed = documentText.trim();\nif (!trimmed) throw new Error(\"No encontré archivo ni texto en el request.\");\nlet fileKind = \"txt\";\nif (trimmed.startsWith(\"{\") || trimmed.startsWith(\"[\")) fileKind = \"json\";\nif (typeof direct.css === \"string\") fileKind = \"css\";\n\nreturn {\n  json: {\n    ok: true,\n    fileKind,\n    fileName: firstNonEmpty(direct.filename, direct.client_filename, `webhook-body.${fileKind}`),\n    ext: fileKind,\n    mimeType: fileKind === \"json\" ? \"application/json\" : (fileKind === \"css\" ? \"text/css\" : \"text/plain\"),\n    binaryPropertyName: \"\",\n    fileSize: trimmed.length,\n    document_text: documentText,\n    form: { exam_id: firstNonEmpty(direct.exam_id), notes: firstNonEmpty(direct.notes), lugar_codigo: firstNonEmpty(direct.lugar_codigo) }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        300
+      ],
+      "id": "8f48ff4a-9ddb-4690-9e34-2dda03bfb9f5",
+      "name": "Entrada — detectar archivo y texto"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "41f552bc-1af0-4d58-89c6-3c9064c7372d",
+              "leftValue": "={{$json.fileKind}}",
+              "rightValue": "pdf",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        840,
+        300
+      ],
+      "id": "f7f22f23-5f90-4442-b201-f4577338ab70",
+      "name": "IF PDF"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        160
+      ],
+      "id": "d80a07dc-00df-4ed3-adc7-d5bd63717871",
+      "name": "Extract PDF text"
+    },
+    {
+      "parameters": {
+        "jsCode": "function collectStrings(value, out = []) {\n  if (value === null || value === undefined) return out;\n  if (typeof value === \"string\") {\n    if (value.trim()) out.push(value);\n    return out;\n  }\n  if (Array.isArray(value)) {\n    for (const v of value) collectStrings(v, out);\n    return out;\n  }\n  if (typeof value === \"object\") {\n    for (const key of [\"text\", \"content\", \"data\", \"pageContent\", \"document\", \"rawText\"]) {\n      if (value[key] !== undefined) collectStrings(value[key], out);\n    }\n    return out;\n  }\n  return out;\n}\n\nconst inputItems = $input.all();\nconst parts = [];\nfor (const item of inputItems) {\n  const found = collectStrings(item.json || {});\n  if (found.length) parts.push(found.join(\"\\n\"));\n}\nconst meta = $items(\"Entrada — detectar archivo y texto\")[0]?.json || {};\nconst documentText = parts.join(\"\\n\\n\").trim();\nif (!documentText) {\n  throw new Error(\"El PDF se recibió, pero no se pudo extraer texto seleccionable. Si es escaneado, agregá OCR local antes de DeepSeek para mantener la anonimización previa.\");\n}\nreturn [{ json: { ...meta, document_text: documentText } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        160
+      ],
+      "id": "40ea0551-cee2-4b17-8e91-06974f17dce8",
+      "name": "Texto desde PDF"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const documentText = String($json.document_text || \"\").trim();\nif (!documentText) throw new Error(\"No hay texto utilizable para procesar.\");\nreturn { json: { ...$json, document_text: documentText } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        440
+      ],
+      "id": "d86e068d-6b5c-49c8-a64c-fe6606c5b092",
+      "name": "Texto directo TXT JSON CSS FOTO-OCR"
+    },
+    {
+      "parameters": {
+        "jsCode": "function getConfig() {\n  let cfg = {};\n  try { cfg = $items(\"CONFIG — BD Endoscopia v3\")[0]?.json || {}; } catch (e) {}\n  const DIRECTUS_URL = String(cfg.DIRECTUS_URL || \"https://directus.drperez86.com\").replace(/\\/+$/, \"\");\n  const DIRECTUS_TOKEN = String(cfg.DIRECTUS_TOKEN || \"\");\n  if (!DIRECTUS_TOKEN) throw new Error(\"Falta DIRECTUS_TOKEN desde CONFIG.\");\n  return { ...cfg, DIRECTUS_URL, DIRECTUS_TOKEN };\n}\nconst cfg = getConfig();\nconst httpRequest = this.helpers.httpRequest.bind(this);\nconst headers = { Authorization: `Bearer ${cfg.DIRECTUS_TOKEN}`, Accept: \"application/json\", \"Content-Type\": \"application/json\" };\nconst fieldCache = {};\n\nfunction safeJson(v) { try { return typeof v === \"string\" ? v : JSON.stringify(v); } catch(e) { return String(v); } }\nasync function api(method, path, body = undefined, qs = undefined) {\n  const opts = { method, url: `${cfg.DIRECTUS_URL}${path}`, headers, json: true };\n  if (body !== undefined) opts.body = body;\n  if (qs !== undefined) opts.qs = qs;\n  try { return await httpRequest(opts); }\n  catch (err) {\n    const status = err?.response?.status ?? err?.statusCode ?? err?.status ?? \"sin_status\";\n    const data = err?.response?.data ?? err?.data ?? err?.message ?? err;\n    throw new Error(`Directus ${method} ${path} falló HTTP ${status}: ${safeJson(data).slice(0, 1500)}`);\n  }\n}\nasync function fields(collection) {\n  if (fieldCache[collection]) return fieldCache[collection];\n  const res = await api(\"GET\", `/fields/${collection}`);\n  const arr = Array.isArray(res?.data) ? res.data : [];\n  fieldCache[collection] = new Set(arr.map(f => f.field));\n  return fieldCache[collection];\n}\nasync function filterPayload(collection, obj) {\n  const fs = await fields(collection);\n  const out = {};\n  for (const [k,v] of Object.entries(obj)) {\n    if (!fs.has(k)) continue;\n    if (v === undefined) continue;\n    out[k] = v;\n  }\n  return out;\n}\nasync function postItem(collection, obj) {\n  const payload = await filterPayload(collection, obj);\n  return await api(\"POST\", `/items/${collection}`, payload);\n}\nasync function patchItem(collection, id, obj) {\n  const payload = await filterPayload(collection, obj);\n  return await api(\"PATCH\", `/items/${collection}/${id}`, payload);\n}\nfunction nowIso() { return new Date().toISOString(); }\nfunction asText(v) { return v === null || v === undefined ? \"\" : String(v).trim(); }\nfunction normSpaces(s) { return String(s || \"\").replace(/\\s+/g, \" \").trim(); }\nfunction stripAccents(s) { return String(s || \"\").normalize(\"NFD\").replace(/[\\u0300-\\u036f]/g, \"\"); }\nfunction normKey(s) { return stripAccents(s).toUpperCase().replace(/[^A-Z0-9]+/g, \"_\").replace(/^_+|_+$/g, \"\"); }\nfunction onlyDigits(s) { return asText(s).replace(/\\D+/g, \"\"); }\nfunction escapeRegExp(s) { return String(s).replace(/[.*+?^${}()|[\\]\\\\]/g, \"\\\\$&\"); }\nfunction hashText(s) { let h = 5381; s = String(s || \"\"); for (let i=0;i<s.length;i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(16).padStart(8,\"0\"); }\nfunction dateIso(s) {\n  s = asText(s);\n  let m = s.match(/^(\\d{4})[-\\/](\\d{1,2})[-\\/](\\d{1,2})$/);\n  if (m) return `${m[1]}-${String(m[2]).padStart(2,\"0\")}-${String(m[3]).padStart(2,\"0\")}`;\n  m = s.match(/^(\\d{1,2})[-\\/](\\d{1,2})[-\\/](\\d{2,4})$/);\n  if (m) { let y=m[3]; if (y.length===2) y=(Number(y)>30?\"19\":\"20\")+y; return `${y}-${String(m[2]).padStart(2,\"0\")}-${String(m[1]).padStart(2,\"0\")}`; }\n  return \"\";\n}\nfunction cleanLine(s) {\n  let out = asText(s).replace(/\\s{2,}/g, \" \").replace(/[|;]+$/g, \"\").trim();\n  if (out.length > 140) out = out.slice(0, 140).trim();\n  return out;\n}\nfunction firstMatch(text, patterns, group = 1) {\n  for (const re of patterns) {\n    const m = String(text || \"\").match(re);\n    if (m && m[group] !== undefined) return cleanLine(m[group]);\n  }\n  return \"\";\n}\nfunction firstRaw(text, patterns, group = 1) {\n  for (const re of patterns) {\n    const m = String(text || \"\").match(re);\n    if (m && m[group] !== undefined) return asText(m[group]);\n  }\n  return \"\";\n}\nfunction titleish(s) { return normSpaces(String(s || \"\").replace(/[-_]+/g, \" \")).toUpperCase(); }\nfunction parseFilename(fileName) {\n  const base = String(fileName || \"\").split(/[\\\\/]/).pop();\n  const noExt = base.replace(/\\.[a-z0-9]+$/i, \"\");\n  const meta = { fecha: \"\", procedure_hint: \"INDETERMINADO\", numero_documento: \"\", nombre_completo: \"\", exam_id: \"\" };\n  const m = noExt.match(/^(\\d{4}-\\d{2}-\\d{2})_([^_]+)_([0-9]{5,12})_([^_]+?)(?:_[0-9a-fA-F]{4,})?$/);\n  if (m) {\n    meta.fecha = m[1];\n    const proc = normKey(m[2]);\n    if (proc.includes(\"VEDA\") && proc.includes(\"VCC\")) meta.procedure_hint = \"VEDA-VCC\";\n    else if (proc.includes(\"VEDA\")) meta.procedure_hint = \"VEDA\";\n    else if (proc.includes(\"VCC\")) meta.procedure_hint = \"VCC\";\n    meta.numero_documento = onlyDigits(m[3]);\n    meta.nombre_completo = titleish(m[4]);\n    return meta;\n  }\n  const d = noExt.match(/(\\d{4}-\\d{2}-\\d{2})/);\n  if (d) meta.fecha = d[1];\n  const k = normKey(noExt);\n  if (k.includes(\"VEDA\") && k.includes(\"VCC\")) meta.procedure_hint = \"VEDA-VCC\";\n  else if (k.includes(\"VEDA\")) meta.procedure_hint = \"VEDA\";\n  else if (k.includes(\"VCC\")) meta.procedure_hint = \"VCC\";\n  const dni = noExt.match(/(?:^|_)(\\d{6,12})(?:_|$)/);\n  if (dni) meta.numero_documento = onlyDigits(dni[1]);\n  return meta;\n}\nfunction extractIdentityAndIds(text, filenameMeta, form) {\n  const t = String(text || \"\");\n  const nombre = firstMatch(t, [\n    /(?:Paciente|Nombre\\s+y\\s+Apellido|Apellido\\s+y\\s+Nombre|Nombre\\s+del\\s+paciente|Nombre)\\s*[:\\-]\\s*([^\\n\\r]+)/i,\n    /(?:Sr\\.?|Sra\\.?)\\s*[:\\-]?\\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑa-záéíóúñ]+(?:\\s+[A-ZÁÉÍÓÚÑa-záéíóúñ]+){1,6})/i\n  ]) || filenameMeta.nombre_completo || \"\";\n  const docRaw = firstRaw(t, [\n    /\\b(?:DNI|Documento|DU|LC|LE|Pasaporte|C[eé]dula)\\b\\s*(?:N[°ºro\\.]*|nro\\.?|n[uú]mero)?\\s*[:\\-]?\\s*([0-9.\\-\\s]{5,18})/i,\n    /\\b(?:DNI|Documento)\\s*[:\\-]?\\s*([0-9.\\-\\s]{5,18})/i\n  ]);\n  const dni = onlyDigits(docRaw) || filenameMeta.numero_documento || \"\";\n  let tipoDocumento = dni ? \"DNI\" : \"No informado\";\n  const tipoDocM = t.match(/\\b(Pasaporte|C[eé]dula|LC|LE|DNI|Documento)\\b\\s*(?:N[°ºro\\.]*|nro\\.?|n[uú]mero)?\\s*[:\\-]?\\s*[0-9.\\-\\s]{5,18}/i);\n  if (tipoDocM) {\n    const k = normKey(tipoDocM[1]);\n    if (k.includes(\"PASAPORTE\")) tipoDocumento = \"Pasaporte\";\n    else if (k.includes(\"CEDULA\")) tipoDocumento = \"Cédula\";\n    else if (k === \"LC\") tipoDocumento = \"LC\";\n    else if (k === \"LE\") tipoDocumento = \"LE\";\n    else tipoDocumento = \"DNI\";\n  }\n  const hc = firstRaw(t, [/(?:N[°º]\\s*)?(?:Historia\\s+cl[ií]nica|HC|H\\.C\\.|N[°º]\\s*HC|Nro\\.?\\s*HC|N[uú]mero\\s+de\\s+historia\\s+cl[ií]nica)\\s*[:\\-]?\\s*([A-Z0-9.\\-\\/]{2,30})/i]);\n  const historiaClinica = onlyDigits(hc) || asText(hc);\n  const fechaProc = dateIso(firstRaw(t, [\n    /(?:Fecha\\s+del\\s+procedimiento|Fecha\\s+de\\s+procedimiento|Fecha\\s+del\\s+estudio|Fecha\\s+de\\s+estudio|Fecha\\s+del\\s+examen|Fecha\\s+de\\s+examen|Fecha\\s+informe|Fecha)\\s*[:\\-]?\\s*(\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4}|\\d{4}[\\/\\-]\\d{1,2}[\\/\\-]\\d{1,2})/i\n  ])) || filenameMeta.fecha || \"\";\n  const examId = asText(form?.exam_id) || firstRaw(t, [\n    /(?:Examen|Estudio|Procedimiento|Informe|Protocolo|ID\\s*estudio|N[°º]\\s*estudio|Nro\\.?\\s*estudio|N[uú]mero\\s+de\\s+estudio)\\s*(?:N[°ºro\\.]*)?\\s*[:\\-]?\\s*([A-Z0-9.\\-\\/]{2,40})/i\n  ]) || filenameMeta.exam_id || \"\";\n  let confianza = \"baja\";\n  if (dni || historiaClinica) confianza = \"alta\";\n  else if (nombre) confianza = \"media\";\n  return {\n    paciente: {\n      nombre_completo: nombre,\n      tipo_documento: tipoDocumento,\n      numero_documento: dni,\n      historia_clinica: historiaClinica,\n      requiere_revision: confianza !== \"alta\",\n      observaciones_identificacion: confianza !== \"alta\" ? \"Identidad extraída con confianza no alta.\" : \"\",\n      created_at: nowIso(),\n      updated_at: nowIso()\n    },\n    fecha_procedimiento: fechaProc,\n    exam_id: examId,\n    confianza_identidad: confianza\n  };\n}\nfunction classifyType(text, filenameHint) {\n  if ([\"VEDA\",\"VCC\"].includes(filenameHint)) return filenameHint;\n  const k = normKey(text);\n  let veda=0, vcc=0;\n  for (const term of [\"VEDA\",\"VIDEOENDOSCOPIA\",\"ENDOSCOPIA_DIGESTIVA_ALTA\",\"ESOFAGO\",\"ESTOMAGO\",\"DUODENO\",\"CARDIAS\",\"ANTRO\"]) if (k.includes(term)) veda++;\n  for (const term of [\"VCC\",\"VIDEOCOLONOSCOPIA\",\"COLONOSCOPIA\",\"BOSTON\",\"CIEGO\",\"VALVULA_ILEOCECAL\",\"ILEON\",\"RECTO\",\"SIGMA\",\"COLON\"]) if (k.includes(term)) vcc++;\n  if (vcc > veda) return \"VCC\";\n  if (veda > vcc) return \"VEDA\";\n  return \"INDETERMINADO\";\n}\nfunction splitSegments(text, filenameHint) {\n  const raw = String(text || \"\").trim();\n  const markers = [];\n  const re = /(^|\\n)\\s*(?:#{1,3}\\s*)?(VIDEOENDOSCOPIA\\s+DIGESTIVA\\s+ALTA|VEDA\\b|ENDOSCOPIA\\s+DIGESTIVA\\s+ALTA|ESOFAGOGASTRODUODENOSCOPIA|VIDEOCOLONOSCOPIA|VCC\\b|COLONOSCOPIA)\\b[^\\n]*/gim;\n  let m; while ((m = re.exec(raw)) !== null) markers.push(m.index + (m[1] ? m[1].length : 0));\n  const unique = [...new Set(markers)].sort((a,b)=>a-b).filter((x,i,a)=>i===0 || x-a[i-1]>500);\n  const out = [];\n  if (unique.length >= 2) {\n    for (let i=0; i<unique.length; i++) {\n      const part = raw.slice(unique[i], unique[i+1] ?? raw.length).trim();\n      if (part.length > 80) out.push({ text: part, tipo_sugerido: classifyType(part, filenameHint === \"VEDA-VCC\" ? \"INDETERMINADO\" : filenameHint) });\n    }\n  } else if (filenameHint === \"VEDA-VCC\") {\n    out.push({ text: raw, tipo_sugerido: \"VEDA\" });\n    out.push({ text: raw, tipo_sugerido: \"VCC\" });\n  } else {\n    out.push({ text: raw, tipo_sugerido: classifyType(raw, filenameHint) });\n  }\n  const seen = new Set();\n  return out.filter(s => {\n    const key = `${s.tipo_sugerido}:${hashText(s.text.slice(0, 10000))}`;\n    if (seen.has(key)) return false;\n    seen.add(key); return true;\n  });\n}\nfunction anonymize(text, ident) {\n  let out = String(text || \"\");\n  const warnings = [];\n  const pii = {\n    nombre: !!ident.paciente.nombre_completo,\n    dni: !!ident.paciente.numero_documento,\n    historia_clinica: !!ident.paciente.historia_clinica,\n    fecha_procedimiento: !!ident.fecha_procedimiento,\n    exam_id: !!ident.exam_id\n  };\n  function replaceLiteral(value, token) {\n    value = asText(value);\n    if (!value || value.length < 3) return;\n    out = out.replace(new RegExp(escapeRegExp(value), \"gi\"), token);\n  }\n  replaceLiteral(ident.paciente.nombre_completo, \"<PACIENTE>\");\n  replaceLiteral(ident.paciente.numero_documento, \"<DNI>\");\n  if (ident.paciente.numero_documento) replaceLiteral(ident.paciente.numero_documento.replace(/(\\d{1,2})(\\d{3})(\\d{3})$/, \"$1.$2.$3\"), \"<DNI>\");\n  replaceLiteral(ident.paciente.historia_clinica, \"<HC>\");\n  replaceLiteral(ident.fecha_procedimiento, \"<FECHA_PROCEDIMIENTO>\");\n  replaceLiteral(ident.exam_id, \"<EXAM_ID>\");\n\n  out = out.replace(/((?:Paciente|Nombre\\s+y\\s+Apellido|Apellido\\s+y\\s+Nombre|Nombre\\s+del\\s+paciente|Nombre)\\s*[:\\-])\\s*[^\\n\\r]+/gi, \"$1 <PACIENTE>\");\n  out = out.replace(/((?:DNI|Documento|DU|LC|LE|Pasaporte|C[eé]dula)\\s*(?:N[°ºro\\.]*|nro\\.?|n[uú]mero)?\\s*[:\\-]?)\\s*[0-9.\\-\\s]{5,18}/gi, \"$1 <DNI>\");\n  out = out.replace(/((?:Historia\\s+cl[ií]nica|HC|H\\.C\\.|N[°º]\\s*HC|Nro\\.?\\s*HC)\\s*[:\\-]?)\\s*[A-Z0-9.\\-\\/]{2,30}/gi, \"$1 <HC>\");\n  out = out.replace(/((?:Fecha\\s+del\\s+procedimiento|Fecha\\s+de\\s+procedimiento|Fecha\\s+del\\s+estudio|Fecha\\s+de\\s+estudio|Fecha\\s+del\\s+examen|Fecha\\s+de\\s+examen|Fecha\\s+informe|Fecha)\\s*[:\\-]?)\\s*(\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4}|\\d{4}[\\/\\-]\\d{1,2}[\\/\\-]\\d{1,2})/gi, \"$1 <FECHA_PROCEDIMIENTO>\");\n  out = out.replace(/((?:Examen|Estudio|Procedimiento|Informe|Protocolo|ID\\s*estudio|N[°º]\\s*estudio|Nro\\.?\\s*estudio|N[uú]mero\\s+de\\s+estudio)\\s*(?:N[°ºro\\.]*)?\\s*[:\\-]?)\\s*[A-Z0-9.\\-\\/]{2,40}/gi, \"$1 <EXAM_ID>\");\n\n  for (const [label, value] of [[\"nombre\", ident.paciente.nombre_completo], [\"dni\", ident.paciente.numero_documento], [\"hc\", ident.paciente.historia_clinica], [\"fecha\", ident.fecha_procedimiento], [\"exam_id\", ident.exam_id]]) {\n    const v = asText(value);\n    if (v && v.length >= 3 && out.toLowerCase().includes(v.toLowerCase())) warnings.push(`Posible ${label} residual tras anonimización.`);\n  }\n  return { text: out, ok: warnings.length === 0, warnings, pii };\n}\nasync function findPaciente(paciente) {\n  const filters = [];\n  if (paciente.numero_documento) filters.push({ numero_documento: paciente.numero_documento });\n  if (paciente.historia_clinica) filters.push({ historia_clinica: paciente.historia_clinica });\n  if (paciente.nombre_completo) filters.push({ nombre_completo: paciente.nombre_completo });\n  for (const f of filters) {\n    const qs = { limit: 1 };\n    for (const [k,v] of Object.entries(f)) qs[`filter[${k}][_eq]`] = v;\n    const res = await api(\"GET\", \"/items/bd_pacientes\", undefined, qs);\n    const hit = Array.isArray(res?.data) ? res.data[0] : null;\n    if (hit?.id) return hit;\n  }\n  return null;\n}\nasync function createOrUpdatePaciente(paciente) {\n  const hasAny = paciente.nombre_completo || paciente.numero_documento || paciente.historia_clinica;\n  if (!hasAny) return { id: null, created: false };\n  const existing = await findPaciente(paciente);\n  if (existing?.id) {\n    const patch = { updated_at: nowIso() };\n    for (const [k,v] of Object.entries(paciente)) {\n      if ((existing[k] === null || existing[k] === undefined || existing[k] === \"\") && v !== \"\") patch[k] = v;\n    }\n    await patchItem(\"bd_pacientes\", existing.id, patch);\n    return { id: existing.id, created: false };\n  }\n  const created = await postItem(\"bd_pacientes\", paciente);\n  return { id: created?.data?.id ?? null, created: true };\n}\nfunction makeCode(ingestaId, index, seed) {\n  const rand = Math.random().toString(16).slice(2, 8).toUpperCase();\n  return `ANON_${ingestaId}_${String(index).padStart(3,\"0\")}_${hashText(seed).slice(0,6).toUpperCase()}_${rand}`;\n}\n\nconst input = $input.all()[0]?.json || {};\nconst rawText = String(input.document_text || \"\").trim();\nif (!rawText) throw new Error(\"No llegó document_text al nodo de anonimización.\");\nconst fileName = input.fileName || input.form?.client_filename || \"archivo_sin_nombre\";\nconst fileKind = input.fileKind || \"txt\";\nconst filenameMeta = parseFilename(fileName);\nconst ident = extractIdentityAndIds(`${fileName}\\n${rawText.slice(0, 80000)}`, filenameMeta, input.form || {});\nconst codigoLugar = String(input.form?.lugar_codigo || \"\").trim().toUpperCase();\nif (!/^[A-Z0-9_]{2,60}$/.test(codigoLugar)) throw new Error(\"Seleccioná un sitio válido antes de procesar.\");\nconst lugarQuery = { \"filter[codigo][_eq]\": codigoLugar, \"filter[activo][_eq]\": true, fields: \"id\", limit: 1 };\nconst lugarResponse = await api(\"GET\", \"/items/bd_lugares\", undefined, lugarQuery);\nconst lugarId = lugarResponse?.data?.[0]?.id;\nif (!lugarId) throw new Error(`No existe un sitio activo con código ${codigoLugar}.`);\nconst pacienteRef = await createOrUpdatePaciente(ident.paciente);\n\nconst ingesta = await postItem(\"bd_ingestas\", {\n  source_file_name: fileName,\n  lugar_estudio: lugarId,\n  lugar_codigo_request: codigoLugar,\n  source_file_kind: fileKind,\n  source_file_size: input.fileSize ?? null,\n  mime_type: input.mimeType || \"\",\n  exam_id_request: ident.exam_id || input.form?.exam_id || \"\",\n  source_chars_total: rawText.length,\n  cantidad_estudios_detectados: 0,\n  status: \"anonimizado\",\n  metadata: { filename_meta: filenameMeta, pii_detectada_local: { nombre: !!ident.paciente.nombre_completo, dni: !!ident.paciente.numero_documento, fecha_procedimiento: !!ident.fecha_procedimiento, exam_id: !!ident.exam_id, historia_clinica: !!ident.paciente.historia_clinica }, prompt_version: cfg.PROMPT_VERSION },\n  created_at: nowIso(),\n  updated_at: nowIso()\n});\nconst ingestaId = ingesta?.data?.id;\nif (!ingestaId) throw new Error(\"Directus no devolvió id al crear bd_ingestas.\");\n\nconst segments = splitSegments(rawText, filenameMeta.procedure_hint);\nawait patchItem(\"bd_ingestas\", ingestaId, { cantidad_estudios_detectados: segments.length, updated_at: nowIso() });\n\nconst output = [];\nfor (let i=0; i<segments.length; i++) {\n  const seg = segments[i];\n  const anon = anonymize(seg.text, ident);\n  if (!anon.ok) {\n    await patchItem(\"bd_ingestas\", ingestaId, { status: \"requiere_revision\", error_message: \"Anonimización local detectó identificadores residuales; no se envió a DeepSeek.\", updated_at: nowIso() });\n    throw new Error(\"Anonimización incompleta. Revisá el archivo localmente antes de enviarlo a IA.\");\n  }\n  const codigo = makeCode(ingestaId, i+1, `${fileName}:${i}:${ident.paciente.numero_documento}:${ident.exam_id}`);\n  output.push({ json: {\n    ingesta_id: ingestaId,\n    lugar_id: lugarId,\n    paciente_id: pacienteRef.id,\n    numero_en_archivo: i + 1,\n    codigo_anonimo: codigo,\n    ai_text: anon.text,\n    anonimizacion_ok: anon.ok,\n    anonimizacion_warnings: anon.warnings,\n    pii_detectada: anon.pii,\n    tipo_sugerido: seg.tipo_sugerido,\n    fecha_procedimiento_local: ident.fecha_procedimiento,\n    exam_id_local: ident.exam_id,\n    identidad_confianza: ident.confianza_identidad,\n    source_file_name: fileName,\n    source_file_kind: fileKind,\n    source_chars: seg.text.length\n  }});\n}\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        300
+      ],
+      "id": "3165b5a7-5465-41ba-9d98-27e26a724eda",
+      "name": "Directus — ingesta paciente anonimizar"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "function getConfig() {\n  let cfg = {};\n  try { cfg = $items(\"CONFIG — BD Endoscopia v3\")[0]?.json || {}; } catch (e) {}\n  return cfg;\n}\nconst cfg = getConfig();\nconst model = String(cfg.DEEPSEEK_MODEL || \"deepseek-chat\");\nconst maxChars = Number(cfg.DEEPSEEK_MAX_CHARS || 60000);\nconst codigo = String($json.codigo_anonimo || \"\");\nconst aiText = String($json.ai_text || \"\").trim();\nif (!codigo) throw new Error(\"Falta codigo_anonimo.\");\nif (!aiText) throw new Error(\"Falta texto anonimizado para DeepSeek.\");\nconst clipped = aiText.length > maxChars ? aiText.slice(0, maxChars) + \"\\n\\n[TRUNCADO_POR_LONGITUD]\" : aiText;\n\nconst systemPrompt = \"Sos un extractor de datos clínicos para informes de endoscopia. Devolvés exclusivamente JSON válido. No des explicaciones. No uses markdown. No inventes datos. El texto ya fue anonimizado; no intentes reconstruir identidad.\";\nconst userPrompt = `Extraé variables mínimas de este informe endoscópico anonimizado.\n\nCÓDIGO ANÓNIMO RECIBIDO: ${codigo}\nTIPO SUGERIDO LOCALMENTE: ${$json.tipo_sugerido || \"INDETERMINADO\"}\n\nReglas de privacidad:\n- Devolvé exactamente el mismo codigo_anonimo.\n- No agregues nombre, DNI, historia clínica, fecha de procedimiento ni examen_id.\n- Si ves placeholders como <PACIENTE>, <DNI>, <HC>, <FECHA_PROCEDIMIENTO> o <EXAM_ID>, no los copies salvo que sea dentro de observaciones sin identificadores reales; preferí omitirlos.\n\nReglas clínicas:\n- procedure_type: \"VEDA\", \"VCC\" o \"INDETERMINADO\".\n- Si es VCC, entubacion_cecal=true cuando el informe dice llegada/intubación a ciego, fondo cecal, válvula ileocecal o íleon.\n- llego_a_ileon=true solo si menciona íleon o intubación ileal.\n- Boston derecho/transverso/izquierdo: enteros 0-3. Boston total: entero 0-9. Si no consta, null.\n- Si hay parciales pero no total, calculá el total.\n- Si es VEDA, Boston y entubación deben ser null/false.\n- polipos=true solo si informa pólipo(s) o lesión polipoidea.\n- tipo_preparacion: uno de \"Ayuno\", \"Barex\", \"Barex kit\", \"Barex plus\", \"Picoprep\", \"Piocprep\", \"Otro\", \"No informado\". Si no consta, \"No informado\".\n- preparacion_texto: texto literal breve de preparación si aparece o si no encaja en la categoría.\n- requiere_revision=true si hay ambigüedad o dato fuera de rango.\n\nDevolvé SOLO esta estructura JSON exacta:\n{\n  \"codigo_anonimo\": \"${codigo}\",\n  \"procedure_type\": \"INDETERMINADO\",\n  \"entubacion_cecal\": false,\n  \"llego_a_ileon\": false,\n  \"boston_derecho\": null,\n  \"boston_transverso\": null,\n  \"boston_izquierdo\": null,\n  \"boston_total\": null,\n  \"polipos\": false,\n  \"tipo_preparacion\": \"No informado\",\n  \"preparacion_texto\": \"\",\n  \"requiere_revision\": false,\n  \"observaciones\": \"\"\n}\n\nTEXTO ANONIMIZADO:\n${clipped}`;\n\nreturn {\n  json: {\n    ...$json,\n    deepseekBody: {\n      model,\n      messages: [\n        { role: \"system\", content: systemPrompt },\n        { role: \"user\", content: userPrompt }\n      ],\n      temperature: 0,\n      stream: false,\n      response_format: { type: \"json_object\" },\n      max_tokens: 1800\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1960,
+        300
+      ],
+      "id": "b5b3f58c-4459-4c7b-8abc-7491eaacb004",
+      "name": "Build DeepSeek Request v3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.deepseek.com/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "deepSeekApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json.deepseekBody}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2260,
+        300
+      ],
+      "id": "9bec4c82-1f43-410a-95cf-202abc9a8e07",
+      "name": "DeepSeek — Chat Completions"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "function getConfig() {\n  let cfg = {};\n  try { cfg = $items(\"CONFIG — BD Endoscopia v3\")[0]?.json || {}; } catch (e) {}\n  const DIRECTUS_URL = String(cfg.DIRECTUS_URL || \"https://directus.drperez86.com\").replace(/\\/+$/, \"\");\n  const DIRECTUS_TOKEN = String(cfg.DIRECTUS_TOKEN || \"\");\n  if (!DIRECTUS_TOKEN) throw new Error(\"Falta DIRECTUS_TOKEN desde CONFIG.\");\n  return { ...cfg, DIRECTUS_URL, DIRECTUS_TOKEN };\n}\nconst cfg = getConfig();\nconst httpRequest = this.helpers.httpRequest.bind(this);\nconst headers = { Authorization: `Bearer ${cfg.DIRECTUS_TOKEN}`, Accept: \"application/json\", \"Content-Type\": \"application/json\" };\nconst fieldCache = {};\nfunction safeJson(v) { try { return typeof v === \"string\" ? v : JSON.stringify(v); } catch(e) { return String(v); } }\nasync function api(method, path, body = undefined, qs = undefined) {\n  const opts = { method, url: `${cfg.DIRECTUS_URL}${path}`, headers, json: true };\n  if (body !== undefined) opts.body = body;\n  if (qs !== undefined) opts.qs = qs;\n  try { return await httpRequest(opts); }\n  catch (err) {\n    const status = err?.response?.status ?? err?.statusCode ?? err?.status ?? \"sin_status\";\n    const data = err?.response?.data ?? err?.data ?? err?.message ?? err;\n    throw new Error(`Directus ${method} ${path} falló HTTP ${status}: ${safeJson(data).slice(0, 1500)}`);\n  }\n}\nasync function fields(collection) {\n  if (fieldCache[collection]) return fieldCache[collection];\n  const res = await api(\"GET\", `/fields/${collection}`);\n  const arr = Array.isArray(res?.data) ? res.data : [];\n  fieldCache[collection] = new Set(arr.map(f => f.field));\n  return fieldCache[collection];\n}\nasync function filterPayload(collection, obj) {\n  const fs = await fields(collection);\n  const out = {};\n  for (const [k,v] of Object.entries(obj)) {\n    if (!fs.has(k)) continue;\n    if (v === undefined) continue;\n    out[k] = v;\n  }\n  return out;\n}\nasync function postItem(collection, obj) { return await api(\"POST\", `/items/${collection}`, await filterPayload(collection, obj)); }\nasync function patchItem(collection, id, obj) { return await api(\"PATCH\", `/items/${collection}/${id}`, await filterPayload(collection, obj)); }\nfunction nowIso() { return new Date().toISOString(); }\nfunction stripFences(s) { return String(s || \"\").replace(/```(?:json)?/gi, \"\").replace(/```/g, \"\").trim(); }\nfunction firstJsonObject(raw) { raw = stripFences(raw); const start = raw.indexOf(\"{\"); const end = raw.lastIndexOf(\"}\"); if (start < 0 || end <= start) throw new Error(\"DeepSeek no devolvió objeto JSON reconocible.\"); return raw.slice(start, end+1).replace(/,\\s*([}\\]])/g, \"$1\"); }\nfunction cleanStr(v) { return v === null || v === undefined ? \"\" : String(v).trim(); }\nfunction bool(v) { return v === true || [\"true\",\"si\",\"sí\",\"1\",\"yes\",\"y\"].includes(String(v).toLowerCase()); }\nfunction maybeInt(v, min, max) {\n  if (v === null || v === undefined || v === \"\") return null;\n  const n = Number(v);\n  if (!Number.isInteger(n) || n < min || n > max) return null;\n  return n;\n}\nfunction prepValue(v) {\n  const s = cleanStr(v).toLowerCase().normalize(\"NFD\").replace(/[\\u0300-\\u036f]/g, \"\");\n  if (!s) return \"No informado\";\n  if (s.includes(\"barex\") && s.includes(\"plus\")) return \"Barex plus\";\n  if (s.includes(\"barex\") && s.includes(\"kit\")) return \"Barex kit\";\n  if (s.includes(\"barex\")) return \"Barex\";\n  if (s.includes(\"pico\") || s.includes(\"pioc\") || s.includes(\"picoprep\")) return \"Picoprep\";\n  if (s.includes(\"ayuno\")) return \"Ayuno\";\n  if (s.includes(\"no informado\")) return \"No informado\";\n  if (s.includes(\"otro\")) return \"Otro\";\n  return cleanStr(v) || \"No informado\";\n}\nfunction normKey(s) { return String(s || \"\").toUpperCase().normalize(\"NFD\").replace(/[\\u0300-\\u036f]/g, \"\").replace(/[^A-Z0-9]+/g, \"_\").replace(/^_+|_+$/g, \"\"); }\n\nconst inputMeta = $items(\"Build DeepSeek Request v3\")[$itemIndex]?.json || {};\nconst content = $json?.choices?.[0]?.message?.content ?? $json?.choices?.[0]?.text ?? $json?.message?.content ?? $json?.text ?? \"\";\nlet obj;\ntry { obj = JSON.parse(firstJsonObject(content)); }\ncatch (e) {\n  await patchItem(\"bd_ingestas\", inputMeta.ingesta_id, { status: \"error\", error_message: `JSON IA inválido: ${e.message}`, updated_at: nowIso() });\n  throw e;\n}\nif (obj.codigo_anonimo !== inputMeta.codigo_anonimo) {\n  throw new Error(\"Código anónimo no coincide entre n8n y DeepSeek. Se detuvo el guardado para evitar cruce incorrecto.\");\n}\n\nlet procedure = [\"VEDA\", \"VCC\"].includes(obj.procedure_type) ? obj.procedure_type : null;\nif (!procedure && [\"VEDA\", \"VCC\"].includes(inputMeta.tipo_sugerido)) procedure = inputMeta.tipo_sugerido;\nif (!procedure) procedure = \"VEDA\"; // Directus schema mínimo suele aceptar solo VEDA/VCC; se marca revisión.\n\nlet bd = maybeInt(obj.boston_derecho, 0, 3);\nlet bt = maybeInt(obj.boston_transverso, 0, 3);\nlet bi = maybeInt(obj.boston_izquierdo, 0, 3);\nlet btotal = maybeInt(obj.boston_total, 0, 9);\nif (procedure === \"VCC\" && btotal === null && [bd,bt,bi].every(x => x !== null)) btotal = bd + bt + bi;\nif (procedure === \"VEDA\") { bd = null; bt = null; bi = null; btotal = null; }\n\nconst entubacion = procedure === \"VCC\" ? (bool(obj.entubacion_cecal) || bool(obj.llego_a_ileon)) : false;\nconst warnings = [...(inputMeta.anonimizacion_warnings || [])];\nif (!inputMeta.anonimizacion_ok) warnings.push(\"Anonimización requiere revisión.\");\nif (inputMeta.identidad_confianza !== \"alta\") warnings.push(\"Identidad extraída con confianza no alta.\");\nif (!inputMeta.fecha_procedimiento_local) warnings.push(\"Fecha de procedimiento no detectada localmente.\");\nif (!inputMeta.exam_id_local) warnings.push(\"exam_id no detectado localmente.\");\nif (!['VEDA','VCC'].includes(obj.procedure_type)) warnings.push(\"Tipo de estudio no definido por IA; se usó sugerencia local/default.\");\nif (bool(obj.requiere_revision)) warnings.push(\"IA marcó requiere_revision.\");\n\nconst fs = await fields(\"bd_estudios\");\nconst cecalField = fs.has(\"entubacion_cecal\") ? \"entubacion_cecal\" : (fs.has(\"llego_a_ciego\") ? \"llego_a_ciego\" : \"entubacion_cecal\");\nconst payload = {\n  paciente: inputMeta.paciente_id || null,\n  ingesta: inputMeta.ingesta_id,\n  lugar_estudio: inputMeta.lugar_id,\n  lugar_fuente: \"frontend\",\n  numero_en_archivo: inputMeta.numero_en_archivo,\n  exam_id: inputMeta.exam_id_local || \"\",\n  procedure_type: procedure,\n  fecha_estudio: inputMeta.fecha_procedimiento_local || null,\n  [cecalField]: entubacion,\n  llego_a_ileon: procedure === \"VCC\" ? bool(obj.llego_a_ileon) : false,\n  boston_derecho: bd,\n  boston_transverso: bt,\n  boston_izquierdo: bi,\n  boston_total: btotal,\n  polipos: procedure === \"VCC\" ? bool(obj.polipos) : false,\n  tipo_preparacion: prepValue(obj.tipo_preparacion),\n  preparacion_texto: cleanStr(obj.preparacion_texto),\n  requiere_revision: warnings.length > 0,\n  observaciones: [cleanStr(obj.observaciones), ...warnings].filter(Boolean).join(\" | \"),\n  raw_ai_json: {\n    codigo_anonimo: inputMeta.codigo_anonimo,\n    prompt_version: cfg.PROMPT_VERSION,\n    ai: obj,\n    local: {\n      fecha_procedimiento: inputMeta.fecha_procedimiento_local ? \"extraida_localmente_no_enviada_a_ia\" : \"no_detectada\",\n      exam_id: inputMeta.exam_id_local ? \"extraido_localmente_no_enviado_a_ia\" : \"no_detectado\",\n      pii_detectada: inputMeta.pii_detectada\n    }\n  },\n  created_at: nowIso(),\n  updated_at: nowIso()\n};\nconst created = await postItem(\"bd_estudios\", payload);\nconst estudioId = created?.data?.id;\nif (!estudioId) throw new Error(\"Directus no devolvió id al crear bd_estudios.\");\n\nreturn { json: {\n  ok: true,\n  ingesta_id: inputMeta.ingesta_id,\n  paciente_id: inputMeta.paciente_id || null,\n  estudio_id: estudioId,\n  codigo_anonimo: inputMeta.codigo_anonimo,\n  procedure_type: procedure,\n  exam_id: inputMeta.exam_id_local || \"\",\n  fecha_estudio: inputMeta.fecha_procedimiento_local || \"\",\n  entubacion_cecal: entubacion,\n  boston_total: btotal,\n  boston_derecho: bd,\n  boston_transverso: bt,\n  boston_izquierdo: bi,\n  polipos: procedure === \"VCC\" ? bool(obj.polipos) : false,\n  tipo_preparacion: prepValue(obj.tipo_preparacion),\n  requiere_revision: warnings.length > 0,\n  warnings\n} };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2560,
+        300
+      ],
+      "id": "e4a3e703-b6b8-49fe-a2d0-6949b7149d19",
+      "name": "Directus — guardar estudio"
+    },
+    {
+      "parameters": {
+        "jsCode": "function getConfig() {\n  let cfg = {};\n  try { cfg = $items(\"CONFIG — BD Endoscopia v3\")[0]?.json || {}; } catch (e) {}\n  const DIRECTUS_URL = String(cfg.DIRECTUS_URL || \"https://directus.drperez86.com\").replace(/\\/+$/, \"\");\n  const DIRECTUS_TOKEN = String(cfg.DIRECTUS_TOKEN || \"\");\n  if (!DIRECTUS_TOKEN) throw new Error(\"Falta DIRECTUS_TOKEN desde CONFIG.\");\n  return { ...cfg, DIRECTUS_URL, DIRECTUS_TOKEN };\n}\nconst cfg = getConfig();\nconst httpRequest = this.helpers.httpRequest.bind(this);\nconst headers = { Authorization: `Bearer ${cfg.DIRECTUS_TOKEN}`, Accept: \"application/json\", \"Content-Type\": \"application/json\" };\nasync function api(method, path, body = undefined) {\n  return await httpRequest({ method, url: `${cfg.DIRECTUS_URL}${path}`, headers, body, json: true });\n}\nconst items = $input.all().map(i => i.json);\nconst ingestaIds = [...new Set(items.map(x => x.ingesta_id).filter(Boolean))];\nconst anyWarnings = items.some(x => x.requiere_revision || (Array.isArray(x.warnings) && x.warnings.length));\nfor (const id of ingestaIds) {\n  await api(\"PATCH\", `/items/bd_ingestas/${id}`, {\n    status: anyWarnings ? \"requiere_revision\" : \"procesado\",\n    processed_at: new Date().toISOString(),\n    updated_at: new Date().toISOString()\n  });\n}\nreturn [{ json: {\n  ok: true,\n  message: \"Procesado: texto extraído, PII separada en Directus, texto anonimizado enviado a DeepSeek y estudio guardado.\",\n  ingesta_ids: ingestaIds,\n  items_procesados: items.length,\n  requiere_revision: anyWarnings,\n  resultados: items\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        300
+      ],
+      "id": "8279e4d3-bd6e-4a21-a8db-0405c6cc6c15",
+      "name": "Directus — finalizar ingesta"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook — endodb index.html": {
+      "main": [
+        [
+          {
+            "node": "CONFIG — BD Endoscopia v3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CONFIG — BD Endoscopia v3": {
+      "main": [
+        [
+          {
+            "node": "Entrada — detectar archivo y texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entrada — detectar archivo y texto": {
+      "main": [
+        [
+          {
+            "node": "IF PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF PDF": {
+      "main": [
+        [
+          {
+            "node": "Extract PDF text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Texto directo TXT JSON CSS FOTO-OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF text": {
+      "main": [
+        [
+          {
+            "node": "Texto desde PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto desde PDF": {
+      "main": [
+        [
+          {
+            "node": "Directus — ingesta paciente anonimizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto directo TXT JSON CSS FOTO-OCR": {
+      "main": [
+        [
+          {
+            "node": "Directus — ingesta paciente anonimizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Directus — ingesta paciente anonimizar": {
+      "main": [
+        [
+          {
+            "node": "Build DeepSeek Request v3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build DeepSeek Request v3": {
+      "main": [
+        [
+          {
+            "node": "DeepSeek — Chat Completions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek — Chat Completions": {
+      "main": [
+        [
+          {
+            "node": "Directus — guardar estudio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Directus — guardar estudio": {
+      "main": [
+        [
+          {
+            "node": "Directus — finalizar ingesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "668cd0d8-04ec-4b6a-9149-25c68494204d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "description": "Importable n8n: endpoint endodb/process-exam-directus-v3, anonimiza PII antes de DeepSeek, guarda bd_pacientes/bd_ingestas/bd_estudios."
+  },
+  "tags": []
+}
