@@ -3,426 +3,74 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Base de Datos Dr Perez • Subida de informes</title>
+  <title>EndoDB · Carga</title>
 
   <style>
-    :root{
-      --bg0:#f6f9ff;
-      --bg1:#ffffff;
-      --card:#ffffff;
-      --ink:#0f172a;
-      --muted:#475569;
-      --line:#e2e8f0;
-
-      --accent:#1d4ed8;
-      --accent2:#1e40af;
-      --accentSoft: rgba(29,78,216,.10);
-
-      --ok:#16a34a;
-      --warn:#f59e0b;
-      --bad:#ef4444;
-
-      --shadow: 0 10px 30px rgba(15,23,42,.08);
-      --radius: 18px;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
-    }
-
-    *{ box-sizing:border-box; }
-    html,body{ height:100%; }
-    body{
-      margin:0;
-      font-family: var(--sans);
-      background:
-        radial-gradient(1100px 600px at 12% 0%, rgba(29,78,216,.12), transparent 55%),
-        radial-gradient(900px 520px at 92% 8%, rgba(29,78,216,.08), transparent 60%),
-        linear-gradient(180deg, var(--bg0), var(--bg1));
-      color:var(--ink);
-    }
-
-    .wrap{ max-width: 980px; margin:0 auto; padding:22px; }
-
-    /* Header (igual vibe que viewer) */
-    .header{
-      display:flex;align-items:center;justify-content:space-between;gap:14px;
-      background: var(--card);
-      border:1px solid var(--line);
-      border-radius: var(--radius);
-      padding:16px 16px;
-      box-shadow: var(--shadow);
-      margin-bottom: 14px;
-    }
-    .title{
-      font-size:20px;
-      font-weight:900;
-      letter-spacing:.2px;
-      margin:0;
-      line-height:1.15;
-    }
-    .subtitle{
-      margin:6px 0 0;
-      color:var(--muted);
-      font-size:13px;
-      line-height:1.45;
-    }
-    .brand-right{ display:flex; align-items:center; gap:10px; }
-    .logo{
-      width:86px;height:86px;
-      object-fit:cover;
-      border-radius: 18px;
-      border:1px solid rgba(29,78,216,.25);
-      box-shadow: 0 10px 22px rgba(29,78,216,.18);
-      background: #fff;
-    }
-
-    .pill{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding:8px 10px;
-      border-radius:999px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,.72);
-      box-shadow: 0 4px 18px rgba(15,23,42,.06);
-      font-size: 12px;
-      color: var(--muted);
-      white-space: nowrap;
-    }
-    .dot{
-      width:10px;height:10px;border-radius:50%;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-    }
-
-    .panel{
-      background: rgba(255,255,255,.92);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 16px;
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(6px);
-    }
-
-    .grid{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-      margin-top: 14px;
-    }
-
-    label{
-      display:block;
-      font-size:12px;
-      color: var(--muted);
-      margin: 0 0 6px 2px;
-      font-weight: 800;
-    }
-
-    input, textarea, select{
-      width:100%;
-      padding: 11px 12px;
-      border-radius: 14px;
-      border: 1px solid var(--line);
-      background: #fff;
-      color: var(--ink);
-      outline: none;
-      font-size: 14px;
-      transition: border-color .15s ease, box-shadow .15s ease;
-      appearance: none;
-    }
-    input:focus, textarea:focus, select:focus{
-      border-color: rgba(29,78,216,.55);
-      box-shadow: 0 0 0 4px rgba(29,78,216,.12);
-    }
-    textarea{ min-height: 88px; resize: vertical; }
-
-    .row{
-      display:flex;
-      gap: 10px;
-      align-items:center;
-      flex-wrap: wrap;
-    }
-
-    .btn{
-      cursor:pointer;
-      padding: 11px 14px;
-      border-radius: 14px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,.90);
-      color: var(--ink);
-      font-weight: 900;
-      font-size: 14px;
-      transition: transform .03s ease, box-shadow .15s ease, background .15s ease;
-      box-shadow: 0 6px 18px rgba(15,23,42,.06);
-      user-select:none;
-    }
-    .btn:hover{ background: rgba(29,78,216,.06); }
-    .btn:active{ transform: translateY(1px); }
-    .btn:disabled{
-      opacity: .55;
-      cursor:not-allowed;
-      box-shadow:none;
-    }
-
-    .btn.primary{
-      border-color: rgba(29,78,216,.35);
-      background: linear-gradient(135deg, rgba(29,78,216,.92), rgba(30,64,175,.92));
-      color: white;
-    }
-    .btn.primary:hover{ filter: brightness(1.02); }
-
-    .hint{
-      color: var(--muted);
-      font-size: 12px;
-      margin-top: 8px;
-      line-height: 1.35;
-    }
-
-    .drop{
-      margin-top: 14px;
-      border-radius: var(--radius);
-      border: 2px dashed rgba(29,78,216,.28);
-      padding: 16px;
-      background: linear-gradient(180deg, rgba(29,78,216,.08), rgba(255,255,255,.75));
-    }
-    .drop.dragover{
-      border-color: rgba(29,78,216,.65);
-      box-shadow: 0 0 0 4px rgba(29,78,216,.12);
-    }
-    .dropTitle{
-      font-weight: 900;
-      margin-bottom: 6px;
-      font-size: 14px;
-    }
-    .dropSub{
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.35;
-    }
-
-    .files{
-      margin-top: 12px;
-      display:grid;
-      gap: 8px;
-    }
-
-    .file{
-      display:flex;
-      justify-content:space-between;
-      gap: 12px;
-      align-items:center;
-      padding: 10px 12px;
-      border-radius: 14px;
-      border: 1px solid var(--line);
-      background: #fff;
-    }
-    .fileName{
-      font-weight: 900;
-      font-size: 13px;
-      line-height: 1.2;
-      word-break: break-word;
-    }
-    .fileMeta{
-      margin-top: 2px;
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    .tag{
-      font-size: 12px;
-      font-weight: 900;
-      padding: 4px 10px;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      background: rgba(0,0,0,.02);
-      white-space: nowrap;
-    }
-    .tag.ok{ border-color: rgba(22,163,74,.30); color: var(--ok); background: rgba(22,163,74,.08); }
-    .tag.bad{ border-color: rgba(239,68,68,.30); color: var(--bad); background: rgba(239,68,68,.06); }
-    .tag.warn{ border-color: rgba(245,158,11,.35); color: var(--warn); background: rgba(245,158,11,.08); }
-
-    .progress{
-      height: 10px;
-      border-radius: 999px;
-      overflow:hidden;
-      background: rgba(15,23,42,.08);
-      margin-top: 12px;
-    }
-    .bar{
-      height:100%;
-      width:0%;
-      background: linear-gradient(135deg, rgba(29,78,216,.92), rgba(30,64,175,.92));
-      transition: width .12s ease;
-    }
-
-    .result{
-      margin-top: 14px;
-      padding: 12px;
-      border-radius: 16px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,.9);
-    }
-    code{
-      background: rgba(29,78,216,.10);
-      padding: 2px 6px;
-      border-radius: 10px;
-      font-size: 12px;
-      font-family: var(--mono);
-    }
-    pre{
-      margin: 10px 0 0 0;
-      background: rgba(15,23,42,.06);
-      padding: 10px;
-      border-radius: 14px;
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-size: 12px;
-      color: #111827;
-      font-family: var(--mono);
-    }
-
-    a.link{
-      color: var(--accent2);
-      text-decoration: none;
-      font-weight: 900;
-    }
-    a.link:hover{ text-decoration: underline; }
-
-    /* Nav (iconos a otras páginas) */
-    .navlinks{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
-    a.navbtn{
-      display:inline-flex; align-items:center; gap:8px;
-      padding:8px 10px; border-radius:999px;
-      border:1px solid var(--line);
-      background: rgba(255,255,255,.72);
-      box-shadow: 0 4px 18px rgba(15,23,42,.06);
-      font-size: 12px; color: var(--muted);
-      text-decoration:none; font-weight: 900;
-      white-space: nowrap;
-    }
-    a.navbtn:hover{ background: rgba(29,78,216,.06); border-color: rgba(29,78,216,.25); color: var(--ink); }
-
-    @media (max-width: 820px){
-      .grid{ grid-template-columns: 1fr; }
-      .header{ flex-direction: column; align-items:flex-start; }
-      .brand-right{ width:100%; justify-content:space-between; }
-      .pill{ align-self: flex-start; }
-    }
-    @media (max-width: 480px){
-      .wrap{ padding: 14px; }
-      .panel{ padding: 14px; }
-      .btn{ width: 100%; }
-      .row{ gap: 8px; }
-      .file{ flex-direction: column; align-items: flex-start; }
-      .file .row{ width:100%; }
-      .logo{ width:76px; height:76px; }
-    }
+    :root{--bg:#f5f8fb;--card:#fff;--ink:#102033;--muted:#5a6b7d;--line:#dbe5ef;--soft:#edf5fb;--accent:#0f6b8f;--accent-2:#164e63;--ok:#0f766e;--bad:#b42318;--warn:#b7791f;--shadow:0 14px 38px rgba(16,32,51,.08);--radius:18px;--font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+    *{box-sizing:border-box} html{scroll-behavior:smooth} body{margin:0;font-family:var(--font);color:var(--ink);background:radial-gradient(900px 520px at 8% -8%,rgba(15,107,143,.16),transparent 62%),linear-gradient(180deg,var(--bg),#fff 72%)}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+    .wrap{width:min(1200px,100%);margin:0 auto;padding:22px}.header,.panel,.result{background:rgba(255,255,255,.94);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+    .header{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;padding:20px}.eyebrow{color:var(--accent);font-weight:900;font-size:12px;letter-spacing:.08em;text-transform:uppercase}.title{margin:.2rem 0;font-size:clamp(1.55rem,2.7vw,2.35rem);line-height:1.1}.subtitle{color:var(--muted);margin:0;max-width:70ch;line-height:1.5}
+    .nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.nav a,.btn{border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--accent-2);padding:10px 14px;font-weight:800;text-decoration:none;cursor:pointer;font:inherit;font-weight:800}.nav a.active{background:var(--accent);border-color:var(--accent);color:#fff}.btn:hover,.nav a:hover{border-color:var(--accent);box-shadow:0 0 0 3px rgba(15,107,143,.12)}:focus-visible{outline:3px solid rgba(15,107,143,.38);outline-offset:2px}
+    .status{display:inline-flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:999px;padding:10px 13px;font-weight:800;min-width:180px;max-width:360px}.dot{width:11px;height:11px;border-radius:50%;background:var(--warn);flex:none}.dot.ok{background:var(--ok)}.dot.bad{background:var(--bad)}
+    .panel{padding:22px;margin-top:16px}.panel-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:20px}.section-title{font-size:1.25rem;margin:0}.hint{color:var(--muted);font-size:13px;line-height:1.45;margin:6px 0 0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.field-wide{grid-column:1/-1}label{display:block;font-size:12px;font-weight:850;color:var(--muted);margin-bottom:6px}
+    input:not([type=file]),textarea,select{width:100%;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);padding:11px 12px;font:inherit;font-size:14px}textarea{min-height:86px;resize:vertical}select{appearance:auto}.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}.btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}.actions .btn{min-width:148px}
+    .drop{border:2px dashed #a8ccda;background:#f8fcff;border-radius:16px;padding:26px;text-align:center;transition:border-color .15s,background .15s}.drop.dragover{border-color:var(--accent);background:var(--soft)}.dropTitle{font-size:1.05rem;font-weight:900}.dropSub{color:var(--muted);font-size:13px;margin-top:5px}.files{display:grid;gap:8px;margin-top:16px;text-align:left}.file{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fff}.fileName{font-weight:850;overflow-wrap:anywhere}.fileMeta{font-size:12px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.tag{display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;background:#f1f5f9;color:#475569;font-size:12px;font-weight:850;white-space:nowrap}.tag.ok{background:#ecfdf5;color:#047857}.tag.bad{background:#fff1f2;color:#be123c}.tag.warn{background:#fff7ed;color:#9a3412}
+    .progress{height:9px;background:#e6edf3;border-radius:999px;overflow:hidden;margin-top:18px}.bar{height:100%;width:0;background:var(--accent);transition:width .12s}.result{padding:18px;margin-top:16px}.result>.panel{box-shadow:none;margin-top:10px}.result .file{margin-top:8px}.notice{color:#80531a;background:#fff9ec;border:1px solid #f1dfb5;border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.45}.config{margin-top:20px;border-top:1px solid var(--line);padding-top:16px}.config summary{color:var(--accent-2);font-size:13px;font-weight:850;cursor:pointer}.config label{margin-top:12px}.config .hint{margin-top:6px}code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#f1f5f9;border-radius:5px;padding:1px 4px;font-size:12px}
+    @media(max-width:720px){.wrap{padding:12px}.header{flex-direction:column}.status{max-width:none;width:100%}.grid{grid-template-columns:1fr}.field-wide{grid-column:auto}.panel{padding:16px}.actions,.actions .btn{width:100%}.drop{padding:18px}.file{align-items:flex-start;flex-direction:column}.file .row{width:100%}}
   </style>
 </head>
 
 <body>
   <div class="wrap">
-    <div class="header">
+    <header class="header">
       <div>
-        <h1 class="title">Base de Datos Dr Perez</h1>
-        <div class="subtitle">
-          Carga de informes PDF, TXT, JSON, CSS o FOTO para probar el flujo n8n V3. Se envía <b>1 request por archivo</b>. n8n separa PII en Directus, anonimiza el texto antes de DeepSeek y guarda los estudios en bd_estudios.
-          <br/>
-          <div class="navlinks">
-            <a class="navbtn" href="./index.html" title="Subida">⬆️ Subida</a>
-            <a class="navbtn" href="./viewer.html" title="Viewer">🔎 Viewer</a>
-            <a class="navbtn" href="./stats.html" title="Stats">📊 Stats</a>
-          </div>
-        </div>
+        <div class="eyebrow">Informes endoscópicos</div>
+        <h1 class="title">EndoDB · Carga</h1>
+        <p class="subtitle">Seleccioná la sede y cargá los informes para incorporarlos a la base.</p>
+        <nav class="nav" aria-label="Navegación principal">
+          <a href="index.html" class="active" aria-current="page">Carga</a>
+          <a href="viewer.html">Viewer</a>
+          <a href="stats.html">Estadísticas</a>
+        </nav>
       </div>
+      <div class="status" aria-live="polite"><span id="statusDot" class="dot"></span><span id="statusLine">Preparando carga</span></div>
+    </header>
 
-      <div class="brand-right">
-        <div class="pill"><span class="dot"></span> Modelo mínimo VEDA/VCC</div>
-        <img class="logo"
-          alt="Logo"
-          src="https://raw.githubusercontent.com/Rafamaro/Base-de-datos-endoscopia/main/WhatsApp%20Image%202026-02-03%20at%2022.23.15.jpeg">
-      </div>
-    </div>
-
-    <div class="panel">
+    <main class="panel">
+      <div class="panel-head"><div><h2 class="section-title">Nueva carga</h2><p class="hint">Podés seleccionar varios archivos; se procesarán uno por uno.</p></div></div>
       <div class="grid">
         <div>
-          <label for="endpoint">Webhook n8n (Production)</label>
-          <input id="endpoint" placeholder="https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v3" inputmode="url" />
-          <div class="hint">
-            Se envía <code>multipart/form-data</code> con <code>file</code> (PDF, TXT, JSON, CSS o FOTO) + metadatos mínimos. n8n V3 procesa, separa PII en Directus y guarda una fila por procedimiento detectado.
-            <br/>
-            Si ves “Procesando” sin respuesta, es normal: la subida terminó pero el servidor tarda (Cloudflare a veces corta la respuesta).
+          <label for="lugarCodigo">Sede de realización</label>
+          <select id="lugarCodigo" required><option value="">Cargando sedes…</option></select>
+        </div>
+        <div>
+          <label for="notes">Notas internas <span class="hint">(opcional)</span></label>
+          <textarea id="notes" placeholder="Agregar una nota al lote"></textarea>
+        </div>
+        <div class="field-wide">
+          <div class="drop" id="drop">
+            <div class="dropTitle">Arrastrá tus archivos aquí</div>
+            <div class="dropSub">PDF, TXT, JSON, CSS o imágenes · También podés usar «Elegir archivos».</div>
+            <div class="files" id="files"></div>
           </div>
         </div>
-
-        <div>
-          <label for="lugarCodigo">Sitio de realización</label>
-          <select id="lugarCodigo" required>
-            <option value="">Seleccionar sitio…</option>
-          </select>
-          <div class="hint">Obligatorio para cargas nuevas. Se envía a n8n como metadato administrativo (<code>lugar_codigo</code>), no como texto clínico para IA.</div>
-        </div>
-
-        <div>
-          <label for="notes">Notas internas (opcional)</label>
-          <textarea id="notes" placeholder="Notas internas opcionales para el lote"></textarea>
-          <div class="hint">Se envían las mismas notas para todos los archivos del lote.</div>
-        </div>
-
-        <div>
-          <label for="ocrText">Texto OCR/manual para prueba de FOTO (opcional)</label>
-          <textarea id="ocrText" placeholder="Pegá acá texto OCR/manual para probar fotos o PDF escaneado cuando todavía no está configurado OCR local en n8n"></textarea>
-          <div class="hint">Si tiene contenido, se envía como <code>document_text</code> y <code>ocr_text</code> junto con el archivo.</div>
-          <div class="hint" style="margin-top:8px">Para FOTO o PDF escaneado, el flujo necesita OCR local configurado en n8n o texto OCR enviado como <code>document_text</code>/<code>ocr_text</code>. Esto evita mandar imágenes con PII directamente a una IA externa antes de anonimizar.</div>
-        </div>
-
-        <div>
-          <label>Acciones</label>
-          <div class="row">
-            <input  id="filepicker"  type="file"  accept=".pdf,.txt,.json,.css,.jpg,.jpeg,.png,.webp,.heic,.tif,.tiff,application/pdf,text/plain,application/json,text/css,image/jpeg,image/png,image/webp,image/heic,image/tiff"  multiple  style="display:none"/>
-            <button class="btn" id="btnPick" type="button">Elegir archivos</button>
-            <button class="btn primary" id="btnUpload" type="button" disabled>Subir y procesar</button>
-            <button class="btn" id="btnClear" type="button" disabled>Limpiar</button>
-          </div>
-
-          <div class="progress" aria-label="progreso" title="Progreso total del lote">
-            <div class="bar" id="bar"></div>
-          </div>
-
-          <div class="hint">
-            Se suben en serie (uno tras otro).
-          </div>
-        </div>
-
-        <div>
-          <label>Estado</label>
-          <div class="hint" id="statusLine">—</div>
-          <div class="hint" style="margin-top:10px">
-            Campos enviados por cada archivo:
-            <br/>
-            • <code>file</code> (binario PDF/TXT/JSON/CSS/FOTO)
-            <br/>
-            • <code>exam_id</code> (UUID generado por el navegador)
-            <br/>
-            • <code>client_filename</code> (opcional)
-            <br/>
-            • <code>notes</code> (opcional)
-            <br/>
-            • <code>lugar_codigo</code> (sitio de realización obligatorio)
-            <br/>
-            • <code>document_text</code> y <code>ocr_text</code> (opcionales, si completás el texto OCR/manual)
-          </div>
+        <div class="field-wide">
+          <label for="ocrText">Texto extraído de imagen o PDF escaneado <span class="hint">(opcional)</span></label>
+          <textarea id="ocrText" placeholder="Pegá el texto si ya lo tenés extraído"></textarea>
         </div>
       </div>
-
-      <div class="drop" id="drop">
-        <div class="dropTitle">Arrastrá y soltá aquí</div>
-        <div class="dropSub">Podés soltar varios archivos PDF, TXT, JSON, CSS o FOTO. Se enviarán uno por uno; n8n anonimizará antes de DeepSeek y guardará en Directus.</div>
-        <div class="files" id="files"></div>
+      <div class="actions">
+        <input id="filepicker" type="file" accept=".pdf,.txt,.json,.css,.jpg,.jpeg,.png,.webp,.heic,.tif,.tiff,application/pdf,text/plain,application/json,text/css,image/jpeg,image/png,image/webp,image/heic,image/tiff" multiple hidden />
+        <button class="btn" id="btnPick" type="button">Elegir archivos</button>
+        <button class="btn primary" id="btnUpload" type="button" disabled>Subir y procesar</button>
+        <button class="btn" id="btnClear" type="button" disabled>Limpiar</button>
       </div>
-
-      <div class="result" id="result" style="display:none"></div>
-    </div>
+      <div class="progress" role="progressbar" aria-label="Progreso de carga" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="bar" id="bar"></div></div>
+      <p class="notice">El flujo actual aún no vincula la sede seleccionada con el estudio guardado. Esa relación requiere actualizar n8n.</p>
+      <details class="config"><summary>Configuración del envío</summary><label for="endpoint">Dirección del servicio</label><input id="endpoint" inputmode="url" placeholder="https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v3" /><p class="hint">Cambiá esta dirección solo si tu flujo utiliza otro webhook.</p></details>
+    </main>
+    <section class="result" id="result" aria-live="polite" style="display:none"></section>
   </div>
 
 <script src="/endodb-api.js"></script>
@@ -449,17 +97,22 @@
   const elBar = document.getElementById("bar");
   const elResult = document.getElementById("result");
   const elStatusLine = document.getElementById("statusLine");
+  const statusDot = document.getElementById("statusDot");
+  let locationMessage = "";
 
   elEndpoint.value = DEFAULT_ENDPOINT;
 
   async function loadLocations(){
     try {
-      const locations = await window.endodbGet('/api/locations');
-      elLugarCodigo.replaceChildren(new Option('Seleccionar sitio…', ''), ...locations.map(l => new Option(l.nombre || l.nombre_corto || l.codigo, l.codigo)));
+      const { data: locations } = await window.EndoDBApi.all('/api/locations');
+      elLugarCodigo.replaceChildren(new Option(locations.length ? 'Seleccionar sede…' : 'No hay sedes activas disponibles', ''), ...locations.map(l => { const option = new Option(l.nombre || l.codigo || l.id, l.id); option.dataset.code = l.codigo || ''; return option; }));
+      locationMessage = locations.length ? "" : 'No hay sedes disponibles para cargar informes.';
+      refreshStatusLine();
       refreshButtons();
     } catch (error) {
-      elLugarCodigo.replaceChildren(new Option('No se pudieron cargar los sitios; reintentá más tarde', ''));
-      elStatusLine.textContent = error.message;
+      elLugarCodigo.replaceChildren(new Option('No se pudieron cargar las sedes', ''));
+      locationMessage = error.message;
+      refreshStatusLine();
       refreshButtons();
     }
   }
@@ -492,7 +145,9 @@
   };
 
   const setProgress = (p) => {
-    elBar.style.width = `${Math.max(0, Math.min(100, p))}%`;
+    const value = Math.max(0, Math.min(100, p));
+    elBar.style.width = `${value}%`;
+    elBar.parentElement.setAttribute("aria-valuenow", String(Math.round(value)));
   };
 
   const setResult = (html) => {
@@ -542,7 +197,7 @@
       left.style.flex = "1";
       left.innerHTML = `
         <div class="fileName">${escapeHtml(it.file.name)}</div>
-        <div class="fileMeta">${escapeHtml(fmtSize(it.file.size))} • ${escapeHtml(it.file.type || "desconocido")}${it.exam_id ? ` • exam_id: <code>${escapeHtml(it.exam_id)}</code>` : ""}</div>
+        <div class="fileMeta">${escapeHtml(fmtSize(it.file.size))} · ${escapeHtml(fileKind(it.file))}</div>
       `;
 
       const right = document.createElement("div");
@@ -587,13 +242,16 @@
     const up = queue.filter(x => x.status === "uploading").length;
     const pend = queue.filter(x => x.status === "pending").length;
 
-    if (!total) {
-      elStatusLine.textContent = "—";
+    statusDot.className = "dot" + (locationMessage || err ? " bad" : total && !up && !proc && !pend ? " ok" : "");
+    if (locationMessage) {
+      elStatusLine.textContent = locationMessage;
       return;
     }
-
-    elStatusLine.textContent =
-      `Total: ${total} • Pendientes: ${pend} • Subiendo: ${up} • Procesando: ${proc} • OK: ${ok} • Errores: ${err}`;
+    if (!total) {
+      elStatusLine.textContent = "Elegí una sede y los archivos";
+      return;
+    }
+    elStatusLine.textContent = uploading ? `${up || pend} en curso · ${ok} listos` : err ? `${ok} listos · ${err} con error` : proc ? `${proc} procesando · ${ok} listos` : ok === total ? `${ok} archivos enviados` : `${pend} archivos listos para subir`;
   };
 
   const addFiles = (files) => {
@@ -664,7 +322,7 @@
       return;
     }
     if (!lugarCodigo) {
-      setResult(`<div><b>Falta el sitio de realización.</b> Seleccioná el sitio antes de subir el informe.</div>`);
+      setResult(`<div><b>Falta la sede.</b> Seleccioná una sede antes de subir el informe.</div>`);
       elLugarCodigo.focus();
       return;
     }
@@ -740,11 +398,9 @@
     const errCount = responses.filter(r => !r.ok).length;
 
     setResult(`
-      <div style="display:grid;gap:10px">
-        <div><b>Listo.</b> Enviados: <code>${responses.length}</code> • OK: <code>${okCount}</code> • Procesando: <code>${procCount}</code> • Errores: <code>${errCount}</code></div>
-        <div class="hint">
-          Si queda en <b>Procesando</b>, el upload ya se completó pero el servidor tardó en responder. Revisá luego en el Viewer.
-        </div>
+      <div>
+        <h2 class="section-title">Resultado de la carga</h2>
+        <p class="hint">${okCount} enviados · ${procCount} procesando · ${errCount} con error</p>
         ${renderResponses(responses)}
       </div>
     `);
@@ -758,51 +414,19 @@
     return [];
   }
 
-  function firstDefined(...values){
-    return values.find(v => v !== undefined && v !== null && v !== "") ?? "—";
-  }
-
   function renderResponses(responses){
     return responses.map((r) => {
       const payload = r.response || {};
       const estudios = listFromPayload(payload);
-      const procedures = estudios.map(it => firstDefined(it.procedure_type, it.tipo)).filter(v => v !== "—");
-      const ingestaIds = Array.isArray(payload.ingesta_ids) ? payload.ingesta_ids : [firstDefined(payload.ingesta_id, payload.ingesta?.id)].filter(v => v !== "—");
-      const generalWarnings = Array.isArray(payload.warnings) ? payload.warnings : [];
-      const summary = [];
-
-      if (payload.message) summary.push(`message: <code>${escapeHtml(payload.message)}</code>`);
-      summary.push(`ingesta_ids: <code>${escapeHtml(ingestaIds.length ? ingestaIds.join(", ") : "—")}</code>`);
-      summary.push(`items_procesados: <code>${escapeHtml(firstDefined(payload.items_procesados, payload.estudios_creados, payload.created_count, estudios.length || undefined))}</code>`);
-      summary.push(`requiere_revision: <code>${escapeHtml(firstDefined(payload.requiere_revision))}</code>`);
-      summary.push(`procedimientos: <code>${escapeHtml(procedures.length ? procedures.join(", ") : "—")}</code>`);
-
-      const itemHtml = estudios.length ? estudios.map((it, idx) => {
-        const warnings = Array.isArray(it.warnings) ? it.warnings : [];
-        return `
-        <div class="file" style="align-items:flex-start">
-          <div>
-            <div class="fileName">Resultado ${escapeHtml(idx + 1)} • ${escapeHtml(firstDefined(it.procedure_type, it.tipo))}</div>
-            <div class="fileMeta">estudio_id: <code>${escapeHtml(firstDefined(it.estudio_id, it.id))}</code> • procedure_type: <code>${escapeHtml(firstDefined(it.procedure_type, it.tipo))}</code> • exam_id: <code>${escapeHtml(firstDefined(it.exam_id, payload.exam_id))}</code></div>
-            <div class="fileMeta">fecha_estudio: <code>${escapeHtml(firstDefined(it.fecha_estudio, it.fecha))}</code> • entubacion_cecal: <code>${escapeHtml(firstDefined(it.entubacion_cecal, it.llego_a_ciego))}</code> • llego_a_ileon: <code>${escapeHtml(firstDefined(it.llego_a_ileon))}</code></div>
-            <div class="fileMeta">boston_total: <code>${escapeHtml(firstDefined(it.boston_total))}</code> • polipos: <code>${escapeHtml(firstDefined(it.polipos))}</code> • tipo_preparacion: <code>${escapeHtml(firstDefined(it.tipo_preparacion))}</code></div>
-            <div class="fileMeta">requiere_revision: <code>${escapeHtml(firstDefined(it.requiere_revision))}</code>${warnings.length ? ` • warnings: <code>${escapeHtml(warnings.join("; "))}</code>` : ""}</div>
-          </div>
-        </div>`;
-      }).join("") : `<div class="hint">Sin resultados detallados en la respuesta. Revisá luego en el Viewer.</div>`;
-
-      const errorDetails = r.errorDetails || (r.error && typeof r.error === "object" ? r.error : null);
-      const rawForDetails = errorDetails?.payload ?? r.response ?? r.error ?? r;
+      const procedures = estudios.map(it => String(it.procedure_type || it.tipo || '').toUpperCase()).filter(type => type === 'VEDA' || type === 'VCC');
+      const description = r.processing ? 'La subida terminó. Consultá el Viewer para confirmar el procesamiento.'
+        : r.error ? 'No se pudo completar el envío. Revisá la conexión y reintentá este archivo.'
+        : procedures.length ? `${procedures.length} ${procedures.length === 1 ? 'estudio detectado' : 'estudios detectados'}: ${procedures.join(' · ')}`
+        : 'Enviado. Consultá el Viewer para ver los estudios.';
       return `
-        <div class="panel" style="box-shadow:none">
-          <div><b>${escapeHtml(r.file)}</b> • ${r.ok ? (r.processing ? "Procesando" : "OK") : "Error"}</div>
-          ${payload.message ? `<div class="hint">${escapeHtml(payload.message)}</div>` : ""}
-          <div class="hint">${summary.join(" • ")}</div>
-          ${generalWarnings.length ? `<div class="hint">Warnings generales: ${escapeHtml(generalWarnings.join("; "))}</div>` : ""}
-          ${errorDetails?.url ? `<div class="hint">URL usada: <code>${escapeHtml(errorDetails.url)}</code></div>` : ""}
-          ${errorDetails?.status !== undefined ? `<div class="hint">Status HTTP: <code>${escapeHtml(errorDetails.status)}</code></div>` : ""}
-          ${r.error ? `<div class="hint" style="color:var(--bad)">${escapeHtml(errorDetails?.message || r.error)}</div>` : itemHtml}
-          <details style="margin-top:8px"><summary style="cursor:pointer;font-weight:900;color:var(--muted)">JSON crudo</summary><pre>${escapeHtml(JSON.stringify(rawForDetails, null, 2))}</pre></details>
+        <div class="file">
+          <div><div class="fileName">${escapeHtml(r.file)}</div><div class="fileMeta">${escapeHtml(description)}</div></div>
+          <span class="tag ${r.error ? 'bad' : r.processing ? 'warn' : 'ok'}">${r.error ? 'Error' : r.processing ? 'Procesando' : 'Enviado'}</span>
         </div>`;
     }).join("");
   }
@@ -816,8 +440,12 @@
       // Metadatos mínimos para n8n
       if (meta && meta.exam_id) form.append("exam_id", meta.exam_id);
       if (meta && meta.notes) form.append("notes", meta.notes);
-      // Sitio elegido por el usuario; n8n lo resuelve contra bd_lugares.
-      if (meta && meta.lugarCodigo) form.append("lugar_codigo", meta.lugarCodigo);
+      // UUID administrativo para el esquema multiusuario; el flujo n8n debe guardar bd_estudios.sede.
+      if (meta && meta.lugarCodigo) form.append("sede_id", meta.lugarCodigo);
+      if (meta && meta.lugarCodigo) {
+        const code = [...elLugarCodigo.options].find(option => option.value === meta.lugarCodigo)?.dataset.code;
+        if (code) form.append("lugar_codigo", code);
+      }
       if (meta && meta.ocrText) {
         form.append("document_text", meta.ocrText);
         form.append("ocr_text", meta.ocrText);
@@ -880,6 +508,10 @@
         }
 
         const isOk = xhr.status >= 200 && xhr.status < 300;
+        if (isOk && (!ct.includes("application/json") || payload?.ok === false)) {
+          settleErr(makeUploadError("El servicio no confirmó la carga. Revisá el estado en el Viewer antes de reintentar.", xhr.status, null, url));
+          return;
+        }
 
         // Si el proxy devolvió timeout/errores “de respuesta” pero el upload terminó,
         // lo tratamos como "Procesando" (no error).
@@ -895,7 +527,7 @@
             });
             return;
           }
-          settleErr(makeUploadError(`HTTP ${xhr.status} - ${safeShort(payload)}`, xhr.status, payload, url));
+          settleErr(makeUploadError(`El servicio respondió con error HTTP ${xhr.status}.`, xhr.status, null, url));
           return;
         }
 
@@ -908,7 +540,7 @@
           settleOk({ pending: true, note: "Upload completado; error de red durante la espera de respuesta." });
           return;
         }
-        settleErr(makeUploadError("El navegador bloqueó la solicitud por CORS o no pudo conectar con n8n. Verificar endpoint V3 y preflight OPTIONS.", 0, null, url));
+        settleErr(makeUploadError("No se pudo conectar con el servicio de carga.", 0, null, url));
       };
 
       xhr.onabort = () => {
@@ -940,15 +572,6 @@
       payload: err.payload,
       url: err.url || fallbackUrl,
     };
-  }
-
-  function safeShort(obj){
-    try {
-      const s = JSON.stringify(obj);
-      return s.length > 220 ? s.slice(0,220) + "…" : s;
-    } catch {
-      return String(obj);
-    }
   }
 
   function escapeHtml(str) {
