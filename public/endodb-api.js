@@ -11,15 +11,23 @@
     DIRECTUS_INVALID_RESPONSE: 'El servidor de datos devolvió un formato inesperado.',
     DIRECTUS_UPSTREAM_ERROR: 'Directus no pudo completar la solicitud.',
     VALIDATION_ERROR: 'Revisá los filtros de la consulta.',
+    SITE_ADMIN_NOT_CONFIGURED: 'El alta de sedes aún no está configurada en el servidor.',
+    SITE_ADMIN_FORBIDDEN: 'No tenés permiso para agregar sedes.',
+    SITE_INVALID_INPUT: 'Revisá el nombre, código y dirección de la sede.',
+    SITE_ALREADY_EXISTS: 'Ya existe una sede con ese código en esta organización.',
   };
-  async function request(path, { signal } = {}) {
+  async function request(path, { signal, method = 'GET', body } = {}) {
     const controller = new AbortController();
     const abort = () => controller.abort();
     if (signal?.aborted) abort();
     signal?.addEventListener('abort', abort, { once: true });
     const timer = setTimeout(abort, 25000);
     try {
-      const response = await fetch(path, { headers: { Accept: 'application/json' }, cache: 'no-store', signal: controller.signal });
+      const response = await fetch(path, {
+        method, headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        cache: 'no-store', credentials: 'same-origin', signal: controller.signal,
+      });
       if (/cloudflareaccess\.com|\/cdn-cgi\/access\//.test(response.url)) throw new Error('Tu sesión de acceso venció. Volvé a iniciar sesión en EndoDB.');
       const raw = await response.text();
       if (raw.includes('Use /api/(calidad|registro)/(columns|rows)')) throw new Error('El dominio está respondiendo con la API antigua. Revisá el destino del despliegue.');

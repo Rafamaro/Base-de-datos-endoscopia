@@ -13,11 +13,12 @@
     .header{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;padding:20px}.eyebrow{color:var(--accent);font-weight:900;font-size:12px;letter-spacing:.08em;text-transform:uppercase}.title{margin:.2rem 0;font-size:clamp(1.55rem,2.7vw,2.35rem);line-height:1.1}.subtitle{color:var(--muted);margin:0;max-width:70ch;line-height:1.5}
     .nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.nav a,.btn{border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--accent-2);padding:10px 14px;font-weight:800;text-decoration:none;cursor:pointer;font:inherit;font-weight:800}.nav a.active{background:var(--accent);border-color:var(--accent);color:#fff}.btn:hover,.nav a:hover{border-color:var(--accent);box-shadow:0 0 0 3px rgba(15,107,143,.12)}:focus-visible{outline:3px solid rgba(15,107,143,.38);outline-offset:2px}
     .status{display:inline-flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:999px;padding:10px 13px;font-weight:800;min-width:180px;max-width:360px}.dot{width:11px;height:11px;border-radius:50%;background:var(--warn);flex:none}.dot.ok{background:var(--ok)}.dot.bad{background:var(--bad)}
-    .panel{padding:22px;margin-top:16px}.panel-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:20px}.section-title{font-size:1.25rem;margin:0}.hint{color:var(--muted);font-size:13px;line-height:1.45;margin:6px 0 0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.field-wide{grid-column:1/-1}label{display:block;font-size:12px;font-weight:850;color:var(--muted);margin-bottom:6px}
+    .panel{padding:22px;margin-top:16px}.panel-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:20px}.section-title{font-size:1.25rem;margin:0}.hint{color:var(--muted);font-size:13px;line-height:1.45;margin:6px 0 0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.field-wide{grid-column:1/-1}label{display:block;font-size:12px;font-weight:850;color:var(--muted);margin-bottom:6px}.site-row{display:flex;gap:8px;align-items:stretch}.site-row select{min-width:0;flex:1}.site-row .btn{white-space:nowrap}
     input:not([type=file]),textarea,select{width:100%;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);padding:11px 12px;font:inherit;font-size:14px}textarea{min-height:86px;resize:vertical}select{appearance:auto}.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}.btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}.actions .btn{min-width:148px}
     .drop{border:2px dashed #a8ccda;background:#f8fcff;border-radius:16px;padding:26px;text-align:center;transition:border-color .15s,background .15s}.drop.dragover{border-color:var(--accent);background:var(--soft)}.dropTitle{font-size:1.05rem;font-weight:900}.dropSub{color:var(--muted);font-size:13px;margin-top:5px}.files{display:grid;gap:8px;margin-top:16px;text-align:left}.file{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fff}.fileName{font-weight:850;overflow-wrap:anywhere}.fileMeta{font-size:12px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.tag{display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;background:#f1f5f9;color:#475569;font-size:12px;font-weight:850;white-space:nowrap}.tag.ok{background:#ecfdf5;color:#047857}.tag.bad{background:#fff1f2;color:#be123c}.tag.warn{background:#fff7ed;color:#9a3412}
     .progress{height:9px;background:#e6edf3;border-radius:999px;overflow:hidden;margin-top:18px}.bar{height:100%;width:0;background:var(--accent);transition:width .12s}.result{padding:18px;margin-top:16px}.result>.panel{box-shadow:none;margin-top:10px}.result .file{margin-top:8px}.notice{color:#80531a;background:#fff9ec;border:1px solid #f1dfb5;border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.45}.config{margin-top:20px;border-top:1px solid var(--line);padding-top:16px}.config summary{color:var(--accent-2);font-size:13px;font-weight:850;cursor:pointer}.config label{margin-top:12px}.config .hint{margin-top:6px}code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#f1f5f9;border-radius:5px;padding:1px 4px;font-size:12px}
-    @media(max-width:720px){.wrap{padding:12px}.header{flex-direction:column}.status{max-width:none;width:100%}.grid{grid-template-columns:1fr}.field-wide{grid-column:auto}.panel{padding:16px}.actions,.actions .btn{width:100%}.drop{padding:18px}.file{align-items:flex-start;flex-direction:column}.file .row{width:100%}}
+    .site-dialog{width:min(480px,calc(100% - 24px));max-height:calc(100dvh - 32px);overflow:auto;border:1px solid var(--line);border-radius:var(--radius);padding:22px;color:var(--ink);box-shadow:0 24px 70px rgba(16,32,51,.22)}.site-dialog::backdrop{background:rgba(8,20,31,.55)}.site-dialog h2{margin:0 0 6px}.site-dialog form{display:grid;gap:14px}.site-dialog .actions{justify-content:flex-end;margin-top:4px}.site-error{min-height:1.3em;color:var(--bad);font-size:13px;line-height:1.4;margin:0}.site-dialog .btn{min-width:0}
+    @media(max-width:720px){.wrap{padding:12px}.header{flex-direction:column}.status{max-width:none;width:100%}.grid{grid-template-columns:1fr}.field-wide{grid-column:auto}.panel{padding:16px}.actions,.actions .btn{width:100%}.site-row{flex-direction:column}.site-row .btn{width:100%}.drop{padding:18px}.file{align-items:flex-start;flex-direction:column}.file .row{width:100%}.site-dialog{padding:18px}.site-dialog .actions{width:100%}}
   </style>
 </head>
 
@@ -42,7 +43,7 @@
       <div class="grid">
         <div>
           <label for="lugarCodigo">Sede de realización</label>
-          <select id="lugarCodigo" required><option value="">Cargando sedes…</option></select>
+          <div class="site-row"><select id="lugarCodigo" required><option value="">Cargando sedes…</option></select><button class="btn" id="addSiteBtn" type="button">Agregar sede</button></div>
         </div>
         <div>
           <label for="notes">Notas internas <span class="hint">(opcional)</span></label>
@@ -73,6 +74,17 @@
     <section class="result" id="result" aria-live="polite" style="display:none"></section>
   </div>
 
+  <dialog id="siteDialog" class="site-dialog" aria-labelledby="siteDialogTitle">
+    <form id="siteForm">
+      <div><div class="eyebrow">Nueva sede</div><h2 id="siteDialogTitle" class="section-title">Agregar sede</h2><p class="hint">Aparecerá en el selector después de guardarla.</p></div>
+      <div><label for="siteName">Nombre de la sede</label><input id="siteName" name="nombre" required maxlength="120" minlength="3" autocomplete="off" placeholder="Nombre de la institución" /></div>
+      <div><label for="siteCode">Código</label><input id="siteCode" name="codigo" required maxlength="40" minlength="2" pattern="[A-Z][A-Z0-9_]*" autocomplete="off" placeholder="CODIGO_SEDE" /><p class="hint">Se genera desde el nombre; podés editarlo.</p></div>
+      <div><label for="siteAddress">Dirección <span class="hint">(opcional)</span></label><input id="siteAddress" name="direccion" maxlength="200" autocomplete="street-address" /></div>
+      <p id="siteError" class="site-error" role="alert" aria-live="assertive"></p>
+      <div class="actions"><button class="btn" id="cancelSiteBtn" type="button">Cancelar</button><button class="btn primary" id="saveSiteBtn" type="submit">Guardar sede</button></div>
+    </form>
+  </dialog>
+
 <script src="/endodb-api.js"></script>
 <script>
 (() => {
@@ -98,25 +110,61 @@
   const elResult = document.getElementById("result");
   const elStatusLine = document.getElementById("statusLine");
   const statusDot = document.getElementById("statusDot");
+  const siteDialog = document.getElementById("siteDialog");
+  const siteForm = document.getElementById("siteForm");
+  const siteName = document.getElementById("siteName");
+  const siteCode = document.getElementById("siteCode");
+  const siteAddress = document.getElementById("siteAddress");
+  const siteError = document.getElementById("siteError");
+  const saveSiteBtn = document.getElementById("saveSiteBtn");
   let locationMessage = "";
 
   elEndpoint.value = DEFAULT_ENDPOINT;
 
-  async function loadLocations(){
+  async function loadLocations(selectId){
     try {
       const { data: locations } = await window.EndoDBApi.all('/api/locations');
       elLugarCodigo.replaceChildren(new Option(locations.length ? 'Seleccionar sede…' : 'No hay sedes activas disponibles', ''), ...locations.map(l => { const option = new Option(l.nombre || l.codigo || l.id, l.id); option.dataset.code = l.codigo || ''; return option; }));
+      if (selectId && locations.some(site => site.id === selectId)) elLugarCodigo.value = selectId;
       locationMessage = locations.length ? "" : 'No hay sedes disponibles para cargar informes.';
       refreshStatusLine();
       refreshButtons();
+      return !selectId || elLugarCodigo.value === selectId;
     } catch (error) {
       elLugarCodigo.replaceChildren(new Option('No se pudieron cargar las sedes', ''));
       locationMessage = error.message;
       refreshStatusLine();
       refreshButtons();
+      return false;
     }
   }
   loadLocations();
+
+  const makeSiteCode = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
+  let codeEdited = false;
+  document.getElementById('addSiteBtn').onclick = () => { siteForm.reset(); siteError.textContent = ''; codeEdited = false; siteDialog.showModal(); siteName.focus(); };
+  document.getElementById('cancelSiteBtn').onclick = () => siteDialog.close();
+  siteCode.addEventListener('input', () => { codeEdited = true; siteCode.value = makeSiteCode(siteCode.value); });
+  siteName.addEventListener('input', () => { if (!codeEdited) siteCode.value = makeSiteCode(siteName.value); });
+  siteForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!siteForm.reportValidity()) return;
+    saveSiteBtn.disabled = true;
+    siteError.textContent = '';
+    try {
+      const result = await window.EndoDBApi.request('/api/locations', {
+        method: 'POST', body: { nombre: siteName.value, codigo: siteCode.value, direccion: siteAddress.value },
+      });
+      const selected = await loadLocations(result.data.id);
+      if (!selected || !result.visible) {
+        siteError.textContent = result.warning || 'La sede se guardó, pero aún no aparece en el selector. Revisá los permisos de lectura; no la vuelvas a crear.';
+        return;
+      }
+      siteDialog.close();
+      elLugarCodigo.focus();
+    } catch (error) { siteError.textContent = error.message; }
+    finally { saveSiteBtn.disabled = false; }
+  });
 
   // queue items: { id, file, status: "pending|uploading|processing|ok|error", response, error }
   /** @type {{id:string,file:File,status:string,response?:any,error?:any,exam_id?:string}[]} */
