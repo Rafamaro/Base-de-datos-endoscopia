@@ -1,12 +1,18 @@
 import { DirectusConfigurationError, listDirectusItems } from "../../../../lib/directus/client.js";
+import { LOCATION_FIELDS } from "../../../../lib/endodb/locations.js";
+import { STUDY_FIELDS } from "../../../../lib/endodb/studies.js";
 import { configurationError, jsonResponse, upstreamError } from "../../../../lib/http/jsonResponse.js";
 
 export async function GET() {
-  try {
-    const data = await listDirectusItems("bd_lugares", { fields: ["id", "codigo", "nombre"], limit: 1 });
-    return jsonResponse({ ok: true, service: "endodb", dataSource: "directus", directusConfigured: true, connection: "reachable", collection: "bd_lugares", sampleReceived: Array.isArray(data) && data.length > 0, timestamp: new Date().toISOString() });
-  } catch (error) {
-    if (error instanceof DirectusConfigurationError || error?.code === "DIRECTUS_CONFIGURATION_ERROR") return configurationError();
-    return upstreamError(error);
+  for (const [collection, fields] of [["bd_lugares", LOCATION_FIELDS], ["bd_estudios", STUDY_FIELDS]]) {
+    try {
+      await listDirectusItems(collection, { fields, limit: 1 });
+    } catch (error) {
+      if (error instanceof DirectusConfigurationError || error?.code === "DIRECTUS_CONFIGURATION_ERROR") return configurationError();
+      const response = upstreamError(error);
+      const body = await response.json();
+      return jsonResponse({ ...body, collection }, response.status);
+    }
   }
+  return jsonResponse({ ok: true, service: "endodb", runtime: "nextjs", dataSource: "directus", connection: "reachable", checkedCollections: ["bd_lugares", "bd_estudios"], timestamp: new Date().toISOString() });
 }

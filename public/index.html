@@ -425,6 +425,7 @@
     </div>
   </div>
 
+<script src="/endodb-api.js"></script>
 <script>
 (() => {
   const DEFAULT_ENDPOINT = "https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v3";
@@ -453,10 +454,8 @@
 
   async function loadLocations(){
     try {
-      const response = await fetch('/api/locations', { headers: { Accept: 'application/json' } });
-      const payload = await response.json();
-      if (!response.ok || !payload.ok || !Array.isArray(payload.data)) throw new Error(payload.message || 'No se pudieron cargar los sitios.');
-      elLugarCodigo.replaceChildren(new Option('Seleccionar sitio…', ''), ...payload.data.map(l => new Option(l.nombre || l.nombre_corto || l.codigo, l.codigo)));
+      const locations = await window.endodbGet('/api/locations');
+      elLugarCodigo.replaceChildren(new Option('Seleccionar sitio…', ''), ...locations.map(l => new Option(l.nombre || l.nombre_corto || l.codigo, l.codigo)));
       refreshButtons();
     } catch (error) {
       elLugarCodigo.replaceChildren(new Option('No se pudieron cargar los sitios; reintentá más tarde', ''));

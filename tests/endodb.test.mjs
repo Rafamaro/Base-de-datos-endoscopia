@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { assertAllowedEndodbCollection, ENDODB_READ_COLLECTIONS } from "../lib/directus/endodbCollections.js";
 import { normalizeStudy, parseStudiesQuery, STUDY_FIELDS } from "../lib/endodb/studies.js";
+import { classifyDirectusFailure } from "../lib/directus/errors.js";
 
 function parse(query, currentYear = 2026) {
   return parseStudiesQuery(new URLSearchParams(query), currentYear);
@@ -95,4 +96,11 @@ test("public study projection omits identity and source filename", () => {
   assert.equal(JSON.stringify(normalized).includes("12345678"), false);
   assert.equal(Object.hasOwn(normalized, "paciente"), false);
   assert.equal(Object.hasOwn(normalized, "raw_ai_json"), false);
+});
+
+test("Directus failures distinguish access, schema, collection and upstream", () => {
+  assert.equal(classifyDirectusFailure(403, "FORBIDDEN"), "DIRECTUS_ACCESS_DENIED");
+  assert.equal(classifyDirectusFailure(400, "INVALID_QUERY"), "DIRECTUS_SCHEMA_MISMATCH");
+  assert.equal(classifyDirectusFailure(404, "COLLECTION_NOT_FOUND"), "DIRECTUS_COLLECTION_NOT_FOUND");
+  assert.equal(classifyDirectusFailure(502), "DIRECTUS_UPSTREAM_ERROR");
 });
