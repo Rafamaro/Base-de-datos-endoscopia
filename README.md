@@ -1,45 +1,55 @@
-# EndoDB · Directus
+# EndoDB · despliegue Next.js + Directus
 
-Este repositorio sirve `index.html` (carga), `viewer.html` (consulta) y `stats.html` (indicadores) desde Next.js. El navegador consulta `/api/locations` y `/api/studies`; el token de lectura de Directus permanece en el servidor. Los archivos se envían al webhook n8n, que separa identidad y datos clínicos antes de llamar a DeepSeek.
+**Servidor único:** el `Dockerfile` compila Next.js y ejecuta `node server.js` en el puerto 3000. Next.js sirve `public/index.html`, `public/viewer.html` y `public/stats.html`, además de la API. No seleccionar una imagen Nginx, publicación estática ni GitHub Pages. Se eliminaron `nginx.conf.template`, `CNAME` y las copias HTML de la raíz para impedir que una configuración anterior parezca funcional.
 
-## Requisitos y ejecución
+El navegador consulta **únicamente** `/api/locations` y `/api/studies` para leer datos. No hay proxy arbitrario a Directus. Las rutas `/api/directus/*`, `/api/calidad/*`, `/api/registro/*` y `/nc/*` responden 410 cuando llegan a esta aplicación. La ingesta continúa en el webhook n8n actual; este cambio no modifica el flujo ni las colecciones.
 
-Node.js 20+, las colecciones `bd_lugares`, `bd_estudios`, `bd_ingestas` y `bd_pacientes` del esquema actual, y un flujo n8n configurado. Las versiones del esquema de Directus deben incluir los campos de VCC incompleta usados por `/api/studies`.
+## Configuración exacta en Coolify
+
+1. Crear o editar la aplicación que atiende `endodb.drperez86.com`, origen GitHub `Rafamaro/Base-de-datos-endoscopia`, rama que se vaya a desplegar después del merge, directorio raíz `/`, **build pack Dockerfile**, ruta `Dockerfile`. No seleccionar Nixpacks, servidor estático ni Docker Compose antiguo.
+2. Puerto interno del contenedor: `3000`. Asociar **solo esta aplicación** al dominio `https://endodb.drperez86.com`. La comprobación de salud es `GET /api/health` en el puerto 3000; no verifica Directus, porque su indisponibilidad no debe reiniciar Next.js.
+3. Variables **de ejecución**, nunca `NEXT_PUBLIC_*`: `DIRECTUS_URL=https://directus.drperez86.com`, `DIRECTUS_TOKEN=<token de solo lectura>`, `ENDODB_RELEASE=<SHA o etiqueta del despliegue>`. Configurar el token como secreto en Coolify. No incluirlo en repositorio, parámetros de URL, HTML ni logs. `ENDODB_PUBLIC_URL` es opcional y actualmente no afecta el enrutamiento.
+4. El token debe leer `bd_lugares` y `bd_estudios` con los campos de `lib/endodb/locations.js` y `lib/endodb/studies.js`, incluida la relación `lugar_estudio`. No conceder `bd_pacientes`, `bd_ingestas`, `raw_ai_json`, `exam_id`, escrituras ni administración. Si los campos de VCC incompleta no están instalados, `/api/diagnostics/directus` mostrará el fallo y habrá que evaluar el esquema **antes** de modificar Directus.
+5. Desplegar el commit de esta PR y confirmar en Coolify el SHA efectivo, puerto, logs de arranque y salud interna. Una PR abierta no despliega la aplicación por sí sola.
+
+## Configuración exacta en Cloudflare
+
+1. En **DNS** y **Tunnels → Public Hostnames**, comprobar cuál ruta atiende `endodb.drperez86.com`. Debe apuntar al proxy de Coolify para esa única aplicación o al servicio HTTP de Next.js en el puerto 3000; no apuntar al contenedor Nginx/Nextcloud previo. Evitar dos rutas que compitan por el mismo hostname.
+2. En **Workers & Pages → Workers Routes / Custom Domains**, revisar coincidencias `endodb.drperez86.com/*` y `*.drperez86.com/*`. Desasociar o adaptar cualquier Worker que devuelva la API antigua, incluidas rutas `/api/*` y `/nc/*`. No basta con cambiar DNS si un Worker intercepta las solicitudes. Revisar Redirects, Transform, Cache y Origin Rules que alteren esas rutas; desactivar caché para `/api/*` y los HTML.
+3. Mantener **Cloudflare Access** delante del hostname completo y sus rutas API. Una sesión no autenticada puede recibir 302 hacia Access; eso no prueba el estado del origen. Si se usa un service token de Access para la verificación, permitirlo explícitamente en la política de la aplicación. No abrir las rutas clínicas al público para hacer una prueba.
+4. Comparar `/api/health` desde la red interna contra el servicio Coolify en el puerto 3000 y desde el dominio con la misma sesión/política de Access. Si el origen muestra `X-EndoDB-Runtime: nextjs-directus` y el dominio no, revisar Worker, reglas, túnel y caché. Si ambos muestran la respuesta antigua, Coolify sigue ejecutando el servicio anterior.
+
+## Verificación reproducible
 
 ```bash
 npm ci
-cp .env.example .env.local
-npm run dev
-```
-
-En `.env.local`, reemplazá `DIRECTUS_TOKEN` por un token de **solo lectura** de `bd_lugares` (`id,codigo,nombre,nombre_corto,tipo,activo,orden`) y `bd_estudios` (los campos clínicos de `lib/endodb/studies.js`, con expansión de `lugar_estudio`). No concedas lectura de `bd_pacientes`, `bd_ingestas`, `raw_ai_json`, `exam_id`, `observaciones` ni escrituras. `DIRECTUS_URL` apunta a `https://directus.drperez86.com`; nunca uses `NEXT_PUBLIC_` para secretos.
-
-Abrí `http://localhost:3000/index.html`, `/viewer.html` o `/stats.html`. El contenedor `Dockerfile` ejecuta Next.js con los mismos valores de entorno. El sitio **requiere un servidor Next.js**: una publicación estática en GitHub Pages no puede responder a `/api/*`. `nginx.conf.template` del despliegue antiguo no forma parte del contenedor.
-
-## Rutas de lectura
-
-- `GET /api/locations`: sedes activas ordenadas por `orden,nombre`.
-- `GET /api/studies?limit=500&page=1`: página de estudios; acepta además `procedure_type`, `location_id`, `year` y `requires_review`. El navegador solicita las páginas sucesivas y calcula los indicadores con el conjunto completo.
-- `GET /api/diagnostics/directus`: verifica la conexión sin devolver filas.
-- `GET /api/health`: salud local de Next.js.
-
-La API pública devuelve solo el conjunto clínico definido en `STUDY_FIELDS`. Omite `paciente`, nombres de archivo, `exam_id`, `legacy_row_id`, texto libre, JSON crudo de IA y relaciones privadas. No ofrece escritura ni proxy genérico. Sigue exponiendo variables clínicas y fechas; antes de usar datos de pacientes en una instalación accesible desde Internet, configurá autenticación y permisos de lectura por usuario o en el proxy de acceso. El esquema actual **no tiene todavía aislamiento multiusuario por organización**.
-
-## Ingesta n8n
-
-`workflows/endodb_directus_v3.json` es una copia de trabajo del flujo V3 adjunto, preparada para importar en n8n. Conserva el webhook `endodb/process-exam-directus-v3`, la separación local de identidad y la llamada a DeepSeek. La versión incluye:
-
-- `lugar_codigo` en entradas binarias y de texto; verifica una sede activa por código antes de escribir.
-- `bd_ingestas.lugar_estudio` y `bd_estudios.lugar_estudio`, con `lugar_fuente=frontend`.
-- Detención antes de DeepSeek si la comprobación local encuentra identificadores residuales.
-
-Tras importar, seleccioná la credencial DeepSeek del nodo HTTP Request y configurá el token Directus en el nodo CONFIG (o trasladalo a una credencial n8n antes de activar). El JSON del repositorio solo contiene el marcador de posición; no guardes tokens reales en Git. La detección automática de PII no garantiza anonimización perfecta: revisá el flujo con documentos de prueba y mantené la salida privada. El OCR de imágenes/PDF escaneados debe ser local o propio antes de pasar texto a DeepSeek. Importar el archivo **no actualiza ni activa** el flujo actualmente en producción.
-
-## Verificación
-
-```bash
 npm test
 npm run build
+npm run start
 ```
 
-Para probar la integración real, configurá Directus y verificá `/api/diagnostics/directus`, `/api/locations` y varias páginas de `/api/studies`. Luego ejecutá un informe sintético VEDA+VCC por el webhook y confirmá dos registros con la misma ingesta y sede en Directus. No uses datos de pacientes para pruebas.
+En otra terminal, con un Directus real configurado:
+
+```bash
+ENDODB_BASE_URL=http://localhost:3000 npm run check:deployment
+ENDODB_BASE_URL=https://endodb.drperez86.com npm run check:deployment
+```
+
+El script consulta `/api/health`, `/api/diagnostics/directus`, `/api/locations`, `/api/studies?limit=1&page=1` y la ruta antigua `/api/calidad/rows`. No usa registros simulados. Si Cloudflare Access requiere un service token, definir `CF_ACCESS_CLIENT_ID` y `CF_ACCESS_CLIENT_SECRET` como variables locales; el script las envía solo en headers y no imprime ni guarda su valor. También se puede verificar con `curl -i` desde una sesión autenticada.
+
+Resultado esperado: salud 200 con `runtime: nextjs`, `dataSource: directus`, `release` y header `X-EndoDB-Runtime: nextjs-directus`; diagnóstico 200 con las dos colecciones verificadas; sedes y estudios 200 con `data` arreglo; ruta antigua 410 con `LEGACY_ROUTE_REMOVED`. Abrir luego `/`, `/index.html`, `/viewer.html` y `/stats.html`. El HTML raíz redirige a `/index.html`.
+
+| Señal | Causa probable / comprobación siguiente |
+| --- | --- |
+| Texto `Use /api/(calidad\|registro)/(columns\|rows)` o `/nc/tables` | Backend antiguo; comparar origen Coolify y dominio. |
+| Origen Next.js correcto, dominio distinto | Intercepción de Worker/túnel/regla/caché; sin comparar ambos lados no se puede atribuir inequívocamente a un Worker. |
+| 302 a `cloudflareaccess.com` | Falta sesión o política de service token en Cloudflare Access. |
+| `NEXT_ROUTE_NOT_FOUND` y marca Next.js | Ruta Next.js inexistente. |
+| `DIRECTUS_CONFIGURATION_ERROR` | Faltan variables de ejecución en Coolify. |
+| `DIRECTUS_CONNECTION_ERROR` | DNS, TLS o red entre contenedor y Directus. |
+| `DIRECTUS_ACCESS_DENIED` | Token expirado o permisos insuficientes; Directus puede ocultar colecciones sin permiso. |
+| `DIRECTUS_COLLECTION_NOT_FOUND` | Colección/ruta ausente; con políticas que ocultan recursos, comprobar también permisos. |
+| `DIRECTUS_SCHEMA_MISMATCH` | Campo o relación incompatible; revisar la colección indicada en el diagnóstico. |
+| 404 sin marca `X-EndoDB-Runtime` | El servidor esperado no atendió la petición; revisar Cloudflare y Coolify. |
+
+Las respuestas de error nunca incluyen el cuerpo bruto de Directus, el token ni filas de `bd_pacientes`. El viewer y las estadísticas solo reciben las variables clínicas de `STUDY_FIELDS`; mantienen VEDA/VCC y paginación. La protección de acceso a datos clínicos depende además de Cloudflare Access y de bloquear el acceso directo al origen.

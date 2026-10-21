@@ -17,10 +17,10 @@
   <div class="stats" id="stats"></div>
   <div class="panel"><div class="panel-head"><div><h2 class="title" style="font-size:18px">Resumen por mes</h2><div class="hint" id="meta"></div></div></div><div class="table-wrap"><table><thead><tr><th>mes</th><th>VEDA</th><th>VCC</th><th>total</th><th>VCC ciego %</th><th>VCC Boston adecuado %</th><th>VCC pólipos %</th></tr></thead><tbody id="tbody"></tbody></table></div></div>
   <div class="panel" style="margin-top:14px"><div class="panel-head"><div><h2 class="title" style="font-size:18px">Estudios por sitio</h2><div class="hint">Incluye estudios antiguos sin lugar como “No informado”.</div></div></div><div class="table-wrap"><table><thead><tr><th>Sitio</th><th>VEDA</th><th>VCC</th><th>total</th></tr></thead><tbody id="tbodyLugar"></tbody></table></div></div>
-</div><script>
+</div><script src="/endodb-api.js"></script><script>
 'use strict';
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-async function get(url){const r=await fetch(url,{headers:{Accept:'application/json'}});const j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)throw new Error(j.message||`HTTP ${r.status}`);if(!Array.isArray(j.data))throw new Error('Respuesta sin estudios');return j.data;}
+const get=window.endodbGet;
 async function allStudies(){const rows=[];for(let page=1;page<=1000;page++){const batch=await get(`/api/studies?limit=500&page=${page}`);rows.push(...batch);if(batch.length<500)return rows;}throw new Error('El conjunto excede el límite de carga; usar filtros del servidor.');}
 function place(r){return r.lugar_estudio||{};}
 function code(r){return place(r).codigo||'NO_INFORMADO';}
