@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "start:standalone": "node .next/standalone/server.js",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --conditions=react-server --test tests/*.test.mjs",
     "check:deployment": "node scripts/check-deployment.mjs"
   },
   "dependencies": {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { assertAllowedEndodbCollection, ENDODB_READ_COLLECTIONS } from "../lib/directus/endodbCollections.js";
-import { normalizeStudy, parseStudiesQuery, STUDY_FIELDS } from "../lib/endodb/studies.js";
+import { buildStudiesFilter, normalizeStudy, parseStudiesQuery, selectStudyFields, STUDY_FIELDS } from "../lib/endodb/studies.js";
 import { classifyDirectusFailure } from "../lib/directus/errors.js";
 
 function parse(query, currentYear = 2026) {
@@ -10,7 +10,7 @@ function parse(query, currentYear = 2026) {
 }
 
 test("allowlist accepts only EndoDB read collections", () => {
-  assert.deepEqual(ENDODB_READ_COLLECTIONS, ["bd_estudios", "bd_lugares"]);
+  assert.deepEqual(ENDODB_READ_COLLECTIONS, ["bd_estudios", "bd_sedes"]);
   assert.equal(assertAllowedEndodbCollection("bd_estudios"), "bd_estudios");
   assert.throws(() => assertAllowedEndodbCollection("bd_pacientes"), /no está permitida/);
   assert.throws(() => assertAllowedEndodbCollection("directus_users"), /no está permitida/);
@@ -37,8 +37,9 @@ test("validates procedure_type", () => {
 });
 
 test("validates location_id", () => {
-  assert.equal(parse("location_id=10").location_id, 10);
+  assert.equal(parse("location_id=7a898b58-72db-49a5-a8a9-130456b78f01").location_id, "7a898b58-72db-49a5-a8a9-130456b78f01");
   assert.throws(() => parse("location_id=0"), /location_id/);
+  assert.equal(parse("location_id=__missing").location_id, "__missing");
   assert.throws(() => parse("location_id=abc"), /location_id/);
 });
 
@@ -56,7 +57,7 @@ test("validates requires_review", () => {
 });
 
 test("rejects unknown query parameters", () => {
-  assert.throws(() => parse("filter={}"), /Parámetro no permitido/);
+  assert.throws(() => parse("filter={}"), /parámetro no permitido/);
 });
 
 test("public study projection omits identity and source filename", () => {
@@ -78,7 +79,7 @@ test("public study projection omits identity and source filename", () => {
     requiere_revision: null,
     observaciones: "",
     lugar_fuente: "frontend",
-    lugar_estudio: { id: 5, codigo: "SANTA_ISABEL", nombre: "Clínica Santa Isabel", nombre_corto: "Santa Isabel" },
+    sede: { id: "7a898b58-72db-49a5-a8a9-130456b78f01", codigo: "SANTA_ISABEL", nombre: "Clínica Santa Isabel" },
     ingesta: { id: 7, source_file_name: "2026-01-01_VCC_12345678_NOMBRE.pdf", source_file_kind: "pdf", status: "procesado" },
     created_at: "2026-07-01T00:00:00.000Z",
     updated_at: "2026-07-02T00:00:00.000Z",
@@ -86,7 +87,7 @@ test("public study projection omits identity and source filename", () => {
     raw_ai_json: { secret: true },
   });
   assert.equal(normalized.requiere_revision, null);
-  assert.equal(normalized.lugar_estudio.codigo, "SANTA_ISABEL");
+  assert.equal(normalized.sede.codigo, "SANTA_ISABEL");
   assert.equal(normalized.boston.total, 9);
   assert.equal(normalized.ingesta, undefined);
   for (const key of ["paciente", "raw_ai_json", "ingesta", "exam_id", "legacy_row_id", "observaciones", "preparacion_texto"]) {
@@ -103,4 +104,16 @@ test("Directus failures distinguish access, schema, collection and upstream", ()
   assert.equal(classifyDirectusFailure(400, "INVALID_QUERY"), "DIRECTUS_SCHEMA_MISMATCH");
   assert.equal(classifyDirectusFailure(404, "COLLECTION_NOT_FOUND"), "DIRECTUS_COLLECTION_NOT_FOUND");
   assert.equal(classifyDirectusFailure(502), "DIRECTUS_UPSTREAM_ERROR");
+});
+
+
+test("selects only verified optional fields, uses UUID relation and preserves two procedures", () => {
+  const schema = { fields: new Set(["id", "procedure_type", "fecha_estudio", "sede", "polipos"]), locations: new Set(["id", "nombre"]) };
+  assert.deepEqual(selectStudyFields(schema), ["id", "procedure_type", "fecha_estudio", "polipos", "sede.id", "sede.nombre"]);
+  assert.deepEqual(buildStudiesFilter(parse("procedure_type=VCC&location_id=7a898b58-72db-49a5-a8a9-130456b78f01")), {
+    procedure_type: { _eq: "VCC" }, sede: { _eq: "7a898b58-72db-49a5-a8a9-130456b78f01" },
+  });
+  const procedures = [normalizeStudy({ id: 10, procedure_type: "VEDA" }), normalizeStudy({ id: 11, procedure_type: "VCC" })];
+  assert.deepEqual(procedures.map(row => row.procedure_type), ["VEDA", "VCC"]);
+  assert.notEqual(procedures[0].id, procedures[1].id);
 });
