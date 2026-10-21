@@ -359,10 +359,6 @@
           <label for="lugarCodigo">Sitio de realización</label>
           <select id="lugarCodigo" required>
             <option value="">Seleccionar sitio…</option>
-            <option value="SANTA_ISABEL">Clínica Santa Isabel</option>
-            <option value="PROVIDENCIA">Sanatorio de la Providencia</option>
-            <option value="HOSPITAL_CLINICAS">Hospital de Clínicas</option>
-            <option value="OTRO">Otro</option>
           </select>
           <div class="hint">Obligatorio para cargas nuevas. Se envía a n8n como metadato administrativo (<code>lugar_codigo</code>), no como texto clínico para IA.</div>
         </div>
@@ -432,7 +428,7 @@
 <script>
 (() => {
   const DEFAULT_ENDPOINT = "https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v3";
-  // Repositorio estático: este frontend llama directo a n8n. Para evitar CORS, n8n debe responder OPTIONS y POST con los headers documentados en README.md.
+  // La ingesta sigue en n8n; los sitios y las consultas se obtienen de Directus por la API local.
 
   // Si Cloudflare corta la respuesta por tardanza, acá lo convertimos en "Procesando" (no error).
   // Se activa SOLO cuando el upload ya terminó y la respuesta no llega a tiempo.
@@ -454,6 +450,21 @@
   const elStatusLine = document.getElementById("statusLine");
 
   elEndpoint.value = DEFAULT_ENDPOINT;
+
+  async function loadLocations(){
+    try {
+      const response = await fetch('/api/locations', { headers: { Accept: 'application/json' } });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok || !Array.isArray(payload.data)) throw new Error(payload.message || 'No se pudieron cargar los sitios.');
+      elLugarCodigo.replaceChildren(new Option('Seleccionar sitio…', ''), ...payload.data.map(l => new Option(l.nombre || l.nombre_corto || l.codigo, l.codigo)));
+      refreshButtons();
+    } catch (error) {
+      elLugarCodigo.replaceChildren(new Option('No se pudieron cargar los sitios; reintentá más tarde', ''));
+      elStatusLine.textContent = error.message;
+      refreshButtons();
+    }
+  }
+  loadLocations();
 
   // queue items: { id, file, status: "pending|uploading|processing|ok|error", response, error }
   /** @type {{id:string,file:File,status:string,response?:any,error?:any,exam_id?:string}[]} */

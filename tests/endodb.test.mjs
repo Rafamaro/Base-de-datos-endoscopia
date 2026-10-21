@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { assertAllowedEndodbCollection, ENDODB_READ_COLLECTIONS } from "../lib/directus/endodbCollections.js";
-import { normalizeStudy, parseStudiesQuery } from "../lib/endodb/studies.js";
+import { normalizeStudy, parseStudiesQuery, STUDY_FIELDS } from "../lib/endodb/studies.js";
 
 function parse(query, currentYear = 2026) {
   return parseStudiesQuery(new URLSearchParams(query), currentYear);
 }
 
 test("allowlist accepts only EndoDB read collections", () => {
-  assert.deepEqual(ENDODB_READ_COLLECTIONS, ["bd_estudios", "bd_ingestas", "bd_lugares"]);
+  assert.deepEqual(ENDODB_READ_COLLECTIONS, ["bd_estudios", "bd_lugares"]);
   assert.equal(assertAllowedEndodbCollection("bd_estudios"), "bd_estudios");
   assert.throws(() => assertAllowedEndodbCollection("bd_pacientes"), /no está permitida/);
   assert.throws(() => assertAllowedEndodbCollection("directus_users"), /no está permitida/);
@@ -58,7 +58,7 @@ test("rejects unknown query parameters", () => {
   assert.throws(() => parse("filter={}"), /Parámetro no permitido/);
 });
 
-test("normalizes study without patient or raw AI JSON fields", () => {
+test("public study projection omits identity and source filename", () => {
   const normalized = normalizeStudy({
     id: 1,
     numero_en_archivo: 2,
@@ -78,15 +78,21 @@ test("normalizes study without patient or raw AI JSON fields", () => {
     observaciones: "",
     lugar_fuente: "frontend",
     lugar_estudio: { id: 5, codigo: "SANTA_ISABEL", nombre: "Clínica Santa Isabel", nombre_corto: "Santa Isabel" },
-    ingesta: { id: 7, source_file_name: "archivo.pdf", source_file_kind: "pdf", status: "procesado" },
+    ingesta: { id: 7, source_file_name: "2026-01-01_VCC_12345678_NOMBRE.pdf", source_file_kind: "pdf", status: "procesado" },
     created_at: "2026-07-01T00:00:00.000Z",
     updated_at: "2026-07-02T00:00:00.000Z",
     paciente: { nombre: "NO" },
     raw_ai_json: { secret: true },
   });
   assert.equal(normalized.requiere_revision, null);
-  assert.equal(normalized.lugar.codigo, "SANTA_ISABEL");
-  assert.equal(normalized.ingesta.source_file_name, "archivo.pdf");
+  assert.equal(normalized.lugar_estudio.codigo, "SANTA_ISABEL");
+  assert.equal(normalized.boston.total, 9);
+  assert.equal(normalized.ingesta, undefined);
+  for (const key of ["paciente", "raw_ai_json", "ingesta", "exam_id", "legacy_row_id", "observaciones", "preparacion_texto"]) {
+    assert.equal(STUDY_FIELDS.some(field => field === key || field.startsWith(`${key}.`)), false);
+    assert.equal(Object.hasOwn(normalized, key), false);
+  }
+  assert.equal(JSON.stringify(normalized).includes("12345678"), false);
   assert.equal(Object.hasOwn(normalized, "paciente"), false);
   assert.equal(Object.hasOwn(normalized, "raw_ai_json"), false);
 });
