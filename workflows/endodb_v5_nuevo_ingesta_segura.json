@@ -1,0 +1,1072 @@
+{
+  "name": "EndoDB v5 NUEVO — Ingesta PDF JSON Imagen OCR Local + DeepSeek + BD Multisede [INACTIVO POR DEFECTO]",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "endodb/process-exam-directus-v5-nuevo",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        380
+      ],
+      "id": "801c12f0-8cd5-5e13-b63d-2937ea6180ed",
+      "name": "Webhook v5 NUEVO"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const h=$json.headers||{},secret=String($vars.ENDODB_WEBHOOK_SHARED_SECRET||'');\nconst supplied=String(h['x-endodb-secret']||h['X-EndoDB-Secret']||'');\n// El webhook no acepta acceso directo del navegador. La clave solo vive en Next.js y n8n.\nconst ok=Boolean(secret&&secret.length>=24&&supplied.length===secret.length&&supplied===secret);\nconst hasConfig=Boolean($vars.ENDODB_DIRECTUS_TOKEN&&$vars.ENDODB_ORGANIZATION_ID);\nreturn {json:{authorized:ok&&hasConfig,error:!ok?'UNAUTHORIZED':!hasConfig?'N8N_CONFIG_MISSING':null,...(ok?{payload:($json.body||{}),query:($json.query||{})}:{})},...(ok?{binary:$binary}:{})};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        380
+      ],
+      "id": "a45418ac-856f-5f93-a875-75ca64a8c952",
+      "name": "01 Seguridad y configuración"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8d2f168c-2543-4d2f-a089-1ba08907175d",
+              "leftValue": "={{ $json.authorized }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        480,
+        380
+      ],
+      "id": "a485d963-f161-51b8-a656-76dac6dd9106",
+      "name": "02 Autorizado"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        710,
+        650
+      ],
+      "id": "9fc70440-c134-506c-8488-a3e952154e8c",
+      "name": "Respuesta rechazada"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const body=$json.payload||{},query=$json.query||{},bin=$binary||{};\nconst keys=Object.keys(bin);const k=keys.includes('file')?'file':keys[0];const b=k?bin[k]:null;\nconst filename=String(b?.fileName||body.client_filename||body.filename||'documento.txt').slice(0,180);\nconst ext=(filename.toLowerCase().match(/\\.([a-z0-9]{1,8})$/)||[])[1]||'';\nconst mime=String(b?.mimeType||body.mime_type||'').toLowerCase();\nlet kind=(ext==='pdf'||mime==='application/pdf')?'pdf':(['png','jpg','jpeg','webp','tiff','tif','heic','heif','bmp'].includes(ext)||mime.startsWith('image/'))?'image':(['json'].includes(ext)||mime.includes('json'))?'json':(['txt','text','md','csv'].includes(ext)||mime.startsWith('text/'))?'text':(!b&&(body.document_text||body.ocr_text))?'text':'unsupported';\nconst sede=String(body.sede_id||body.sede||'');const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;\nconst trace=String(body.request_id||'').slice(0,80);\nif(!uuid.test(sede)) return {json:{ready:false,error:'SEDE_INVALIDA',trace}};\nif(kind==='unsupported') return {json:{ready:false,error:'FORMATO_NO_ADMITIDO',trace}};\nif(b){const mb=String(b.fileSize||'');if(/GB/i.test(mb)||(/MB/i.test(mb)&&parseFloat(mb)>22))return {json:{ready:false,error:'ARCHIVO_EXCESIVO',trace}};}\nreturn {json:{ready:true,kind,filename,mime,ext,sede_id:sede,exam_id_request:String(body.exam_id||'').slice(0,120),trace,source_size:Number(body.file_size||0)||null,body_text:String(body.document_text||body.ocr_text||'')},...(b?{binary:{file:b}}:{})};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        710,
+        250
+      ],
+      "id": "5d6be382-64ea-5e51-9ab2-4e34ac72a94b",
+      "name": "03 Identificar archivo"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "38fee014-bce4-4793-b700-58a032a552eb",
+              "leftValue": "={{ $json.ready }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        930,
+        250
+      ],
+      "id": "8f2a8e32-c38f-5ad6-87c0-623464e0fc72",
+      "name": "04 Entrada admisible"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 422
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1150,
+        30
+      ],
+      "id": "38d35df4-880e-50e6-a272-0324ffbdcaca",
+      "name": "Respuesta entrada inválida"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0e5f709a-a250-4a93-9222-13534f568cce",
+              "leftValue": "={{ $json.kind === \"pdf\" }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1150,
+        300
+      ],
+      "id": "7de52487-80b6-55fd-91a4-e5ce3e8b28d4",
+      "name": "05 Es PDF"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1370,
+        170
+      ],
+      "id": "7c830a02-4885-5747-b688-c46f8fda8fd9",
+      "name": "06 Extraer PDF texto nativo",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const info=$('03 Identificar archivo').first().json;const x=$json||{};\nfunction collect(v){if(typeof v==='string')return v;if(Array.isArray(v))return v.map(collect).join('\\n');if(v&&typeof v==='object')return ['text','data','content','pageContent'].map(k=>v[k]?collect(v[k]):'').filter(Boolean).join('\\n');return ''}\nconst txt=collect(x).trim();\nreturn {json:{...info,document_text:txt,extraction_method:'pdf_text_native',text_ok:txt.replace(/\\s+/g,'').length>=70&&!x.error}};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1590,
+        170
+      ],
+      "id": "037a655c-913b-5c35-82e3-25b4735eccab",
+      "name": "07 Evaluar PDF nativo"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "422f3805-e9fa-43e9-86b6-e42a33b629df",
+              "leftValue": "={{ $json.text_ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        170
+      ],
+      "id": "d21b6971-1b70-5d82-88cc-ddc0cb305ddb",
+      "name": "08 PDF tiene texto suficiente"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const info=$('03 Identificar archivo').first();const key=String($execution.id||Date.now()).replace(/[^0-9]/g,'')+'_'+Math.random().toString(36).slice(2,12);\nconst inFile='/data/ocr/entrada/endodbv5_'+key+'.pdf',outFile='/data/ocr/salida/endodbv5_'+key+'_ocr.pdf';\nconst command=`set -e; /usr/local/bin/ocrpdf '${inFile}' '${outFile}'; test -s '${outFile}'; echo OCR_OK`;\nreturn {json:{...info.json,ocr_input:inFile,ocr_output:outFile,ocr_command:command},binary:info.binary};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2060,
+        310
+      ],
+      "id": "d42e261f-f908-5795-bdc2-c8ea6f28135d",
+      "name": "09 Preparar OCR PDF"
+    },
+    {
+      "parameters": {
+        "fileName": "={{ $json.ocr_input }}",
+        "dataPropertyName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        2290,
+        310
+      ],
+      "id": "99b9bef1-5948-5373-a522-89d5369bd7ad",
+      "name": "10 Escribir PDF OCR",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "={{ $(\"09 Preparar OCR PDF\").first().json.ocr_command }}"
+      },
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        2510,
+        310
+      ],
+      "id": "1d44e1eb-8b6d-5c6c-85f1-a9cc7eb4e7b0",
+      "name": "11 OCR Ubuntu SSH PDF",
+      "credentials": {
+        "sshPassword": {
+          "id": "NbllHNmobi0ztXfm",
+          "name": "SSH Password account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "filePath": "={{ $(\"09 Preparar OCR PDF\").first().json.ocr_output }}",
+        "dataPropertyName": "file"
+      },
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        2730,
+        310
+      ],
+      "id": "c60094b6-420d-5e80-9a44-4ff67aff401f",
+      "name": "12 Leer PDF OCR",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        2950,
+        310
+      ],
+      "id": "94d0c75e-6b09-52fc-a1a9-bea73d86e794",
+      "name": "13 Extraer PDF OCR",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const info=$('03 Identificar archivo').first().json;const res=$json||{};\nconst text=[res.text,res.data,res.content].filter(x=>typeof x==='string').join('\\n').trim();\nreturn {json:{...info,document_text:text,extraction_method:'pdf_ocr_ssh',ocr_used:true,...(!text?{extraction_error:'OCR_PDF_SIN_TEXTO'}:{})}};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3180,
+        310
+      ],
+      "id": "a8f4856b-6b02-59be-a6e7-70f1d53cda45",
+      "name": "14 Unificar PDF OCR"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "bb0b2a6f-6ecc-4d0e-8768-024b45138b97",
+              "leftValue": "={{ $json.kind === \"image\" }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1370,
+        560
+      ],
+      "id": "84cea58d-dc51-547b-a1dd-ec4e8d4c561a",
+      "name": "15 Es imagen"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const info=$('03 Identificar archivo').first();const ext=['jpg','jpeg','png','webp','heic','heif','tif','tiff','bmp'].includes(info.json.ext)?info.json.ext:'png';\nconst key=String($execution.id||Date.now()).replace(/[^0-9]/g,'')+'_'+Math.random().toString(36).slice(2,12);\nconst path='/data/ocr/entrada/endodbv5_'+key+'.'+ext;\n// Entradas y rutas no contienen caracteres suministrados por usuarios.\nconst command=`set -e; f='${path}'; tmp='/data/ocr/entrada/endodbv5_${key}.png'; trap 'rm -f \"$f\" \"$tmp\"' EXIT; if tesseract \"$f\" stdout -l spa+eng 2>/dev/null || tesseract \"$f\" stdout -l eng 2>/dev/null; then exit 0; fi; if command -v magick >/dev/null 2>&1; then magick \"$f\" \"$tmp\"; elif command -v convert >/dev/null 2>&1; then convert \"$f\" \"$tmp\"; elif command -v heif-convert >/dev/null 2>&1; then heif-convert \"$f\" \"$tmp\" >/dev/null; else exit 2; fi; tesseract \"$tmp\" stdout -l spa+eng 2>/dev/null || tesseract \"$tmp\" stdout -l eng 2>/dev/null`;\nreturn {json:{...info.json,ocr_input:path,ocr_command:command},binary:info.binary};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1590,
+        520
+      ],
+      "id": "e6d3520a-d71f-57e6-9477-c152c2231131",
+      "name": "16 Preparar OCR imagen"
+    },
+    {
+      "parameters": {
+        "fileName": "={{ $json.ocr_input }}",
+        "dataPropertyName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        1820,
+        520
+      ],
+      "id": "100b40dc-5887-5532-be06-adae7c7a3cd4",
+      "name": "17 Escribir imagen OCR",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "command": "={{ $(\"16 Preparar OCR imagen\").first().json.ocr_command }}"
+      },
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        2050,
+        520
+      ],
+      "id": "001896d2-7800-5ac5-8c16-79008968ec83",
+      "name": "18 OCR Ubuntu SSH imagen",
+      "credentials": {
+        "sshPassword": {
+          "id": "NbllHNmobi0ztXfm",
+          "name": "SSH Password account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const info=$('03 Identificar archivo').first().json;const obj=$json||{};\nconst text=String(obj.stdout||obj.data?.stdout||'').trim();\nreturn {json:{...info,document_text:text,extraction_method:'image_tesseract_ssh',ocr_used:true,...(!text?{extraction_error:'OCR_IMAGEN_SIN_TEXTO'}:{})}};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2290,
+        520
+      ],
+      "id": "906e8859-2951-596c-a6df-2d65ee54062c",
+      "name": "19 Unificar OCR imagen"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const info=$json;let text=String(info.body_text||'');\nif($binary?.file){const buf=await this.helpers.getBinaryDataBuffer(0,'file');if(buf.length>25*1024*1024) return {json:{...info,document_text:'',extraction_error:'ARCHIVO_EXCESIVO'}};text=buf.toString('utf8').replace(/^\\uFEFF/,'');}\nif(info.kind==='json'){try{const obj=JSON.parse(text);text=JSON.stringify(obj,null,2);}catch(e){return {json:{...info,document_text:'',extraction_error:'JSON_INVALIDO'}}}}\nreturn {json:{...info,document_text:text,extraction_method:info.kind==='json'?'json_estructurado':'texto_directo'}};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1590,
+        740
+      ],
+      "id": "47e2c243-209e-54e4-8ffd-456964276b83",
+      "name": "20 Leer TXT y JSON"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const c=$json,org=String($vars.ENDODB_ORGANIZATION_ID||''),token=String($vars.ENDODB_DIRECTUS_TOKEN||'');\nconst base=String($vars.ENDODB_DIRECTUS_URL||'https://directus.drperez86.com').replace(/\\/+$/,'');\nconst headers={Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'};\nasync function api(method,path,body,params){const url=base+path+(params?'?'+Object.entries(params).map(([k,v])=>encodeURIComponent(k)+'='+encodeURIComponent(v)).join('&'):'');let err;\n for(let i=0;i<3;i++){try{const r=await this.helpers.httpRequest({method,url,headers,...(body!==undefined?{body}:{ }),json:true,timeout:20000,returnFullResponse:true,ignoreHttpStatusErrors:true});\n const status=r.statusCode||200, data=r.body||r; if(status>=200&&status<300)return data.data;\n if(status===429||status>=500){err=new Error('DIRECTUS_RETRYABLE_'+status);continue;} throw new Error('DIRECTUS_HTTP_'+status)}catch(e){err=e;if(i===2)throw new Error('DIRECTUS_UNAVAILABLE');}}\n throw err;\n}\nconst f={_and:[{id:{_eq:c.sede_id}},{organizacion:{_eq:org}},{activo:{_eq:true}}]};\nlet ingestaId=null;\ntry{\n const sites=await api.call(this,'GET','/items/bd_sedes',undefined,{fields:'id',filter:JSON.stringify(f),limit:'1'});\n if(!Array.isArray(sites)||sites.length!==1)return {json:{ok:false,error:'SEDE_NO_AUTORIZADA'}};\n const source=String(c.document_text||'');const status=source.trim().length>=35&&!c.extraction_error?'recibido':'requiere_revision';\n // Huella estable para idempotencia dentro de organización y sede. No almacena texto clínico.\n function hash(t){let a=2166136261,b=3339675911;for(let i=0;i<t.length;i++){a=Math.imul(a^t.charCodeAt(i),16777619)>>>0;b=Math.imul(b^(t.charCodeAt(i)+i%97),2246822519)>>>0}return a.toString(16).padStart(8,'0')+b.toString(16).padStart(8,'0')}\n const fingerprint=hash(source);let previous=[];\n try{previous=await api.call(this,'GET','/items/bd_ingestas',undefined,{fields:'id,metadata,status,source_chars_total',filter:JSON.stringify({_and:[{organizacion:{_eq:org}},{sede:{_eq:c.sede_id}},{source_chars_total:{_eq:source.length}}]}),sort:'-id',limit:'100'});}catch{}\n const matched=(Array.isArray(previous)?previous:[]).find(x=>x.metadata?.fingerprint===fingerprint&&x.source_chars_total===source.length&&['recibido','anonimizado','procesado','requiere_revision'].includes(x.status));\n if(matched)return {json:{ok:false,duplicate:true,ingesta_id:matched.id,error:'INGESTA_EXISTENTE_NO_DUPLICAR'}};\n const rec=await api.call(this,'POST','/items/bd_ingestas',{source_file_name:c.filename||'documento',source_file_kind:c.kind==='text'?'txt':c.kind,source_file_size:c.source_size||null,mime_type:c.mime||null,exam_id_request:c.exam_id_request||null,source_chars_total:source.length,status,organizacion:org,sede:c.sede_id,metadata:{pipeline:'endodb-v5-nuevo',trace:c.trace||null,metodo:c.extraction_method||null,ocr:!!c.ocr_used,fingerprint}});ingestaId=rec.id;\n if(status!=='recibido')return {json:{ok:false,error:c.extraction_error||'EXTRACCION_INSUFICIENTE',ingesta_id:ingestaId}};\n if(source.length>110000){await api.call(this,'PATCH','/items/bd_ingestas/'+ingestaId,{status:'requiere_revision',error_message:'DOCUMENTO_EXCESIVAMENTE_LARGO'});return {json:{ok:false,error:'DOCUMENTO_EXCESIVAMENTE_LARGO',ingesta_id:ingestaId}}}\n // PII local: se identifica para Directus, NUNCA se envía en el prompt.\n const patients=[...source.matchAll(/(?:^|\\n)\\s*(?:Paciente|Nombre\\s*(?:completo)?|Apellido\\s*y\\s*nombre)\\s*[:\\-]\\s*([^\\n\\r]{3,95})/gi)].map(x=>x[1].trim());\n const dnis=[...source.matchAll(/(?:^|\\n)\\s*(?:DNI|D\\.N\\.I\\.|Documento|Nro\\.?\\s*documento)\\s*[:#-]?\\s*([0-9.]{7,14})/gim)].map(x=>x[1].replace(/\\D/g,''));\n if(c.kind==='json'){try{const obj=JSON.parse(source);function scan(v,person=false,depth=0){if(!v||depth>20||typeof v!=='object')return;for(const [k,x] of Object.entries(v)){const label=k.toLowerCase().replace(/[^a-z0-9]/g,'');const inPerson=person||/^(paciente|patient|datosdelpaciente)$/.test(label);if(typeof x==='string'||typeof x==='number'){\n   if(/^(dni|numerodocumento|documento|documentonumero)$/.test(label))dnis.push(String(x).replace(/\\D/g,''));\n   if(inPerson&&/^(nombre|nombrecompleto|apellidoynombre|nombredelpaciente)$/.test(label))patients.push(String(x).trim());\n  }else if(x&&typeof x==='object')scan(x,inPerson,depth+1)}}scan(obj)}catch{}}\n const unique=a=>[...new Set(a.filter(Boolean))];const p=unique(patients),ids=unique(dnis.filter(x=>/^\\d{7,9}$/.test(x)));const piiMulti=p.length>1||ids.length>1;\n const dates=[...source.matchAll(/(?:Fecha(?:\\s+(?:de|del))?\\s+(?:estudio|procedimiento|examen|realizaci[oó]n)|[\"']?(?:FECHA_ESTUDIO|FECHA_PROCEDIMIENTO)[\"']?)\\s*[\"':= -]+\\s*[\"']?((?:[0-3]?\\d[\\/.\\-][01]?\\d[\\/.\\-](?:19|20)\\d{2})|(?:(?:19|20)\\d{2}-[01]\\d-[0-3]\\d))/gi)].map(x=>x[1]);\n function iso(s){const v=s.replace(/[.]/g,'/');let y,m,d;if(/^\\d{4}-/.test(v)){[y,m,d]=v.split('-').map(Number)}else{[d,m,y]=v.split(/[\\/-]/).map(Number)}if(y<2000||y>new Date().getUTCFullYear()+1||m<1||m>12||d<1||d>31)return null;const z=new Date(Date.UTC(y,m-1,d));return z.getUTCFullYear()===y&&z.getUTCMonth()===m-1&&z.getUTCDate()===d?`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`:null}\n const dateList=unique(dates.map(iso));const studyDate=dateList.length===1?dateList[0]:null;\n // Identidad sólo por DNI inequívoco. No cruzar por nombre simple (homónimos).\n let patientId=null;\n if(!piiMulti&&ids.length===1){const filt={_and:[{organizacion:{_eq:org}},{numero_documento:{_eq:ids[0]}}]};\n try{const matches=await api.call(this,'GET','/items/bd_pacientes',undefined,{fields:'id',filter:JSON.stringify(filt),limit:'2'});\n if(matches.length===1)patientId=matches[0].id;\n else if(matches.length===0){const item=await api.call(this,'POST','/items/bd_pacientes',{organizacion:org,numero_documento:ids[0],tipo_documento:'DNI',nombre_completo:p[0]||null,requiere_revision:!p[0]});patientId=item.id}\n }catch{ /* No vincular paciente si faltan permisos; la carga clínica queda pendiente de revisión. */ }}\n let anon=source;\n // ENDORA JSON: quitar campos de identidad recursivamente antes del análisis de IA.\n if(c.kind==='json'){\n  try {const sourceObj=JSON.parse(source);const sensitive=/^(?:paciente|nombre(?:_.*)?|apellido(?:_.*)?|dni|documento|nro_?documento|historia_?clinica|hc|obra_?social|cobertura|afiliado|numero_?afiliado|telefono|celular|email|correo|domicilio|direccion|fecha(?:_.*)?|exam_?id|estudio_?id|protocolo|medico(?:_.*)?|operador(?:_.*)?|profesional|endoscopista|solicitante|firma|matricula|nro_?informe|nro_?estudio)$/i;\n   function prune(v,depth=0){if(depth>25)return '[ESTRUCTURA_PROFUNDA]';if(Array.isArray(v))return v.map(x=>prune(x,depth+1));if(v&&typeof v==='object'){const out={};for(const [k,val] of Object.entries(v)){if(sensitive.test(k.trim()))continue;out[k]=prune(val,depth+1)}return out}return v}\n   anon=JSON.stringify(prune(sourceObj));\n  }catch{await api.call(this,'PATCH','/items/bd_ingestas/'+ingestaId,{status:'requiere_revision',error_message:'JSON_NO_VALIDO'});return {json:{ok:false,error:'JSON_NO_VALIDO',ingesta_id:ingestaId}}}\n }\n anon=anon.replace(/^\\s*(?:Paciente|Nombre(?:\\s+completo)?|Apellido(?:\\s*y\\s*nombre)?|Nombre\\s*y\\s*apellido|M[eé]dico(?:\\s+operador)?|Profesional|Operador|Endoscopista|Solicitante|Firma|Obra\\s+social|N[°º]\\s*afiliado|N[°º]\\s*ingreso|Historia\\s+cl[ií]nica|H\\.?C\\.?|DNI|D\\.N\\.I\\.|Documento|Direcci[oó]n|Domicilio|Tel[eé]fono|Celular|Email|Correo|Fecha\\s*(?:del?\\s*)?(?:estudio|procedimiento|nacimiento)|Exam(?:en)?\\s*ID|Estudio\\s*ID|Protocolo)\\s*[:#-]\\s*.*$/gim,'[DATO_ADMINISTRATIVO_OMITIDO]');\n anon=anon.replace(/[\\w.+-]+@[\\w.-]+\\.[A-Za-z]{2,}/g,'[EMAIL]').replace(/\\b(?:\\+?54\\s*)?(?:11\\s*)?\\d[\\d\\s-]{8,14}\\d\\b/g,'[IDENTIFICADOR]').replace(/\\b\\d{7,9}\\b/g,'[NUMERO_PRIVADO]');\n for(const value of [...p,...ids,c.exam_id_request].filter(x=>x&&x.length>=4))anon=anon.split(value).join('[ID_OMITIDO]');\n // No se envían fechas de procedimiento ni identificadores administrativos, pero sí métricas clínicas.\n anon=anon.replace(/\\b(?:[0-3]?\\d)[\\/.-](?:[0-1]?\\d)[\\/.-](?:19|20)\\d{2}\\b/g,'[FECHA]').replace(/\\b(?:19|20)\\d{2}-[01]\\d-[0-3]\\d\\b/g,'[FECHA]');\n const residual=/(?:^|\\n)\\s*(?:Paciente|DNI|Historia\\s*cl[ií]nica|Nombre\\s*completo|N[°º]\\s*afiliado)\\s*[:#-]\\s*(?!\\[)/im.test(anon)||/[\\w.+-]+@[\\w.-]+\\.[A-Za-z]{2,}/.test(anon);\n if(residual){await api.call(this,'PATCH','/items/bd_ingestas/'+ingestaId,{status:'requiere_revision',error_message:'PII_RESIDUAL_BLOQUEO_IA'});return {json:{ok:false,error:'PII_RESIDUAL_BLOQUEO_IA',ingesta_id:ingestaId}}}\n const clean=anon.trim();\n const sys=`Sos un motor de extracción de informes endoscópicos, sin acceso a identidad. Devolvé JSON ESTRICTO sin markdown. Extraé TODOS los procedimientos VEDA y VCC de un mismo archivo, incluso si están en JSON ENDORA. Nunca inventes datos ni conviertas ausente a falso. Cada procedimiento es una fila independiente. Si una afirmación estructurada de llegada a ciego contradice la narrativa (p. ej. la narrativa describe parada en ángulo esplénico), marcar contradiccion_cecal=true y entubacion_cecal=null. Para VCC, true solo si ciego/válvula ileocecal/íleon documentados, false si se documenta explícitamente detención previa, null si no se documenta. Campos Boston 0..3 por segmento y total solo si tres segmentos o total expresamente informado. Las negaciones deben respetarse. Fechas y códigos de identificación no se inventan. Evidencia debe ser cita textual corta extraída del documento anonimizad0. Extracción de pólipos, terapéuticas, biopsias y hallazgos precisa; si falta la medida, null. No incluir identidad. JSON: {\"procedimientos\":[{\"procedure_type\":\"VEDA|VCC\",\"entubacion_cecal\":null,\"contradiccion_cecal\":false,\"evidencia_cecal\":\"\",\"punto_maximo_alcanzado\":\"no_informado\",\"motivo_incompleta\":\"no_informado\",\"motivo_incompleta_texto\":\"\",\"boston_derecho\":null,\"boston_transverso\":null,\"boston_izquierdo\":null,\"boston_total\":null,\"tipo_preparacion\":\"No informado\",\"preparacion_texto\":\"\",\"indicacion\":\"\",\"diagnostico_endoscopico\":\"\",\"resumen_hallazgos\":\"\",\"llego_a_ileon\":null,\"tiempo_retirada_minutos\":null,\"polipos\":[{\"localizacion\":\"\",\"cantidad\":1,\"tamano_mm\":null,\"morfologia\":\"\",\"clasificacion_paris\":\"\",\"resecado\":null}],\"polipos_ausentes_explicitamente\":false,\"evidencia_polipos\":\"\",\"biopsias\":[],\"terapeuticas\":[],\"hallazgos\":[],\"confianza\":\"alta|media|baja\",\"alertas\":[]}]}. No rellenar campos desconocidos.`;\n const body={model:String($vars.ENDODB_DEEPSEEK_MODEL||'deepseek-chat'),temperature:0,response_format:{type:'json_object'},max_tokens:7000,messages:[{role:'system',content:sys},{role:'user',content:'EXTRAÉ INFORMES ENDOSCÓPICOS DE ESTE DOCUMENTO ANONIMIZADO:\\n'+clean}]};\n await api.call(this,'PATCH','/items/bd_ingestas/'+ingestaId,{status:'anonimizado'});\n return {json:{ok:true,ingesta_id:ingestaId,sede_id:c.sede_id,organizacion_id:org,document_text_anon:clean,patient_id:patientId,fecha_estudio_local:studyDate,fecha_ambigua:dateList.length>1,pii_multi:piiMulti,deepseekBody:body,exam_id_request:c.exam_id_request||null,fuente:c.extraction_method,model:body.model}};\n}catch(e){return {json:{ok:false,error:'DIRECTUS_PREPARATION_FAILURE',ingesta_id:ingestaId}}}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3420,
+        530
+      ],
+      "id": "bb2761ec-6bd7-57b9-8752-256c49f68971",
+      "name": "21 Ingesta anonimizacion y contexto"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "31e07f77-bd50-408e-bbd8-7f5f265c48c1",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3670,
+        530
+      ],
+      "id": "e170b674-01c3-503a-97e7-67323282756e",
+      "name": "22 Listo para IA"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 422
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        3880,
+        730
+      ],
+      "id": "6c4404fe-cc1e-5788-aa86-c4bec404c81f",
+      "name": "Respuesta extraccion rechazada"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.deepseek.com/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "deepSeekApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.deepseekBody }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3880,
+        490
+      ],
+      "id": "e814a322-7494-5859-8c30-68d5a628a68f",
+      "name": "23 DeepSeek credencial existente",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "6yyVh1lvQ7SYShyC",
+          "name": "DeepSeek account"
+        }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const res=$json||{};const raw=String(res.choices?.[0]?.message?.content||'').trim();\nfunction parse(s){try{let x=s.replace(/^```(?:json)?\\s*/i,'').replace(/```$/,'').trim();if(!x.startsWith('{')){const at=x.indexOf('{');if(at>=0)x=x.slice(at)}return JSON.parse(x)}catch{return null}}\nconst obj=parse(raw);const valid=Array.isArray(obj?.procedimientos)&&obj.procedimientos.length>0&&obj.procedimientos.length<=30;\nreturn {json:{valid,needs_repair:!valid,parsed:valid?obj:null,repair_text:raw.slice(0,12000),model_response_error:res.error?'DEEPSEEK_REQUEST_FAILED':null}};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4100,
+        490
+      ],
+      "id": "eec95d07-1077-54ca-bd7f-5a72740b39c2",
+      "name": "24 Validar JSON inicial"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "43730fbb-7539-4e22-b223-958a037aad33",
+              "leftValue": "={{ $json.needs_repair }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        4330,
+        490
+      ],
+      "id": "4de49dfd-5a56-5f4f-900b-8a4beb6e8f5d",
+      "name": "25 Reparacion necesaria"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ctx=$('21 Ingesta anonimizacion y contexto').first().json;const r=$json;\nreturn {json:{deepseekBody:{...ctx.deepseekBody,temperature:0,messages:[{role:'system',content:'Tu respuesta anterior no fue JSON válido o omitió la matriz procedimientos. Devuelve SOLO el JSON que cumple el esquema solicitado. No inventes procedimientos. Corrige los errores de formato.'},{role:'user',content:ctx.deepseekBody.messages[1].content},{role:'assistant',content:r.repair_text||'{}'}]},is_repair:true}};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4560,
+        370
+      ],
+      "id": "cfb91385-7066-5a3d-b726-dbf9e6400b5d",
+      "name": "26 Preparar reparacion IA"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.deepseek.com/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "deepSeekApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.deepseekBody }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4790,
+        370
+      ],
+      "id": "7a30408b-a201-572f-a046-cd81f7e41545",
+      "name": "27 DeepSeek reparar credencial existente",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "6yyVh1lvQ7SYShyC",
+          "name": "DeepSeek account"
+        }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ctx=$('21 Ingesta anonimizacion y contexto').first().json;\nconst base=String($vars.ENDODB_DIRECTUS_URL||'https://directus.drperez86.com').replace(/\\/+$/,'');const token=String($vars.ENDODB_DIRECTUS_TOKEN||'');\nconst headers={Authorization:'Bearer '+token,Accept:'application/json','Content-Type':'application/json'};\nasync function api(method,path,body,params){const url=base+path+(params?'?'+Object.entries(params).map(([k,v])=>encodeURIComponent(k)+'='+encodeURIComponent(v)).join('&'):'');for(let i=0;i<3;i++){try{const r=await this.helpers.httpRequest({method,url,headers,...(body!==undefined?{body}:{ }),json:true,timeout:20000,returnFullResponse:true,ignoreHttpStatusErrors:true});const status=r.statusCode||200,data=r.body||r;\n if(status>=200&&status<300)return data.data;if(status===429||status>=500)continue;throw new Error('DIRECTUS_HTTP_'+status)}catch(e){if(i===2)throw new Error('DIRECTUS_IO_FAIL')}}throw new Error('DIRECTUS_IO_FAIL')}\nfunction parse(s){try{let x=String(s).replace(/^```(?:json)?\\s*/i,'').replace(/```$/,'').trim();if(!x.startsWith('{'))x=x.slice(x.indexOf('{'));return JSON.parse(x)}catch{return null}}\nconst input=$json||{};let obj=input.parsed||parse(input.choices?.[0]?.message?.content);\nconst errors=[],written=[],skipped=[],warn=[];let success=0;\nconst enumValues={punto_maximo_alcanzado:['recto','sigmoides','descendente','angulo_esplenico','transverso','angulo_hepatico','ascendente','ciego','ileon_terminal','no_informado'],motivo_incompleta:['mala_preparacion','angulacion_fija','tortuosidad_looping','estenosis_obstruccion','dolor_intolerancia','suspension_clinica_anestesica','procedimiento_parcial_programado','otro','no_informado','no_aplica'],tipo_preparacion:['Barex','Barex Plus','PEG','Fosfato sódico','Picosulfato','Enema','Otro','No informado']};\nfunction clean(s,n=500){return String(s||'').slice(0,n).replace(/(?:^|\\n)\\s*(?:paciente|dni|nombre|HC|historia clinica)\\s*[:#-].*/gim,'[DATO_REDACTADO]')}\nfunction number(v,max){if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isInteger(n)&&n>=0&&n<=max?n:null}\nfunction truth(v){return typeof v==='boolean'?v:null}\nfunction enumOr(v,name,def){if(typeof v!=='string')return def;const alias={'ileon':'ileon_terminal','sigma':'sigmoides','angulo esplenico':'angulo_esplenico','Barex kit':'Barex','Barex plus':'Barex Plus','Picoprep':'Picosulfato'};v=alias[v]||v;return enumValues[name].includes(v)?v:def}\nfunction clinical(doc,p,multipleVcc=false){const s=doc.toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'');\n const pos=/(?:se\\s+(?:alcanza|llego|llega|identifica|intuba|visualiza)\\s+(?:el\\s+)?(?:ciego|fondo\\s+cecal|valvula\\s+ileocecal|ileon)|hasta\\s+(?:el\\s+)?(?:fondo\\s+cecal|ciego|ileon)|orificio\\s+apendicular|valvula\\s+ileocecal|ileon\\s+terminal\\s+(?:intubado|explorado))/i.test(s);\n const neg=/(?:no\\s+se\\s+(?:alcanza|llega|intuba|visualiza|identifica)\\s+(?:el\\s+)?ciego|sin\\s+(?:alcanzar|llegar\\s+a)\\s+(?:el\\s+)?ciego|se\\s+(?:detiene|suspende|interrumpe)\\s+(?:el\\s+)?(?:estudio|avance|procedimiento)\\s+(?:en|a\\s+nivel\\s+de)\\s+(?:recto|sigmoides|descendente|angulo\\s+esplenico|transverso|angulo\\s+hepatico|ascendente)|(?:avance|progresion)\\s+hasta\\s+(?:el\\s+)?angulo\\s+esplenico)/i.test(s);\n const evid=clean(p.evidencia_cecal,280);const hasEvidence=evid.length>=8&&s.includes(evid.toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,''));\n let cecal=null,reason=[];\n if(multipleVcc){reason.push('MULTIPLES_VCC_REVISAR_EVIDENCIA_POR_PROCEDIMIENTO');cecal=null;}\n else if(p.contradiccion_cecal===true||(pos&&neg)){reason.push('CONTRADICCION_CECAL');cecal=null;}\n else if(neg)cecal=false;else if(pos)cecal=true;\n else if(hasEvidence&&truth(p.entubacion_cecal)!==null){cecal=truth(p.entubacion_cecal);reason.push('CECAL_SOLO_EVIDENCIA_MODELO');}\n else reason.push('CECAL_NO_DOCUMENTADO');\n return {cecal,reason,evid_ok:hasEvidence,pos,neg};}\nasync function status(value,message){try{await api.call(this,'PATCH','/items/bd_ingestas/'+ctx.ingesta_id,{status:value,processed_at:new Date().toISOString(),error_message:message?clean(message,220):null})}catch(e){errors.push('STATUS_UPDATE_FAILED')}}\ntry{\n if(!Array.isArray(obj?.procedimientos)||!obj.procedimientos.length||obj.procedimientos.length>30){await status.call(this,'requiere_revision','DEEPSEEK_JSON_INVALIDO_TRAS_REPARACION');return {json:{ok:false,ingesta_id:ctx.ingesta_id,error:'DEEPSEEK_JSON_INVALIDO_TRAS_REPARACION'}}}\n let idx=0;for(const p of obj.procedimientos){idx++;try{\n if(!['VEDA','VCC'].includes(p.procedure_type)){warn.push('TIPO_NO_VALIDO_'+idx);continue}\n const t=p.procedure_type, vcc=t==='VCC';const multipleVcc=obj.procedimientos.filter(z=>z.procedure_type==='VCC').length>1;const qc=vcc?clinical(ctx.document_text_anon,p,multipleVcc):{cecal:null,reason:[],evid_ok:true};\n const b=['boston_derecho','boston_transverso','boston_izquierdo'].map(k=>number(p[k],3));let total=number(p.boston_total,9);\n if(b.every(x=>x!==null)){const sum=b.reduce((a,z)=>a+z,0);if(total!==null&&total!==sum)qc.reason.push('BOSTON_TOTAL_INCONSISTENTE');total=sum}\n else if(total===null){total=null}\n const point=vcc?enumOr(p.punto_maximo_alcanzado,'punto_maximo_alcanzado','no_informado'):null;\n const reason=vcc?enumOr(p.motivo_incompleta,'motivo_incompleta','no_informado'):null;\n const revisa=!!(ctx.pii_multi||ctx.fecha_ambigua||!ctx.fecha_estudio_local||p.confianza==='baja'||p.contradiccion_cecal||p.alertas?.length||qc.reason.length||(!qc.evid_ok&&p.evidencia_cecal)||vcc&&(b.some(x=>x===null)&&total!==null&&total<6));\n const idem=ctx.exam_id_request?{_and:[{exam_id:{_eq:ctx.exam_id_request}},{procedure_type:{_eq:t}},{organizacion:{_eq:ctx.organizacion_id}},{sede:{_eq:ctx.sede_id}}]}:null;\n if(idem){const old=await api.call(this,'GET','/items/bd_estudios',undefined,{fields:'id',filter:JSON.stringify(idem),limit:'2'});if(old.length){skipped.push({numero:idx,existing_id:old[0].id,reason:'EXAM_ID_EXISTENTE_NO_SE_SOBREESCRIBE'});continue}}\n const cecal=qc.cecal, partial=vcc&&(reason==='procedimiento_parcial_programado'),include=vcc&&!partial;\n const adjusted=include&&!['mala_preparacion','estenosis_obstruccion','suspension_clinica_anestesica','procedimiento_parcial_programado'].includes(reason);\n const favorable=adjusted&&!['angulacion_fija','tortuosidad_looping'].includes(reason);\n const prepa=vcc&&b.every(x=>x!==null)?b.every(x=>x>=2):null;\n // No convertir la incertidumbre en fracaso en las tasas.\n const payload={ingesta:ctx.ingesta_id,organizacion:ctx.organizacion_id,sede:ctx.sede_id,paciente:ctx.patient_id||null,fecha_estudio:ctx.fecha_estudio_local||null,numero_en_archivo:idx,procedure_type:t,exam_id:ctx.exam_id_request||null,entubacion_cecal:cecal,llego_a_ileon:vcc?truth(p.llego_a_ileon):null,boston_derecho:vcc?b[0]:null,boston_transverso:vcc?b[1]:null,boston_izquierdo:vcc?b[2]:null,boston_total:vcc?total:null,preparacion_adecuada:prepa,tipo_preparacion:enumOr(p.tipo_preparacion,'tipo_preparacion','No informado'),preparacion_texto:clean(p.preparacion_texto,160),polipos:vcc?(Array.isArray(p.polipos)&&p.polipos.length>0?true:(p.polipos_ausentes_explicitamente===true&&String(p.evidencia_polipos||'').length>=8&&ctx.document_text_anon.toLowerCase().includes(String(p.evidencia_polipos).toLowerCase())?false:null)):null,terapeutica:Array.isArray(p.terapeuticas)&&p.terapeuticas.length>0?true:null,indicacion:clean(p.indicacion,1000),diagnostico_endoscopico:clean(p.diagnostico_endoscopico,1600),resumen_hallazgos:clean(p.resumen_hallazgos,2200),punto_maximo_alcanzado:point,motivo_incompleta:reason,motivo_incompleta_texto:clean(p.motivo_incompleta_texto,350),incluir_tasa_bruta:include,incluir_tasa_ajustada:adjusted,incluir_tasa_casos_favorables:favorable,tiempo_retirada_minutos:Number.isFinite(Number(p.tiempo_retirada_minutos))&&Number(p.tiempo_retirada_minutos)>0&&Number(p.tiempo_retirada_minutos)<180?Number(p.tiempo_retirada_minutos):null,requiere_revision:revisa,estado_validacion:revisa?'pendiente_revision':'validado_automaticamente',raw_ai_json:{version:'endodb-v5-nuevo',qc_cecal:{documentado:cecal!==null,entubacion_cecal:cecal,evidencia:qc.evid_ok?clean(p.evidencia_cecal,280):null,motivos:qc.reason},confianza:p.confianza||null,alertas:(p.alertas||[]).slice(0,20)}};\n // Nunca escribir fecha inventada. Fecha no extraída localmente de forma confiable => null para revisión.\n if(!payload.fecha_estudio)payload.requiere_revision=true;\n const rec=await api.call(this,'POST','/items/bd_estudios',payload);const id=rec.id;written.push({numero:idx,id,tipo:t,requiere_revision:payload.requiere_revision});success++;\n const previousChildErrors=errors.length;\n const linked=[['bd_polipos','polipos',['localizacion','segmento_colon','cantidad','tamano_mm','morfologia','clasificacion_paris','resecado','recuperado','descripcion']],['bd_biopsias','biopsias',['localizacion','cantidad','frasco','protocolo','descripcion']],['bd_terapeuticas','terapeuticas',['codigo','nombre','cantidad','exitosa','detalle']],['bd_hallazgos','hallazgos',['organo','segmento','hallazgo','severidad','descripcion']]];\n for(const [coll,key,allow] of linked){for(const child of (Array.isArray(p[key])?p[key]:[]).slice(0,100)){if(!child||typeof child!=='object')continue;const data={estudio:id};for(const k of allow){if(child[k]!==undefined&&child[k]!==null&&child[k]!=='' ){data[k]=typeof child[k]==='string'?clean(child[k],400):child[k]}}try{await api.call(this,'POST','/items/'+coll,data)}catch{errors.push('CHILD_WRITE_ERROR_'+coll+'_'+idx)}}}\n if(errors.length>previousChildErrors){try{await api.call(this,'PATCH','/items/bd_estudios/'+id,{requiere_revision:true,estado_validacion:'pendiente_revision'})}catch{errors.push('STUDY_REVIEW_UPDATE_FAILED_'+idx)}}\n try{await api.call(this,'POST','/items/bd_auditoria_ia',{ingesta:ctx.ingesta_id,estudio:id,proveedor:'DeepSeek',modelo:ctx.model,version_prompt:'EndoDB-v5-nuevo',estado:payload.requiere_revision?'requiere_revision':'validado',errores:qc.reason.join('|'),resultado_anonimizado:payload.raw_ai_json})}catch{errors.push('AUDIT_WRITE_ERROR_'+idx)}\n }catch{errors.push('STUDY_WRITE_FAILED_'+idx)}}\n if(!success&&!skipped.length){await status.call(this,'requiere_revision','NO_VALID_STUDIES|'+errors.join('|'));return {json:{ok:false,ingesta_id:ctx.ingesta_id,error:'NO_VALID_STUDIES',errors}}}\n if(errors.length||warn.length||written.some(x=>x.requiere_revision)){await status.call(this,'requiere_revision',[...errors,...warn].join('|'));}\n else await status.call(this,'procesado',null);\n try{await api.call(this,'PATCH','/items/bd_ingestas/'+ctx.ingesta_id,{cantidad_estudios_detectados:obj.procedimientos.length})}catch{errors.push('COUNT_WRITE_FAILED')}\n return {json:{ok:errors.length===0,ingesta_id:ctx.ingesta_id,estudios_creados:written,duplicados_no_modificados:skipped,advertencias:[...warn,...errors],requiere_revision:written.some(x=>x.requiere_revision)||errors.length>0}};\n}catch{await status.call(this,'requiere_revision','ERROR_PERSISTENCIA');return {json:{ok:false,ingesta_id:ctx.ingesta_id,error:'ERROR_PERSISTENCIA',parciales:written,advertencias:errors}}}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5020,
+        490
+      ],
+      "id": "de5a792a-dc17-579f-a607-13d27dba5f81",
+      "name": "28 Guardar y validar estudios"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        5260,
+        490
+      ],
+      "id": "a17e7fa0-cf4e-5336-970c-ea8a67b3f028",
+      "name": "Respuesta final JSON"
+    }
+  ],
+  "connections": {
+    "Webhook v5 NUEVO": {
+      "main": [
+        [
+          {
+            "node": "01 Seguridad y configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "01 Seguridad y configuración": {
+      "main": [
+        [
+          {
+            "node": "02 Autorizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02 Autorizado": {
+      "main": [
+        [
+          {
+            "node": "03 Identificar archivo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta rechazada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03 Identificar archivo": {
+      "main": [
+        [
+          {
+            "node": "04 Entrada admisible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04 Entrada admisible": {
+      "main": [
+        [
+          {
+            "node": "05 Es PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta entrada inválida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "05 Es PDF": {
+      "main": [
+        [
+          {
+            "node": "06 Extraer PDF texto nativo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "15 Es imagen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "06 Extraer PDF texto nativo": {
+      "main": [
+        [
+          {
+            "node": "07 Evaluar PDF nativo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "07 Evaluar PDF nativo": {
+      "main": [
+        [
+          {
+            "node": "08 PDF tiene texto suficiente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "08 PDF tiene texto suficiente": {
+      "main": [
+        [
+          {
+            "node": "21 Ingesta anonimizacion y contexto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "09 Preparar OCR PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "09 Preparar OCR PDF": {
+      "main": [
+        [
+          {
+            "node": "10 Escribir PDF OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10 Escribir PDF OCR": {
+      "main": [
+        [
+          {
+            "node": "11 OCR Ubuntu SSH PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "11 OCR Ubuntu SSH PDF": {
+      "main": [
+        [
+          {
+            "node": "12 Leer PDF OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "12 Leer PDF OCR": {
+      "main": [
+        [
+          {
+            "node": "13 Extraer PDF OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "13 Extraer PDF OCR": {
+      "main": [
+        [
+          {
+            "node": "14 Unificar PDF OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "14 Unificar PDF OCR": {
+      "main": [
+        [
+          {
+            "node": "21 Ingesta anonimizacion y contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "15 Es imagen": {
+      "main": [
+        [
+          {
+            "node": "16 Preparar OCR imagen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "20 Leer TXT y JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "16 Preparar OCR imagen": {
+      "main": [
+        [
+          {
+            "node": "17 Escribir imagen OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "17 Escribir imagen OCR": {
+      "main": [
+        [
+          {
+            "node": "18 OCR Ubuntu SSH imagen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "18 OCR Ubuntu SSH imagen": {
+      "main": [
+        [
+          {
+            "node": "19 Unificar OCR imagen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "19 Unificar OCR imagen": {
+      "main": [
+        [
+          {
+            "node": "21 Ingesta anonimizacion y contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "20 Leer TXT y JSON": {
+      "main": [
+        [
+          {
+            "node": "21 Ingesta anonimizacion y contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "21 Ingesta anonimizacion y contexto": {
+      "main": [
+        [
+          {
+            "node": "22 Listo para IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "22 Listo para IA": {
+      "main": [
+        [
+          {
+            "node": "23 DeepSeek credencial existente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta extraccion rechazada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "23 DeepSeek credencial existente": {
+      "main": [
+        [
+          {
+            "node": "24 Validar JSON inicial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "24 Validar JSON inicial": {
+      "main": [
+        [
+          {
+            "node": "25 Reparacion necesaria",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "25 Reparacion necesaria": {
+      "main": [
+        [
+          {
+            "node": "26 Preparar reparacion IA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "28 Guardar y validar estudios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "26 Preparar reparacion IA": {
+      "main": [
+        [
+          {
+            "node": "27 DeepSeek reparar credencial existente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "27 DeepSeek reparar credencial existente": {
+      "main": [
+        [
+          {
+            "node": "28 Guardar y validar estudios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "28 Guardar y validar estudios": {
+      "main": [
+        [
+          {
+            "node": "Respuesta final JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false
+  },
+  "active": false,
+  "pinData": {},
+  "tags": [],
+  "meta": {
+    "instanceId": "endodb-v5-design-new-independent",
+    "templateCredsSetupCompleted": false
+  }
+}
