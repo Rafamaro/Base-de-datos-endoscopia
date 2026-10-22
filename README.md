@@ -67,3 +67,27 @@ Configurar en Coolify como **secretos de ejecución**: `ENDODB_ACCESS_TEAM_DOMAI
 Hasta que estén configuradas estas variables, el formulario responde con un error de configuración y no crea registros. En la inspección actual no se devolvieron organizaciones en `bd_organizaciones`; se necesita una organización real antes de habilitar el alta. Esta función añade sedes al selector de la aplicación; la vinculación de cada estudio con su sede **sigue dependiendo de actualizar el flujo n8n** descrito arriba.
 
 En la inspección del esquema se verificó que `bd_sedes` existe, pero la credencial de inspección no devolvió sedes y una muestra de estudios existentes tenía `sede = null`. El token de Coolify no estaba disponible en el entorno local, por lo que la lectura efectiva de `/fields` y `/relations` con esa identidad debe comprobarse con `/api/diagnostics/directus` tras desplegar.
+
+## Ingesta v4 desde Next.js (preparación de despliegue)
+
+La página de carga usa únicamente `/api/ingest`. `preview` valida el JWT de Cloudflare Access, resuelve la identidad mediante `ENDODB_ACCESS_USER_MAP`, comprueba la membresía activa en `bd_membresias` y que la sede activa pertenezca a la misma organización. Busca coincidencias por `exam_id` y por fecha, sede y tipo de procedimiento. Si encuentra una, devuelve `409` sin contactar n8n. El envío exige un token de vista previa ligado al usuario, sede, archivo y metadatos, válido 10 minutos; antes de confirmar se vuelve a consultar Directus. Nunca se sobrescribe un registro desde esta ruta. Los conflictos históricos requieren revisión fuera de la carga automática.
+
+La extracción de PDF con texto usa `pdftotext -layout` instalado en la imagen Docker. Las imágenes y los PDF sin texto se envían al servicio **local** configurado en `ENDODB_OCR_LOCAL_ENDPOINT`, que recibe `POST {file_name, mime_type, data_base64}` y devuelve `{text}`. TXT y JSON se pasan completos; el PDF de texto conserva sus secciones. Next.js envía únicamente `document_text` al webhook, junto con los ID de sede, organización y usuario validados. La anonimización y el control clínico posteriores siguen siendo responsabilidad del workflow n8n. No se envían imágenes ni PDF al webhook.
+
+Variables privadas necesarias en Coolify (sin prefijo `NEXT_PUBLIC_`):
+
+| Variable | Valor/uso |
+| --- | --- |
+| `DIRECTUS_URL` | URL de Directus para lecturas desde Next.js. |
+| `DIRECTUS_TOKEN` | Token de servicio con lectura de `bd_sedes`, `bd_membresias`, `bd_estudios`, sus campos y relaciones. |
+| `ENDODB_ACCESS_TEAM_DOMAIN` | Issuer Cloudflare Access, por ejemplo `https://equipo.cloudflareaccess.com`. |
+| `ENDODB_ACCESS_AUD` | Audiencia de la aplicación Cloudflare Access. |
+| `ENDODB_ACCESS_USER_MAP` | JSON de correo verificado de Cloudflare a UUID de `directus_users`. |
+| `ENDODB_N8N_URL` | Origen HTTPS del n8n, con `/` final, sin ruta de webhook. |
+| `ENDODB_WEBHOOK_SHARED_SECRET` | Secreto aleatorio de 24 caracteres o más, idéntico al comprobado por el webhook v4. |
+| `ENDODB_OCR_LOCAL_ENDPOINT` | OCR local accesible desde el contenedor; necesario para imágenes y PDF escaneados. |
+| `ENDODB_WEBHOOK_VERSION` | Opcional: `v3` durante transición; ausente usa `v4`. El servidor conserva la ruta antigua, nunca la publica al navegador. |
+
+Pasos manuales: configurar las variables en Coolify, verificar permisos mínimos del token, vincular los usuarios en el mapa y en `bd_membresias`, instalar el OCR local y comprobar su contrato, confirmar en n8n el path v4 y la validación de `x-endodb-secret`, la anonimización previa a DeepSeek, el prompt universal y la persistencia de `raw_ai_json.qc_cecal` para contradicciones. Después ejecutar `npm test`, `npm run build`, hacer una prueba de PDF con texto, una de PDF escaneado, una VEDA+VCC y verificar en Directus que se creen dos estudios independientes y que los falsos de intubación cecal no se conviertan en `null` ni viceversa.
+
+La vista previa es un **DRY_RUN** de la reconciliación: no escribe datos. Un conflicto no puede confirmarse desde la web. Para migrar registros históricos, exportar antes las filas y relaciones afectadas, comparar manualmente por `exam_id`, fecha, sede y tipo, y registrar los ID creados por n8n. Ante un resultado parcial, restaurar mediante ese respaldo y los ID de ingesta/estudios en Directus después de revisar las relaciones; esta aplicación no ejecuta borrados ni rollback automático en Directus. La prevención de duplicados concurrentes y el rollback transaccional de escrituras que ocurren dentro de n8n requieren garantía en el propio workflow o una restricción única en Directus, todavía sin verificar en v4.1.

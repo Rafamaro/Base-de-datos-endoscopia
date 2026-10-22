@@ -4,13 +4,14 @@ import test from "node:test";
 import { assertAllowedEndodbCollection, ENDODB_READ_COLLECTIONS } from "../lib/directus/endodbCollections.js";
 import { buildStudiesFilter, normalizeStudy, parseStudiesQuery, selectStudyFields, STUDY_FIELDS } from "../lib/endodb/studies.js";
 import { classifyDirectusFailure } from "../lib/directus/errors.js";
+import "../public/endodb-metrics.js";
 
 function parse(query, currentYear = 2026) {
   return parseStudiesQuery(new URLSearchParams(query), currentYear);
 }
 
 test("allowlist accepts only EndoDB read collections", () => {
-  assert.deepEqual(ENDODB_READ_COLLECTIONS, ["bd_estudios", "bd_sedes"]);
+  assert.deepEqual(ENDODB_READ_COLLECTIONS, ["bd_estudios", "bd_sedes", "bd_membresias"]);
   assert.equal(assertAllowedEndodbCollection("bd_estudios"), "bd_estudios");
   assert.throws(() => assertAllowedEndodbCollection("bd_pacientes"), /no está permitida/);
   assert.throws(() => assertAllowedEndodbCollection("directus_users"), /no está permitida/);
@@ -116,4 +117,17 @@ test("selects only verified optional fields, uses UUID relation and preserves tw
   const procedures = [normalizeStudy({ id: 10, procedure_type: "VEDA" }), normalizeStudy({ id: 11, procedure_type: "VCC" })];
   assert.deepEqual(procedures.map(row => row.procedure_type), ["VEDA", "VCC"]);
   assert.notEqual(procedures[0].id, procedures[1].id);
+});
+
+test("cecal percentage separates documented from all VCC; VEDA never enters denominator", () => {
+  const rows = [
+    { procedure_type: "VEDA", entubacion_cecal: false },
+    { procedure_type: "VCC", entubacion_cecal: true, punto_maximo_alcanzado: "ciego" },
+    { procedure_type: "VCC", entubacion_cecal: false, punto_maximo_alcanzado: "angulo_esplenico" },
+    { procedure_type: "VCC", entubacion_cecal: null },
+  ];
+  const m = globalThis.EndoDBMetrics.summarize(rows);
+  assert.deepEqual(m.cecal, { numerator: 1, denominator: 2, total: 3 });
+  assert.equal(globalThis.EndoDBMetrics.percent(m.cecal), "50%");
+  assert.equal(globalThis.EndoDBMetrics.totalDetail(m.cecal), "33.3% · 1/3 VCC totales");
 });

@@ -26,17 +26,20 @@
   }
   const percent = metric => metric.denominator ? `${Math.round(metric.numerator * 1000 / metric.denominator) / 10}%` : 'Sin datos';
   const detail = metric => `${percent(metric)} · ${metric.numerator}/${metric.denominator} con dato`;
+  const totalDetail = metric => metric.total ? `${Math.round(metric.numerator * 1000 / metric.total) / 10}% · ${metric.numerator}/${metric.total} VCC totales` : 'Sin datos';
   function cards(rows) {
     const m = summarize(rows);
     const card = (title, metric) => [title, metric.denominator ? metric.numerator : 'Sin datos', `${detail(metric)} · ${metric.total - metric.denominator} sin dato`];
     return [
       ['Total de estudios', m.total, 'procedimientos'], ['Total VEDA', m.veda, 'procedimientos'], ['Total VCC', m.vcc, 'procedimientos'],
-      card('VCC llegó a ciego', m.cecal), card('VCC Boston adecuado', m.boston), card('VCC con pólipos', m.polyps),
+      card('VCC llegó a ciego · documentados', m.cecal),
+      ['VCC llegó a ciego · total', m.cecal.total ? m.cecal.numerator : 'Sin datos', totalDetail(m.cecal)],
+      card('VCC Boston adecuado', m.boston), card('VCC con pólipos', m.polyps),
       card('VCC con preparación impeditiva', m.blocked),
       ['Tasa bruta cecal', percent(m.gross), `${m.gross.numerator}/${m.gross.denominator} incluidos con dato`],
       ['Tasa ajustada cecal', percent(m.adjusted), `${m.adjusted.numerator}/${m.adjusted.denominator} incluidos con dato`],
       card('Requieren revisión', m.review),
     ];
   }
-  root.EndoDBMetrics = { bostonStatus, summarize, percent, detail, cards };
+  root.EndoDBMetrics = { bostonStatus, summarize, percent, detail, totalDetail, cards };
 })(globalThis);
