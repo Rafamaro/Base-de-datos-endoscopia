@@ -24,6 +24,7 @@ function config() {
   if (!/^https:\/\/[a-z0-9-]+\.cloudflareaccess\.com$/i.test(team) || !audience ||
       !UUID.test(org) || !siteToken || secret.length < 24 || !origin ||
       !/^https:\/\//.test(directusUrl) || !/^https:\/\//.test(endpoint) ||
+      new URL(endpoint).hostname !== "n8n.drperez86.com" ||
       new URL(endpoint).pathname !== "/webhook/endodb/process-exam-directus-v5-nuevo") throw new Error("NOT_CONFIGURED");
   return { team, audience, org, siteToken, directusUrl, secret, endpoint, origin };
 }
@@ -120,6 +121,9 @@ export async function POST(request) {
     });
     const result = await r.json().catch(() => null);
     if (!r.ok || !result || typeof result !== "object") return json(502, "INGEST_UPSTREAM_ERROR");
-    return json(200, null, { data: result, ingesta_id: result.ingesta_id ?? null, requiere_revision: result.requiere_revision ?? null });
+    if (result.ok === false && !result.ingesta_id) return json(422, result.error || "INGEST_REJECTED");
+    return json(200, null, { data: result, ingesta_id: result.ingesta_id ?? null,
+      requiere_revision: result.requiere_revision === true || result.ok === false,
+      duplicado: result.duplicate === true });
   } catch { return json(504, "INGEST_UPSTREAM_TIMEOUT_OR_UNAVAILABLE"); }
 }
