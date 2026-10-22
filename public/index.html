@@ -46,30 +46,29 @@
           <div class="site-row"><select id="lugarCodigo" required><option value="">Cargando sedes…</option></select><button class="btn" id="addSiteBtn" type="button">Agregar sede</button></div>
         </div>
         <div>
-          <label for="notes">Notas internas <span class="hint">(opcional)</span></label>
-          <textarea id="notes" placeholder="Agregar una nota al lote"></textarea>
+          <label for="studyDate">Fecha de estudio</label>
+          <input id="studyDate" type="date" required />
+        </div>
+        <div>
+          <label for="studyTypes">Procedimientos del archivo</label>
+          <select id="studyTypes" required><option value="">Seleccionar…</option><option value="VEDA">VEDA</option><option value="VCC">VCC</option><option value="VEDA,VCC">VEDA + VCC</option></select>
         </div>
         <div class="field-wide">
           <div class="drop" id="drop">
             <div class="dropTitle">Arrastrá tus archivos aquí</div>
-            <div class="dropSub">PDF, TXT, JSON, CSS o imágenes · También podés usar «Elegir archivos».</div>
+            <div class="dropSub">PDF, TXT, JSON o imágenes · También podés usar «Elegir archivos».</div>
             <div class="files" id="files"></div>
           </div>
         </div>
-        <div class="field-wide">
-          <label for="ocrText">Texto extraído de imagen o PDF escaneado <span class="hint">(opcional)</span></label>
-          <textarea id="ocrText" placeholder="Pegá el texto si ya lo tenés extraído"></textarea>
-        </div>
+
       </div>
       <div class="actions">
-        <input id="filepicker" type="file" accept=".pdf,.txt,.json,.css,.jpg,.jpeg,.png,.webp,.heic,.tif,.tiff,application/pdf,text/plain,application/json,text/css,image/jpeg,image/png,image/webp,image/heic,image/tiff" multiple hidden />
+        <input id="filepicker" type="file" accept=".pdf,.txt,.json,.jpg,.jpeg,.png,.webp,.heic,.tif,.tiff,application/pdf,text/plain,application/json,image/jpeg,image/png,image/webp,image/heic,image/tiff" multiple hidden />
         <button class="btn" id="btnPick" type="button">Elegir archivos</button>
         <button class="btn primary" id="btnUpload" type="button" disabled>Subir y procesar</button>
         <button class="btn" id="btnClear" type="button" disabled>Limpiar</button>
       </div>
       <div class="progress" role="progressbar" aria-label="Progreso de carga" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="bar" id="bar"></div></div>
-      <p class="notice">El flujo actual aún no vincula la sede seleccionada con el estudio guardado. Esa relación requiere actualizar n8n.</p>
-      <details class="config"><summary>Configuración del envío</summary><label for="endpoint">Dirección del servicio</label><input id="endpoint" inputmode="url" placeholder="https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v3" /><p class="hint">Cambiá esta dirección solo si tu flujo utiliza otro webhook.</p></details>
     </main>
     <section class="result" id="result" aria-live="polite" style="display:none"></section>
   </div>
@@ -88,17 +87,16 @@
 <script src="/endodb-api.js"></script>
 <script>
 (() => {
-  const DEFAULT_ENDPOINT = "https://n8n.drperez86.com/webhook/endodb/process-exam-directus-v3";
+  const DEFAULT_ENDPOINT = "/api/ingest";
   // La ingesta sigue en n8n; los sitios y las consultas se obtienen de Directus por la API local.
 
   // Si Cloudflare corta la respuesta por tardanza, acá lo convertimos en "Procesando" (no error).
   // Se activa SOLO cuando el upload ya terminó y la respuesta no llega a tiempo.
   const POST_UPLOAD_GRACE_MS = 85000; // ~85s: típico umbral antes del “corte” en proxies/CDN
 
-  const elEndpoint = document.getElementById("endpoint");
-  const elNotes = document.getElementById("notes");
+  const elStudyDate = document.getElementById("studyDate");
+  const elStudyTypes = document.getElementById("studyTypes");
   const elLugarCodigo = document.getElementById("lugarCodigo");
-  const elOcrText = document.getElementById("ocrText");
 
   const elDrop = document.getElementById("drop");
   const elFiles = document.getElementById("files");
@@ -119,7 +117,6 @@
   const saveSiteBtn = document.getElementById("saveSiteBtn");
   let locationMessage = "";
 
-  elEndpoint.value = DEFAULT_ENDPOINT;
 
   async function loadLocations(selectId){
     try {
@@ -175,9 +172,8 @@
     const t = (file.type || "").toLowerCase();
     const n = (file.name || "").toLowerCase();
     if (t === "application/pdf" || n.endsWith(".pdf")) return "PDF";
-    if (t.startsWith("text/plain") || n.endsWith(".txt") || n.endsWith(".text") || n.endsWith(".log") || n.endsWith(".md")) return "TXT";
+    if (t.startsWith("text/plain") || n.endsWith(".txt")) return "TXT";
     if (t.includes("json") || n.endsWith(".json")) return "JSON";
-    if (t === "text/css" || n.endsWith(".css")) return "CSS";
     if (t.startsWith("image/") || n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".webp") || n.endsWith(".heic") || n.endsWith(".tif") || n.endsWith(".tiff")) return "FOTO";
     return "No permitido";
   };
@@ -212,11 +208,11 @@
     const hasFiles = queue.length > 0;
     btnClear.disabled = !hasFiles || uploading;
     btnPick.disabled = uploading;
-    const endpointOk = (elEndpoint.value || "").trim().length > 0;
     const lugarOk = (elLugarCodigo.value || "").trim().length > 0;
+    const metadataOk = !!elStudyDate.value && !!elStudyTypes.value;
 
     const bad = queue.some(x => !allowed(x.file));
-    btnUpload.disabled = !(hasFiles && endpointOk && lugarOk && !bad && !uploading);
+    btnUpload.disabled = !(hasFiles && lugarOk && metadataOk && !bad && !uploading);
   };
 
   const statusPill = (status) => {
@@ -347,26 +343,27 @@
     refreshStatusLine();
   });
 
-  elEndpoint.addEventListener("input", refreshButtons);
   elLugarCodigo.addEventListener("input", () => { resetResult(); refreshButtons(); });
+  elStudyDate.addEventListener("input", refreshButtons);
+  elStudyTypes.addEventListener("input", refreshButtons);
 
   // Upload sequentially (1 request por archivo)
   btnUpload.addEventListener("click", async () => {
     resetResult();
     setProgress(0);
 
-    const url = (elEndpoint.value || "").trim();
-    const notes = (elNotes.value || "").trim();
+    const url = DEFAULT_ENDPOINT;
+    const fechaEstudio = elStudyDate.value;
+    const procedureTypes = elStudyTypes.value;
     const lugarCodigo = (elLugarCodigo.value || "").trim();
-    const ocrText = (elOcrText.value || "").trim();
 
     const bad = queue.filter(it => !allowed(it.file));
     if (bad.length) {
-      setResult(`<div><b>Hay archivos no permitidos.</b> Permitidos: PDF, TXT, JSON, CSS o FOTO.</div>`);
+      setResult(`<div><b>Hay archivos no permitidos.</b> Permitidos: PDF, TXT, JSON o FOTO.</div>`);
       return;
     }
     if (!queue.length) {
-      setResult(`<div><b>No hay archivos.</b> Elegí uno o varios archivos PDF, TXT, JSON, CSS o FOTO.</div>`);
+      setResult(`<div><b>No hay archivos.</b> Elegí uno o varios archivos PDF, TXT, JSON o FOTO.</div>`);
       return;
     }
     if (!lugarCodigo) {
@@ -403,9 +400,8 @@
       try {
         const payload = await uploadOne(url, it.file, {
           exam_id: it.exam_id,
-          notes,
+          fechaEstudio, procedureTypes,
           lugarCodigo,
-          ocrText,
         }, (loaded) => {
           const p = totalBytes ? ((doneBytes + loaded) / totalBytes) * 100 : 0;
           setProgress(p);
@@ -479,24 +475,41 @@
     }).join("");
   }
 
-  function uploadOne(url, file, meta, onProgress){
+  async function uploadOne(url, file, meta, onProgress){
+    const preview = new FormData();
+    preview.set("mode", "preview");
+    preview.set("file", file, file.name);
+    preview.set("exam_id", meta.exam_id);
+    preview.set("sede_id", meta.lugarCodigo);
+    preview.set("fecha_estudio", meta.fechaEstudio);
+    preview.set("procedure_types", meta.procedureTypes);
+    let checked;
+    try {
+      const response = await fetch(url, { method: "POST", body: preview });
+      checked = await response.json();
+      if (!response.ok || !checked.ok) throw makeUploadError(checked.error === "RECONCILIATION_REQUIRED" ? "Hay un estudio histórico coincidente. No se cargó el archivo; requiere reconciliación." : "No se pudo validar la carga.", response.status, null, url);
+    } catch (error) {
+      throw error.status ? error : makeUploadError("No se pudo obtener la vista previa.", 0, null, url);
+    }
+    if (!window.confirm(`Confirmar carga de ${file.name} en ${checked.site.codigo} el ${meta.fechaEstudio} (${meta.procedureTypes}). No hay coincidencias por ID o por fecha, sede y tipo.`)) {
+      throw makeUploadError("Envío cancelado.", 0, null, url);
+    }
     return new Promise((resolve, reject) => {
       const form = new FormData();
       form.append("file", file, file.name);
+      form.append("mode", "commit");
+      form.append("preview_token", checked.token);
       form.append("client_filename", file.name);
 
       // Metadatos mínimos para n8n
       if (meta && meta.exam_id) form.append("exam_id", meta.exam_id);
-      if (meta && meta.notes) form.append("notes", meta.notes);
-      // UUID administrativo para el esquema multiusuario; el flujo n8n debe guardar bd_estudios.sede.
+      form.append("fecha_estudio", meta.fechaEstudio);
+      form.append("procedure_types", meta.procedureTypes);
+      // El servidor valida la membresía antes de enviar sede y organización.
       if (meta && meta.lugarCodigo) form.append("sede_id", meta.lugarCodigo);
       if (meta && meta.lugarCodigo) {
         const code = [...elLugarCodigo.options].find(option => option.value === meta.lugarCodigo)?.dataset.code;
         if (code) form.append("lugar_codigo", code);
-      }
-      if (meta && meta.ocrText) {
-        form.append("document_text", meta.ocrText);
-        form.append("ocr_text", meta.ocrText);
       }
 
       const xhr = new XMLHttpRequest();
