@@ -120,6 +120,8 @@ export async function POST(request) {
       cache: "no-store", redirect: "error", signal: AbortSignal.timeout(150000),
     });
     const result = await r.json().catch(() => null);
+    // El secreto compartido solo se verifica dentro de n8n. Informar el fallo sin exponer secretos ni el cuerpo remoto.
+    if (r.status === 401 || r.status === 403) return json(502, "INGEST_WEBHOOK_UNAUTHORIZED");
     if (!r.ok || !result || typeof result !== "object") return json(502, "INGEST_UPSTREAM_ERROR");
     if (result.ok === false && !result.ingesta_id) return json(422, result.error || "INGEST_REJECTED");
     return json(200, null, { data: result, ingesta_id: result.ingesta_id ?? null,
