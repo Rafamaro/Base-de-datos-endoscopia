@@ -1,0 +1,512 @@
+{
+  "name": "BD Endoscopia v3.6.2 — Directus + DeepSeek — OCR SSH + lugares + HC audit fix",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "endodb/process-exam-directus-v3",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        18512,
+        14000
+      ],
+      "id": "bbf620e2-c420-4779-ba5a-5b98f22da385",
+      "name": "Webhook — endodb index.html",
+      "webhookId": "a4ac7e21-26e1-4683-b3bd-0980409a522f"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ============================================================\n// BD Endoscopia v3.5 — CONFIG\n// ============================================================\n// 1) Pegá el token Directus del usuario de n8n, SIN \"Bearer\".\n// 2) DeepSeek usa la credencial configurada en el nodo HTTP Request.\n// 3) PDFs escaneados: OCR local por Ubuntu vía carpeta compartida + nodo SSH.\n//    n8n escribe en /data/ocr/entrada, Ubuntu ejecuta /usr/local/bin/ocrpdf,\n//    n8n lee /data/ocr/salida. Así NO se manda PII a OCR externo.\n// 4) El sitio de realización lo envía index.html como lugar_codigo.\n//    n8n lo resuelve contra bd_lugares y lo guarda en bd_ingestas/bd_estudios.\n// 5) Fotos/imagenes: siguen necesitando OCR local por endpoint o texto OCR ya enviado\n//    desde index.html. El foco de esta versión es PDF por SSH.\n\nconst DIRECTUS_URL = \"https://directus.drperez86.com\";\nconst DIRECTUS_TOKEN = String($vars.ENDODB_DIRECTUS_TOKEN || \"\").trim();\n\nconst DEEPSEEK_MODEL = \"deepseek-chat\"; // Cambiar si tu credencial usa otro modelo.\nconst DEEPSEEK_MAX_CHARS = 60000;\n\n// OCR de PDF por SSH/Ubuntu. Estas rutas deben existir en Ubuntu y verse igual desde n8n Docker.\nconst OCR_INPUT_DIR = \"/data/ocr/entrada\";\nconst OCR_OUTPUT_DIR = \"/data/ocr/salida\";\nconst OCR_COMMAND_BIN = \"/usr/local/bin/ocrpdf\";\n\n// OCR por HTTP opcional, solo para imágenes si index.html no manda ocr_text/document_text.\nconst OCR_LOCAL_ENDPOINT = \"\";\n\nif (!DIRECTUS_TOKEN) {\n  throw new Error(\"Pegá el token Directus en el nodo CONFIG — BD Endoscopia v3.\");\n}\n\nreturn {\n  json: {\n    ...$json,\n    DIRECTUS_URL: DIRECTUS_URL.replace(/\\/+$/, \"\"),\n    DIRECTUS_TOKEN,\n    DEEPSEEK_MODEL,\n    DEEPSEEK_MAX_CHARS,\n    OCR_INPUT_DIR,\n    OCR_OUTPUT_DIR,\n    OCR_COMMAND_BIN,\n    OCR_LOCAL_ENDPOINT,\n    PROMPT_VERSION: \"bd-endoscopia-v3-6-ocr-ssh-lugares-2026-07-13\"\n  },\n  binary: $binary\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        18768,
+        14000
+      ],
+      "id": "ae59a8cc-7cdb-45cd-8e3d-f2020779d234",
+      "name": "CONFIG — BD Endoscopia v3"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const inputJson = $json || {};\nconst inputBinary = $binary || {};\n\nfunction cfgValue(name, fallback = \"\") {\n  return inputJson[name] ?? fallback;\n}\nfunction asString(v) {\n  if (v === null || v === undefined) return \"\";\n  if (typeof v === \"string\") return v;\n  return JSON.stringify(v, null, 2);\n}\nfunction extFromName(name) {\n  const m = String(name || \"\").match(/\\.([a-zA-Z0-9]+)$/);\n  return m ? m[1].toLowerCase() : \"\";\n}\nfunction kindFrom(ext, mime) {\n  const mt = String(mime || \"\").toLowerCase();\n  if (mt === \"application/pdf\" || ext === \"pdf\") return \"pdf\";\n  if (mt.startsWith(\"image/\") || [\"jpg\",\"jpeg\",\"png\",\"webp\",\"heic\",\"tif\",\"tiff\"].includes(ext)) return \"image\";\n  if (mt.includes(\"json\") || ext === \"json\") return \"json\";\n  if (mt === \"text/css\" || ext === \"css\") return \"css\";\n  if (mt.startsWith(\"text/\") || [\"txt\",\"text\",\"log\",\"md\"].includes(ext)) return \"txt\";\n  return \"unsupported\";\n}\nfunction firstNonEmpty(...vals) {\n  for (const v of vals) {\n    const s = asString(v).trim();\n    if (s) return s;\n  }\n  return \"\";\n}\nasync function localOcrFromBinary(buffer, fileName, mimeType) {\n  const endpoint = String(cfgValue(\"OCR_LOCAL_ENDPOINT\", \"\")).trim();\n  if (!endpoint) {\n    throw new Error(\"Se recibió una FOTO/imagen, pero no hay OCR local configurado. Para cumplir anonimización previa, instalá OCR local o enviá document_text/ocr_text desde index.html. No conviene mandar la imagen con PII directo a una IA externa.\");\n  }\n  const httpRequest = this.helpers.httpRequest.bind(this);\n  const res = await httpRequest({\n    method: \"POST\",\n    url: endpoint,\n    headers: { \"Content-Type\": \"application/json\", \"Accept\": \"application/json,text/plain\" },\n    body: {\n      file_name: fileName || \"imagen\",\n      mime_type: mimeType || \"application/octet-stream\",\n      data_base64: buffer.toString(\"base64\")\n    },\n    json: true,\n    timeout: 180000\n  });\n  if (typeof res === \"string\") return res;\n  return asString(res?.text ?? res?.data?.text ?? res?.ocr_text ?? res?.markdown ?? \"\");\n}\n\nconst body = inputJson.body ?? {};\nconst query = inputJson.query ?? {};\nconst binaryNames = Object.keys(inputBinary || {});\n\nif (binaryNames.length > 0) {\n  const chosen = binaryNames.includes(\"file\") ? \"file\" : binaryNames[0];\n  const b = inputBinary[chosen];\n  const fileName = firstNonEmpty(b.fileName, body.client_filename, body.filename, query.filename, `archivo_${Date.now()}`);\n  const ext = extFromName(fileName);\n  const mimeType = String(b.mimeType || body.mime_type || query.mime_type || \"\").toLowerCase();\n  const fileKind = kindFrom(ext, mimeType);\n\n  if (fileKind === \"unsupported\") {\n    throw new Error(`Tipo no soportado: mimeType=${mimeType || \"sin mimeType\"}, archivo=${fileName}. Permitidos: PDF, TXT, JSON, CSS y FOTO/imagen.`);\n  }\n\n  const base = {\n    ok: true,\n    fileKind,\n    fileName,\n    ext: ext || fileKind,\n    mimeType,\n    binaryPropertyName: \"file\",\n    fileSize: b.fileSize ?? b.fileSizeBytes ?? null,\n    form: {\n      client_filename: firstNonEmpty(body.client_filename, query.client_filename, fileName),\n      exam_id: firstNonEmpty(body.exam_id, query.exam_id),\n      // Sitio seleccionado en index.html. Acepta aliases para tolerar versiones del frontend.\n      lugar_codigo: firstNonEmpty(\n        body.lugar_codigo, query.lugar_codigo,\n        body.lugar_estudio_codigo, query.lugar_estudio_codigo,\n        body.sitio_codigo, query.sitio_codigo,\n        body.site_code, query.site_code,\n        body.lugar_estudio, query.lugar_estudio\n      ),\n      notes: firstNonEmpty(body.notes, query.notes)\n    }\n  };\n\n  if (fileKind === \"pdf\") return { json: base, binary: { file: b } };\n\n  const buffer = await this.helpers.getBinaryDataBuffer($itemIndex, chosen);\n  let documentText = \"\";\n\n  if (fileKind === \"image\") {\n    documentText = firstNonEmpty(body.document_text, body.ocr_text, query.document_text, query.ocr_text);\n    if (!documentText) documentText = await localOcrFromBinary.call(this, buffer, fileName, mimeType);\n  } else {\n    documentText = buffer.toString(\"utf8\");\n    if (fileKind === \"json\") {\n      try { documentText = JSON.stringify(JSON.parse(documentText), null, 2); } catch (e) {}\n    }\n  }\n\n  if (!documentText.trim()) throw new Error(`No se pudo obtener texto del archivo ${fileName}.`);\n  return { json: { ...base, document_text: documentText }, binary: { file: b } };\n}\n\n// POST directo sin binario: acepta body.document_text, body.text, body.json, body.css o el body completo.\nconst direct = inputJson.body ?? inputJson;\nlet documentText = firstNonEmpty(direct.document_text, direct.ocr_text, direct.text, direct.informe, direct.css, direct.content);\nif (!documentText) documentText = asString(direct);\nconst trimmed = documentText.trim();\nif (!trimmed) throw new Error(\"No encontré archivo ni texto en el request.\");\nlet fileKind = \"txt\";\nif (trimmed.startsWith(\"{\") || trimmed.startsWith(\"[\")) fileKind = \"json\";\nif (typeof direct.css === \"string\") fileKind = \"css\";\n\nreturn {\n  json: {\n    ok: true,\n    fileKind,\n    fileName: firstNonEmpty(direct.filename, direct.client_filename, `webhook-body.${fileKind}`),\n    ext: fileKind,\n    mimeType: fileKind === \"json\" ? \"application/json\" : (fileKind === \"css\" ? \"text/css\" : \"text/plain\"),\n    binaryPropertyName: \"\",\n    fileSize: trimmed.length,\n    document_text: documentText,\n    form: {\n      exam_id: firstNonEmpty(direct.exam_id),\n      lugar_codigo: firstNonEmpty(\n        direct.lugar_codigo,\n        direct.lugar_estudio_codigo,\n        direct.sitio_codigo,\n        direct.site_code,\n        direct.lugar_estudio\n      ),\n      notes: firstNonEmpty(direct.notes)\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        19072,
+        14000
+      ],
+      "id": "e66b7859-9c21-4bf7-89e6-c3d6e2be2a70",
+      "name": "Entrada — detectar archivo y texto"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "41f552bc-1af0-4d58-89c6-3c9064c7372d",
+              "leftValue": "={{$json.fileKind}}",
+              "rightValue": "pdf",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        19360,
+        14000
+      ],
+      "id": "a4d3df39-4127-4f0c-8efe-4f65828ef7de",
+      "name": "IF PDF"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "function sanitizeBase(name) {\n  const raw = String(name || \"archivo.pdf\").replace(/\\.pdf$/i, \"\");\n  const noAccents = raw.normalize(\"NFD\").replace(/[\\u0300-\\u036f]/g, \"\");\n  const safe = noAccents.replace(/[^a-zA-Z0-9._-]+/g, \"_\").replace(/^_+|_+$/g, \"\").slice(0, 80);\n  return safe || \"archivo\";\n}\nfunction shellQuote(s) {\n  return \"'\" + String(s).replace(/'/g, \"'\\\\''\") + \"'\";\n}\nfunction dirClean(s, fallback) {\n  const v = String(s || fallback).trim().replace(/\\/+$/, \"\");\n  return v || fallback;\n}\n\nconst inputDir = dirClean($json.OCR_INPUT_DIR, \"/data/ocr/entrada\");\nconst outputDir = dirClean($json.OCR_OUTPUT_DIR, \"/data/ocr/salida\");\nconst ocrBin = String($json.OCR_COMMAND_BIN || \"/usr/local/bin/ocrpdf\").trim();\n\nconst originalName = String($json.fileName || \"archivo.pdf\");\nconst base = sanitizeBase(originalName);\nconst stamp = new Date().toISOString().replace(/\\D/g, \"\").slice(0, 14);\nconst rnd = Math.random().toString(16).slice(2, 8).toUpperCase();\nconst finalBase = `${base}_${stamp}_${rnd}`;\n\nconst inputPath = `${inputDir}/${finalBase}.pdf`;\nconst outputPath = `${outputDir}/${finalBase}_ocr.pdf`;\n\nconst command = [\n  `mkdir -p ${shellQuote(inputDir)} ${shellQuote(outputDir)}`,\n  `rm -f ${shellQuote(outputPath)}`,\n  `${shellQuote(ocrBin)} ${shellQuote(inputPath)} ${shellQuote(outputPath)}`,\n  `test -s ${shellQuote(outputPath)}`,\n  `echo OK_SSH_OCR:${shellQuote(outputPath)}`\n].join(\" && \");\n\nreturn {\n  json: {\n    ...$json,\n    ocr_input_path: inputPath,\n    ocr_output_path: outputPath,\n    ocr_command: command,\n    extraction_method: \"pdf_ocr_ssh_ocrmypdf\",\n    ocr_used: true,\n    ocr_strategy: \"shared-folder-plus-ssh\"\n  },\n  binary: $binary\n};"
+      },
+      "id": "767698a3-16ef-4d3c-bb4b-cffc594a7a4b",
+      "name": "OCR — preparar rutas PDF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        19616,
+        13856
+      ]
+    },
+    {
+      "parameters": {
+        "fileName": "={{ $json.ocr_input_path }}",
+        "dataPropertyName": "file",
+        "options": {}
+      },
+      "id": "ba56ebc5-eb42-47a8-8f26-b0a6c745936d",
+      "name": "Write Binary File — PDF entrada OCR",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        19872,
+        13856
+      ]
+    },
+    {
+      "parameters": {
+        "command": "={{ $(\"OCR — preparar rutas PDF\").item.json.ocr_command }}"
+      },
+      "id": "88ed1dfc-cd7d-44c2-a3c3-6aca9a782b08",
+      "name": "SSH — OCRmyPDF Ubuntu",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        20128,
+        13856
+      ],
+      "notesInFlow": true,
+      "credentials": {
+        "sshPassword": {
+          "id": "NbllHNmobi0ztXfm",
+          "name": "SSH Password account"
+        }
+      },
+      "notes": "Seleccioná la credencial SSH del Ubuntu: host 192.168.0.12, puerto 22, usuario rafa. Este nodo ejecuta /usr/local/bin/ocrpdf sobre /data/ocr."
+    },
+    {
+      "parameters": {
+        "filePath": "={{ $(\"OCR — preparar rutas PDF\").item.json.ocr_output_path }}",
+        "dataPropertyName": "file"
+      },
+      "id": "e0875107-1309-4021-b5ed-0f33d9552059",
+      "name": "Read Binary File — PDF OCRizado",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        20400,
+        13856
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "let meta = {};\ntry { meta = $(\"OCR — preparar rutas PDF\").item.json || {}; } catch (e) {}\nif (!Object.keys(meta).length) {\n  try { meta = $items(\"OCR — preparar rutas PDF\")[0]?.json || {}; } catch (e) {}\n}\nconst bin = $binary || {};\nif (!bin.file && Object.keys(bin).length) {\n  const first = Object.keys(bin)[0];\n  bin.file = bin[first];\n}\nreturn {\n  json: {\n    ...meta,\n    ocr_read_ok: true\n  },\n  binary: bin\n};"
+      },
+      "id": "d119b889-7187-46e9-b714-b349d5e57a53",
+      "name": "OCR — restaurar metadata PDF OCRizado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20656,
+        13856
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "file",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        20912,
+        13856
+      ],
+      "id": "b031d3cd-f4fa-47b3-ac9d-fca0e6a91d03",
+      "name": "Extract PDF text"
+    },
+    {
+      "parameters": {
+        "jsCode": "function asString(v) {\n  if (v === null || v === undefined) return \"\";\n  if (typeof v === \"string\") return v;\n  return JSON.stringify(v, null, 2);\n}\nfunction collectStrings(value, out = []) {\n  if (value === null || value === undefined) return out;\n  if (typeof value === \"string\") {\n    if (value.trim()) out.push(value);\n    return out;\n  }\n  if (Array.isArray(value)) {\n    for (const v of value) collectStrings(v, out);\n    return out;\n  }\n  if (typeof value === \"object\") {\n    for (const key of [\"text\", \"content\", \"data\", \"pageContent\", \"document\", \"rawText\"]) {\n      if (value[key] !== undefined) collectStrings(value[key], out);\n    }\n    return out;\n  }\n  return out;\n}\n\nconst inputItems = $input.all();\nconst parts = [];\nfor (const item of inputItems) {\n  const found = collectStrings(item.json || {});\n  if (found.length) parts.push(found.join(\"\\n\"));\n}\n\nlet meta = {};\ntry { meta = $items(\"OCR — restaurar metadata PDF OCRizado\")[0]?.json || {}; } catch (e) {}\nif (!Object.keys(meta).length) {\n  try { meta = $items(\"Entrada — detectar archivo y texto\")[0]?.json || {}; } catch (e) {}\n}\n\nconst documentText = parts.join(\"\\n\\n\").trim();\nif (!documentText) {\n  throw new Error(\n    \"El PDF pasó por OCR vía SSH, pero Extract PDF text/pdftotext no devolvió texto utilizable. \" +\n    `Revisá el archivo OCRizado en: ${meta.ocr_output_path || \"ruta no disponible\"}.`\n  );\n}\n\nreturn [{\n  json: {\n    ...meta,\n    document_text: documentText,\n    extraction_method: meta.extraction_method || \"pdf_ocr_ssh_ocrmypdf\",\n    ocr_used: true\n  },\n  binary: $binary\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        21168,
+        13856
+      ],
+      "id": "cf0fab49-e52b-4ed8-9ad9-41f9930a9c70",
+      "name": "Texto desde PDF"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const documentText = String($json.document_text || \"\").trim();\nif (!documentText) throw new Error(\"No hay texto utilizable para procesar.\");\nreturn { json: { ...$json, document_text: documentText } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        21168,
+        14144
+      ],
+      "id": "16ecff78-8bf5-4e68-a389-fd7838e6e893",
+      "name": "Texto directo TXT JSON CSS FOTO-OCR"
+    },
+    {
+      "parameters": {
+        "jsCode": "function getConfig() {\n  let cfg = {};\n  try { cfg = $items(\"CONFIG — BD Endoscopia v3\")[0]?.json || {}; } catch (e) {}\n  const DIRECTUS_URL = String(cfg.DIRECTUS_URL || \"https://directus.drperez86.com\").replace(/\\/+$/, \"\");\n  const DIRECTUS_TOKEN = String(cfg.DIRECTUS_TOKEN || \"\");\n  if (!DIRECTUS_TOKEN) throw new Error(\"Falta DIRECTUS_TOKEN desde CONFIG.\");\n  return { ...cfg, DIRECTUS_URL, DIRECTUS_TOKEN };\n}\nconst cfg = getConfig();\nconst httpRequest = this.helpers.httpRequest.bind(this);\nconst headers = { Authorization: `Bearer ${cfg.DIRECTUS_TOKEN}`, Accept: \"application/json\", \"Content-Type\": \"application/json\" };\nconst fieldCache = {};\n\nfunction safeJson(v) { try { return typeof v === \"string\" ? v : JSON.stringify(v); } catch(e) { return String(v); } }\nasync function api(method, path, body = undefined, qs = undefined) {\n  const opts = { method, url: `${cfg.DIRECTUS_URL}${path}`, headers, json: true };\n  if (body !== undefined) opts.body = body;\n  if (qs !== undefined) opts.qs = qs;\n  try { return await httpRequest(opts); }\n  catch (err) {\n    const status = err?.response?.status ?? err?.statusCode ?? err?.status ?? \"sin_status\";\n    const data = err?.response?.data ?? err?.data ?? err?.message ?? err;\n    throw new Error(`Directus ${method} ${path} falló HTTP ${status}: ${safeJson(data).slice(0, 1500)}`);\n  }\n}\nasync function fields(collection) {\n  if (fieldCache[collection]) return fieldCache[collection];\n  const res = await api(\"GET\", `/fields/${collection}`);\n  const arr = Array.isArray(res?.data) ? res.data : [];\n  fieldCache[collection] = new Set(arr.map(f => f.field));\n  return fieldCache[collection];\n}\nasync function filterPayload(collection, obj) {\n  const fs = await fields(collection);\n  const out = {};\n  for (const [k,v] of Object.entries(obj)) {\n    if (!fs.has(k)) continue;\n    if (v === undefined) continue;\n    out[k] = v;\n  }\n  return out;\n}\nasync function postItem(collection, obj) {\n  const payload = await filterPayload(collection, obj);\n  return await api(\"POST\", `/items/${collection}`, payload);\n}\nasync function patchItem(collection, id, obj) {\n  const payload = await filterPayload(collection, obj);\n  return await api(\"PATCH\", `/items/${collection}/${id}`, payload);\n}\nasync function patchItemSafe(collection, id, obj, warnings) {\n  try { return await patchItem(collection, id, obj); }\n  catch (e) {\n    warnings.push(`No se pudo actualizar ${collection}.${id}: ${e.message}`);\n    return null;\n  }\n}\nasync function postIngestaWithFallback(fullPayload, warnings) {\n  const fs = await fields(\"bd_ingestas\");\n  const keep = (obj) => {\n    const out = {};\n    for (const [k, v] of Object.entries(obj || {})) {\n      if (!fs.has(k)) continue;\n      if (v === undefined) continue;\n      out[k] = v;\n    }\n    return out;\n  };\n  const attempts = [\n    { label: \"full_filtrado\", payload: keep(fullPayload) },\n    { label: \"core_sin_metadata\", payload: keep({\n      source_file_name: fullPayload.source_file_name,\n      source_file_kind: fullPayload.source_file_kind,\n      mime_type: fullPayload.mime_type,\n      lugar_estudio: fullPayload.lugar_estudio,\n      lugar_codigo_request: fullPayload.lugar_codigo_request,\n      status: \"recibido\"\n    }) },\n    { label: \"core_sin_status\", payload: keep({\n      source_file_name: fullPayload.source_file_name,\n      source_file_kind: fullPayload.source_file_kind,\n      mime_type: fullPayload.mime_type,\n      lugar_estudio: fullPayload.lugar_estudio,\n      lugar_codigo_request: fullPayload.lugar_codigo_request\n    }) },\n    { label: \"solo_nombre_status\", payload: keep({\n      source_file_name: fullPayload.source_file_name,\n      lugar_estudio: fullPayload.lugar_estudio,\n      lugar_codigo_request: fullPayload.lugar_codigo_request,\n      status: \"recibido\"\n    }) },\n    { label: \"solo_nombre\", payload: keep({\n      source_file_name: fullPayload.source_file_name\n    }) },\n    { label: \"vacio\", payload: keep({}) }\n  ];\n  const errors = [];\n  for (const a of attempts) {\n    try {\n      const res = await api(\"POST\", \"/items/bd_ingestas\", a.payload);\n      if (a.label !== \"full_filtrado\") warnings.push(`bd_ingestas creado con fallback ${a.label}. Payload original completo falló; revisar schema/validaciones.`);\n      return { res, usedLabel: a.label, usedPayload: a.payload, errors };\n    } catch (e) {\n      errors.push({ intento: a.label, payload: a.payload, error: e.message });\n    }\n  }\n  throw new Error(\"No se pudo crear bd_ingestas ni con payload mínimo. Esto sugiere tabla rota, permiso de create, colección sin tabla física o un Flow/hook interno de Directus. Intentos: \" + safeJson(errors).slice(0, 3500));\n}\nfunction nowIso() { return new Date().toISOString(); }\nfunction asText(v) { return v === null || v === undefined ? \"\" : String(v).trim(); }\nfunction normSpaces(s) { return String(s || \"\").replace(/\\s+/g, \" \").trim(); }\nfunction stripAccents(s) { return String(s || \"\").normalize(\"NFD\").replace(/[\\u0300-\\u036f]/g, \"\"); }\nfunction normKey(s) { return stripAccents(s).toUpperCase().replace(/[^A-Z0-9]+/g, \"_\").replace(/^_+|_+$/g, \"\"); }\nfunction onlyDigits(s) { return asText(s).replace(/\\D+/g, \"\"); }\nfunction escapeRegExp(s) { return String(s).replace(/[.*+?^${}()|[\\]\\\\]/g, \"\\\\$&\"); }\nfunction hashText(s) { let h = 5381; s = String(s || \"\"); for (let i=0;i<s.length;i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(16).padStart(8,\"0\"); }\nfunction sourceKindForBd(kind) {\n  // Compatibilidad con el schema mínimo instalado:\n  // bd_ingestas.source_file_kind suele aceptar solo pdf/txt/json/csv.\n  // CSS y FOTO/OCR se procesan como texto y se conserva el tipo original en metadata.\n  const k = String(kind || \"\").toLowerCase();\n  if ([\"pdf\", \"txt\", \"json\", \"csv\"].includes(k)) return k;\n  if (k === \"css\" || k === \"image\") return \"txt\";\n  return \"txt\";\n}\nfunction normalizeLugarCodigo(v) {\n  const raw = String(v || \"\").trim();\n  if (!raw) return \"NO_INFORMADO\";\n  const k = stripAccents(raw)\n    .toUpperCase()\n    .replace(/[^A-Z0-9]+/g, \"_\")\n    .replace(/^_+|_+$/g, \"\");\n\n  // Aliases tolerantes para lo que pueda mandar index.html.\n  if ([\"SANTA_ISABEL\", \"CLINICA_SANTA_ISABEL\", \"CSI\", \"ISABEL\"].includes(k)) return \"SANTA_ISABEL\";\n  if ([\"PROVIDENCIA\", \"SANATORIO_PROVIDENCIA\", \"SANATORIO_DE_LA_PROVIDENCIA\", \"SP\"].includes(k)) return \"PROVIDENCIA\";\n  if ([\"HOSPITAL_CLINICAS\", \"HOSPITAL_DE_CLINICAS\", \"CLINICAS\", \"UBA\", \"HOSPITAL_CLINICAS_JOSE_DE_SAN_MARTIN\"].includes(k)) return \"HOSPITAL_CLINICAS\";\n  if ([\"OTRO\", \"OTRA\", \"OTHER\"].includes(k)) return \"OTRO\";\n  if ([\"NO_INFORMADO\", \"SIN_INFORMAR\", \"NO_INFORMA\", \"DESCONOCIDO\", \"\"].includes(k)) return \"NO_INFORMADO\";\n  return k;\n}\nasync function findLugarByCodigo(rawCodigo, warnings) {\n  const requested = String(rawCodigo || \"\").trim();\n  const codigo = normalizeLugarCodigo(requested);\n  const fuente = requested ? \"frontend\" : \"no_informado\";\n\n  async function queryCodigo(c) {\n    const res = await api(\"GET\", \"/items/bd_lugares\", undefined, {\n      limit: 1,\n      \"filter[codigo][_eq]\": c\n    });\n    return Array.isArray(res?.data) ? res.data[0] : null;\n  }\n\n  let lugar = null;\n  try {\n    lugar = await queryCodigo(codigo);\n  } catch (e) {\n    warnings.push(`No se pudo consultar bd_lugares por codigo=${codigo}: ${e.message}`);\n  }\n\n  if (lugar?.id) {\n    return { id: lugar.id, codigo: lugar.codigo || codigo, fuente, requested_codigo: requested || \"\" };\n  }\n\n  if (codigo !== \"NO_INFORMADO\") {\n    warnings.push(`lugar_codigo no encontrado en bd_lugares: ${codigo}. Se usará NO_INFORMADO.`);\n  }\n\n  try {\n    const fallback = await queryCodigo(\"NO_INFORMADO\");\n    if (fallback?.id) return { id: fallback.id, codigo: \"NO_INFORMADO\", fuente: \"no_informado\", requested_codigo: requested || \"\" };\n  } catch (e) {\n    warnings.push(`No se pudo resolver fallback NO_INFORMADO en bd_lugares: ${e.message}`);\n  }\n\n  return { id: null, codigo: \"NO_INFORMADO\", fuente: \"no_informado\", requested_codigo: requested || \"\" };\n}\nfunction sanitizeSourceFileName(fileName) {\n  let s = String(fileName || \"archivo_sin_nombre\").split(/[\\\\/]/).pop();\n\n  // Fecha inicial o cualquier fecha ISO dentro del filename.\n  s = s.replace(/\\d{4}-\\d{2}-\\d{2}/g, \"FECHA\");\n\n  // DNI/documentos de 6 a 12 dígitos.\n  s = s.replace(/\\b\\d{6,12}\\b/g, \"DOC\");\n\n  // Hashes/códigos finales antes de la extensión.\n  s = s.replace(/_[0-9a-fA-F]{6,}(\\.[a-z0-9]+)$/i, \"_HASH$1\");\n\n  // Bloques tipo APELLIDO-NOMBRE-NOMBRE o APELLIDO_NOMBRE.\n  s = s.replace(\n    /_?[A-ZÁÉÍÓÚÑ]{2,}(?:[-_][A-ZÁÉÍÓÚÑ]{2,}){1,8}/g,\n    \"_PACIENTE\"\n  );\n\n  // Limpieza estética.\n  s = s\n    .replace(/_{2,}/g, \"_\")\n    .replace(/-+/g, \"-\")\n    .replace(/^_+|_+$/g, \"\");\n\n  return s || \"archivo_sanitizado\";\n}\nfunction safeFilenameMetaForMetadata(meta) {\n  return {\n    procedure_hint: meta?.procedure_hint || \"INDETERMINADO\",\n    had_fecha_en_filename: !!meta?.fecha,\n    had_documento_en_filename: !!meta?.numero_documento,\n    had_nombre_en_filename: !!meta?.nombre_completo,\n    had_exam_id_en_filename: !!meta?.exam_id\n  };\n}\nfunction dateIso(s) {\n  s = asText(s);\n  let m = s.match(/^(\\d{4})[-\\/](\\d{1,2})[-\\/](\\d{1,2})$/);\n  if (m) return `${m[1]}-${String(m[2]).padStart(2,\"0\")}-${String(m[3]).padStart(2,\"0\")}`;\n  m = s.match(/^(\\d{1,2})[-\\/](\\d{1,2})[-\\/](\\d{2,4})$/);\n  if (m) { let y=m[3]; if (y.length===2) y=(Number(y)>30?\"19\":\"20\")+y; return `${y}-${String(m[2]).padStart(2,\"0\")}-${String(m[1]).padStart(2,\"0\")}`; }\n  return \"\";\n}\nfunction cleanLine(s) {\n  let out = asText(s).replace(/\\s{2,}/g, \" \").replace(/[|;]+$/g, \"\").trim();\n  if (out.length > 140) out = out.slice(0, 140).trim();\n  return out;\n}\nfunction firstMatch(text, patterns, group = 1) {\n  for (const re of patterns) {\n    const m = String(text || \"\").match(re);\n    if (m && m[group] !== undefined) return cleanLine(m[group]);\n  }\n  return \"\";\n}\nfunction firstRaw(text, patterns, group = 1) {\n  for (const re of patterns) {\n    const m = String(text || \"\").match(re);\n    if (m && m[group] !== undefined) return asText(m[group]);\n  }\n  return \"\";\n}\nfunction titleish(s) { return normSpaces(String(s || \"\").replace(/[-_]+/g, \" \")).toUpperCase(); }\nfunction parseFilename(fileName) {\n  const base = String(fileName || \"\").split(/[\\\\/]/).pop();\n  const noExt = base.replace(/\\.[a-z0-9]+$/i, \"\");\n  const meta = { fecha: \"\", procedure_hint: \"INDETERMINADO\", numero_documento: \"\", nombre_completo: \"\", exam_id: \"\" };\n  const m = noExt.match(/^(\\d{4}-\\d{2}-\\d{2})_([^_]+)_([0-9]{5,12})_([^_]+?)(?:_[0-9a-fA-F]{4,})?$/);\n  if (m) {\n    meta.fecha = m[1];\n    const proc = normKey(m[2]);\n    if (proc.includes(\"VEDA\") && proc.includes(\"VCC\")) meta.procedure_hint = \"VEDA-VCC\";\n    else if (proc.includes(\"VEDA\")) meta.procedure_hint = \"VEDA\";\n    else if (proc.includes(\"VCC\")) meta.procedure_hint = \"VCC\";\n    meta.numero_documento = onlyDigits(m[3]);\n    meta.nombre_completo = titleish(m[4]);\n    return meta;\n  }\n  const d = noExt.match(/(\\d{4}-\\d{2}-\\d{2})/);\n  if (d) meta.fecha = d[1];\n  const k = normKey(noExt);\n  if (k.includes(\"VEDA\") && k.includes(\"VCC\")) meta.procedure_hint = \"VEDA-VCC\";\n  else if (k.includes(\"VEDA\")) meta.procedure_hint = \"VEDA\";\n  else if (k.includes(\"VCC\")) meta.procedure_hint = \"VCC\";\n  const dni = noExt.match(/(?:^|_)(\\d{6,12})(?:_|$)/);\n  if (dni) meta.numero_documento = onlyDigits(dni[1]);\n  return meta;\n}\nfunction extractIdentityAndIds(text, filenameMeta, form) {\n  const t = String(text || \"\");\n  const nombre = firstMatch(t, [\n    /(?:Paciente|Nombre\\s+y\\s+Apellido|Apellido\\s+y\\s+Nombre|Nombre\\s+del\\s+paciente|Nombre)\\s*[:\\-]\\s*([^\\n\\r]+)/i,\n    /(?:Sr\\.?|Sra\\.?)\\s*[:\\-]?\\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑa-záéíóúñ]+(?:\\s+[A-ZÁÉÍÓÚÑa-záéíóúñ]+){1,6})/i\n  ]) || filenameMeta.nombre_completo || \"\";\n  const docRaw = firstRaw(t, [\n    /\\b(?:DNI|Documento|DU|LC|LE|Pasaporte|C[eé]dula)\\b\\s*(?:N[°ºro\\.]*|nro\\.?|n[uú]mero)?\\s*[:\\-]?\\s*([0-9.\\-\\s]{5,18})/i,\n    /\\b(?:DNI|Documento)\\s*[:\\-]?\\s*([0-9.\\-\\s]{5,18})/i\n  ]);\n  const dni = onlyDigits(docRaw) || filenameMeta.numero_documento || \"\";\n  let tipoDocumento = dni ? \"DNI\" : \"No informado\";\n  const tipoDocM = t.match(/\\b(Pasaporte|C[eé]dula|LC|LE|DNI|Documento)\\b\\s*(?:N[°ºro\\.]*|nro\\.?|n[uú]mero)?\\s*[:\\-]?\\s*[0-9.\\-\\s]{5,18}/i);\n  if (tipoDocM) {\n    const k = normKey(tipoDocM[1]);\n    if (k.includes(\"PASAPORTE\")) tipoDocumento = \"Pasaporte\";\n    else if (k.includes(\"CEDULA\")) tipoDocumento = \"Cédula\";\n    else if (k === \"LC\") tipoDocumento = \"LC\";\n    else if (k === \"LE\") tipoDocumento = \"LE\";\n    else tipoDocumento = \"DNI\";\n  }\n  const hc = firstRaw(t, [/(?:N[°º]\\s*)?(?:Historia\\s+cl[ií]nica|HC|H\\.C\\.|N[°º]\\s*HC|Nro\\.?\\s*HC|N[uú]mero\\s+de\\s+historia\\s+cl[ií]nica)\\b\\s*(?:N[°º]|Nro\\.?|nro\\.?|n[uú]mero)?\\s*[:\\-]?\\s*([A-Z0-9.\\-\\/]{2,30})/i]);\n  const historiaClinica = onlyDigits(hc) || asText(hc);\n  const fechaProc = dateIso(firstRaw(t, [\n    /(?:Fecha\\s+del\\s+procedimiento|Fecha\\s+de\\s+procedimiento|Fecha\\s+del\\s+estudio|Fecha\\s+de\\s+estudio|Fecha\\s+del\\s+examen|Fecha\\s+de\\s+examen|Fecha\\s+informe|Fecha)\\s*[:\\-]?\\s*(\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4}|\\d{4}[\\/\\-]\\d{1,2}[\\/\\-]\\d{1,2})/i\n  ])) || filenameMeta.fecha || \"\";\n  const examId = asText(form?.exam_id) || firstRaw(t, [\n    /(?:Examen|Estudio|Procedimiento|Informe|Protocolo|ID\\s*estudio|N[°º]\\s*estudio|Nro\\.?\\s*estudio|N[uú]mero\\s+de\\s+estudio)\\s*(?:N[°ºro\\.]*)?\\s*[:\\-]?\\s*([A-Z0-9.\\-\\/]{2,40})/i\n  ]) || filenameMeta.exam_id || \"\";\n  let confianza = \"baja\";\n  if (dni || historiaClinica) confianza = \"alta\";\n  else if (nombre) confianza = \"media\";\n  return {\n    paciente: {\n      nombre_completo: nombre,\n      tipo_documento: tipoDocumento,\n      numero_documento: dni,\n      historia_clinica: historiaClinica,\n      requiere_revision: confianza !== \"alta\",\n      observaciones_identificacion: confianza !== \"alta\" ? \"Identidad extraída con confianza no alta.\" : \"\",\n      created_at: nowIso(),\n      updated_at: nowIso()\n    },\n    fecha_procedimiento: fechaProc,\n    exam_id: examId,\n    confianza_identidad: confianza\n  };\n}\nfunction classifyType(text, filenameHint) {\n  if ([\"VEDA\",\"VCC\"].includes(filenameHint)) return filenameHint;\n  const k = normKey(text);\n  let veda=0, vcc=0;\n  for (const term of [\"VEDA\",\"VIDEOENDOSCOPIA\",\"ENDOSCOPIA_DIGESTIVA_ALTA\",\"ESOFAGO\",\"ESTOMAGO\",\"DUODENO\",\"CARDIAS\",\"ANTRO\"]) if (k.includes(term)) veda++;\n  for (const term of [\"VCC\",\"VIDEOCOLONOSCOPIA\",\"COLONOSCOPIA\",\"BOSTON\",\"CIEGO\",\"VALVULA_ILEOCECAL\",\"ILEON\",\"RECTO\",\"SIGMA\",\"COLON\"]) if (k.includes(term)) vcc++;\n  if (vcc > veda) return \"VCC\";\n  if (veda > vcc) return \"VEDA\";\n  return \"INDETERMINADO\";\n}\nfunction splitSegments(text, filenameHint) {\n  const raw = String(text || \"\").trim();\n  const markers = [];\n  const re = /(^|\\n)\\s*(?:#{1,3}\\s*)?(VIDEOENDOSCOPIA\\s+DIGESTIVA\\s+ALTA|VEDA\\b|ENDOSCOPIA\\s+DIGESTIVA\\s+ALTA|ESOFAGOGASTRODUODENOSCOPIA|VIDEOCOLONOSCOPIA|VCC\\b|COLONOSCOPIA)\\b[^\\n]*/gim;\n  let m; while ((m = re.exec(raw)) !== null) markers.push(m.index + (m[1] ? m[1].length : 0));\n  const unique = [...new Set(markers)].sort((a,b)=>a-b).filter((x,i,a)=>i===0 || x-a[i-1]>500);\n  const out = [];\n  if (unique.length >= 2) {\n    for (let i=0; i<unique.length; i++) {\n      const part = raw.slice(unique[i], unique[i+1] ?? raw.length).trim();\n      if (part.length > 80) out.push({ text: part, tipo_sugerido: classifyType(part, filenameHint === \"VEDA-VCC\" ? \"INDETERMINADO\" : filenameHint) });\n    }\n  } else if (filenameHint === \"VEDA-VCC\") {\n    out.push({ text: raw, tipo_sugerido: \"VEDA\" });\n    out.push({ text: raw, tipo_sugerido: \"VCC\" });\n  } else {\n    out.push({ text: raw, tipo_sugerido: classifyType(raw, filenameHint) });\n  }\n  const seen = new Set();\n  return out.filter(s => {\n    const key = `${s.tipo_sugerido}:${hashText(s.text.slice(0, 10000))}`;\n    if (seen.has(key)) return false;\n    seen.add(key); return true;\n  });\n}\n\n// JSON estructurado generado por index.html:\n// - NO mandar base64 de fotos a DeepSeek.\n// - NO mandar leyendas largas/recomendaciones al modelo.\n// - Crear un segmento limpio por estudio y además extraer localmente las variables mínimas.\n// Esto reduce tokens y evita que la IA arrastre \"Ayuno\" global a la VCC cuando existe tipoPreparacion propia.\nfunction yesNo(v) {\n  const s = stripAccents(String(v ?? \"\")).trim().toLowerCase();\n  return v === true || [\"si\",\"sí\",\"true\",\"1\",\"yes\",\"y\"].includes(s);\n}\nfunction intOrNull(v) {\n  if (v === null || v === undefined || v === \"\") return null;\n  const n = Number(String(v).replace(\",\", \".\"));\n  return Number.isInteger(n) ? n : null;\n}\nfunction cleanJsonText(v) {\n  if (v === null || v === undefined) return \"\";\n  if (Array.isArray(v)) return v.map(cleanJsonText).filter(Boolean).join(\"; \");\n  if (typeof v === \"object\") return \"\";\n  return String(v).replace(/\\s+/g, \" \").trim();\n}\nfunction containsPolypText(s) {\n  const k = stripAccents(String(s || \"\")).toLowerCase();\n  return /\\bpolipo\\b|\\bpolipos\\b|\\bpolipectomia\\b|lesion polipoidea/.test(k);\n}\nfunction containsIleonText(s) {\n  const k = stripAccents(String(s || \"\")).toLowerCase();\n  return /\\bileon\\b|intubacion ileal|ileal/.test(k);\n}\nfunction containsCiegoText(s) {\n  const k = stripAccents(String(s || \"\")).toLowerCase();\n  return /\\bciego\\b|fondo de ciego|valvula ileocecal|intubacion cecal|se progresa hasta ciego/.test(k);\n}\nfunction structuredJsonSegments(rawText, filenameHint) {\n  let obj;\n  try { obj = JSON.parse(String(rawText || \"\")); } catch (e) { return []; }\n  if (!obj || typeof obj !== \"object\" || !obj.studies || typeof obj.studies !== \"object\") return [];\n\n  const studies = obj.studies || {};\n  const top = {\n    estudio: cleanJsonText(obj.estudio),\n    studyMode: cleanJsonText(obj.studyMode),\n    fechaEstudio: cleanJsonText(obj.fechaEstudio),\n    indicacion: cleanJsonText(obj.indicacion),\n    preparacionGeneral: cleanJsonText(obj.preparacion),\n    modalidad: cleanJsonText(obj.modalidad),\n    tipoAnestesia: cleanJsonText(obj.tipoAnestesia),\n    equipoUtilizado: cleanJsonText(obj.equipoUtilizado)\n  };\n\n  const out = [];\n\n  if (studies.veda && typeof studies.veda === \"object\") {\n    const v = studies.veda;\n    const dx = [v.dx1, v.dx2, v.dx3].map(cleanJsonText).filter(Boolean).join(\" | \");\n    const text = [\n      \"TIPO_ESTUDIO: VEDA\",\n      `FECHA_ESTUDIO: ${top.fechaEstudio}`,\n      `INDICACION: ${top.indicacion}`,\n      `PREPARACION_GENERAL: ${top.preparacionGeneral}`,\n      `ESOFAGO: ${cleanJsonText(v.esofago)}`,\n      `ESTOMAGO: ${cleanJsonText(v.estomago)}`,\n      `DUODENO: ${cleanJsonText(v.duodeno)}`,\n      `DIAGNOSTICOS_VEDA: ${dx}`,\n      `BIOPSIAS: ${cleanJsonText(v.biopsiasSi)}; FRASCOS: ${cleanJsonText(v.numeroFrascos)}`,\n      `TERAPEUTICA: ${cleanJsonText(v.terapeuticaSi)} ${cleanJsonText(v.terapeuticaCual)}`,\n      `MATERIAL: ${cleanJsonText(v.materialUtilizado)}`,\n      \"NOTA_TECNICA: Se omitieron fotos/base64 y leyendas generales antes de IA.\"\n    ].filter(Boolean).join(\"\\n\");\n\n    out.push({\n      text,\n      tipo_sugerido: \"VEDA\",\n      structured_json_source: true,\n      local_extract: {\n        procedure_type: \"VEDA\",\n        entubacion_cecal: false,\n        llego_a_ileon: false,\n        boston_derecho: null,\n        boston_transverso: null,\n        boston_izquierdo: null,\n        boston_total: null,\n        polipos: false,\n        tipo_preparacion: top.preparacionGeneral || \"No informado\",\n        preparacion_texto: top.preparacionGeneral || \"\"\n      }\n    });\n  }\n\n  if (studies.vcc && typeof studies.vcc === \"object\") {\n    const v = studies.vcc;\n    const informe = cleanJsonText(v.informe);\n    const dx = [v.dx1, v.dx2, v.dx3].map(cleanJsonText).filter(Boolean).join(\" | \");\n    const prepVcc = cleanJsonText(v.tipoPreparacion) || top.preparacionGeneral || \"\";\n    const bD = intOrNull(v.bostonDerecho);\n    const bT = intOrNull(v.bostonTransverso);\n    const bI = intOrNull(v.bostonIzquierdo);\n    let bTot = intOrNull(v.bostonTotal);\n    if (bTot === null && [bD, bT, bI].every(x => x !== null)) bTot = bD + bT + bI;\n    const textForRules = `${informe} ${dx}`;\n    const ciego = yesNo(v.ciegoSi) || containsCiegoText(textForRules);\n    const ileon = containsIleonText(textForRules);\n    const polipos = containsPolypText(textForRules) || (yesNo(v.terapeuticaSi) && /polipect/i.test(cleanJsonText(v.terapeuticaCual)));\n\n    const text = [\n      \"TIPO_ESTUDIO: VCC\",\n      `FECHA_ESTUDIO: ${top.fechaEstudio}`,\n      `INDICACION: ${top.indicacion}`,\n      `PREPARACION_VCC: ${prepVcc}`,\n      `CALIDAD_PREPARACION: ${cleanJsonText(v.calidadPreparacion)}`,\n      `CIEGO: ${cleanJsonText(v.ciegoSi)}`,\n      `BOSTON_DERECHO: ${bD ?? \"\"}`,\n      `BOSTON_TRANSVERSO: ${bT ?? \"\"}`,\n      `BOSTON_IZQUIERDO: ${bI ?? \"\"}`,\n      `BOSTON_TOTAL: ${bTot ?? \"\"}`,\n      `INFORME_VCC: ${informe}`,\n      `DIAGNOSTICOS_VCC: ${dx}`,\n      `BIOPSIAS: ${cleanJsonText(v.biopsiasSi)}; FRASCOS: ${cleanJsonText(v.numeroFrascos)}`,\n      `TERAPEUTICA: ${cleanJsonText(v.terapeuticaSi)} ${cleanJsonText(v.terapeuticaCual)}`,\n      `MATERIAL: ${cleanJsonText(v.materialUtilizado)}`,\n      \"NOTA_TECNICA: Se omitieron fotos/base64 y leyendas generales antes de IA.\"\n    ].filter(Boolean).join(\"\\n\");\n\n    out.push({\n      text,\n      tipo_sugerido: \"VCC\",\n      structured_json_source: true,\n      local_extract: {\n        procedure_type: \"VCC\",\n        entubacion_cecal: ciego || ileon,\n        llego_a_ileon: ileon,\n        boston_derecho: bD,\n        boston_transverso: bT,\n        boston_izquierdo: bI,\n        boston_total: bTot,\n        polipos,\n        tipo_preparacion: prepVcc || \"No informado\",\n        preparacion_texto: prepVcc || \"\"\n      }\n    });\n  }\n\n  return out;\n}\nfunction anonymize(text, ident) {\n  let out = String(text || \"\");\n  const warnings = [];\n\n  const pii = {\n    nombre: !!ident.paciente.nombre_completo,\n    dni: !!ident.paciente.numero_documento,\n    historia_clinica: !!ident.paciente.historia_clinica,\n    fecha_procedimiento: !!ident.fecha_procedimiento,\n    exam_id: !!ident.exam_id,\n    ingreso: /(?:Ingreso|N[°º]\\s*de\\s*Ingreso|Nro\\.?\\s*de\\s*Ingreso|N[uú]mero\\s+de\\s+Ingreso|Admisi[oó]n)\\s*[:\\-]?\\s*[A-Z0-9.\\-\\/]{3,40}/i.test(text),\n    afiliado: /(?:N[°º]\\s*OS|Nro\\.?\\s*OS|N[uú]mero\\s+OS|N[°º]\\s*Afiliado|Nro\\.?\\s*Afiliado|N[uú]mero\\s+de\\s+afiliado|Afiliado)\\s*[:\\-]?\\s*[A-Z0-9.\\-\\/\\s]{3,40}/i.test(text),\n    telefono: /(?:Tel[eé]fono|Celular|Contacto)\\s*[:\\-]?\\s*[+()0-9\\s.\\-]{7,30}/i.test(text),\n    email: /[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i.test(text)\n  };\n\n  function replaceLiteral(value, token) {\n    value = asText(value);\n    if (!value || value.length < 3) return;\n    out = out.replace(new RegExp(escapeRegExp(value), \"gi\"), token);\n  }\n\n  // Reemplazos literales detectados localmente\n  replaceLiteral(ident.paciente.nombre_completo, \"<PACIENTE>\");\n  replaceLiteral(ident.paciente.numero_documento, \"<DNI>\");\n\n  if (ident.paciente.numero_documento) {\n    const dotted = ident.paciente.numero_documento.replace(\n      /(\\d{1,2})(\\d{3})(\\d{3})$/,\n      \"$1.$2.$3\"\n    );\n    replaceLiteral(dotted, \"<DNI>\");\n  }\n\n  replaceLiteral(ident.paciente.historia_clinica, \"<HC>\");\n  replaceLiteral(ident.fecha_procedimiento, \"<FECHA_PROCEDIMIENTO>\");\n  replaceLiteral(ident.exam_id, \"<EXAM_ID>\");\n\n  // Reemplazos por etiqueta clínica/administrativa\n  out = out.replace(\n    /((?:Paciente|Nombre\\s+y\\s+Apellido|Apellido\\s+y\\s+Nombre|Nombre\\s+del\\s+paciente|Nombre)\\s*[:\\-])\\s*[^\\n\\r]+/gi,\n    \"$1 <PACIENTE>\"\n  );\n\n  out = out.replace(\n    /((?:DNI|Documento|DU|LC|LE|Pasaporte|C[eé]dula)\\s*(?:N[°ºro.]*|nro\\.?|n[uú]mero)?\\s*[:\\-]?)\\s*[0-9.\\-\\s]{5,18}/gi,\n    \"$1 <DNI>\"\n  );\n\n  // Historia clínica / HC, incluyendo variantes como \"Historia Clínica Nº: 382485\".\n  out = out.replace(\n    /((?:Historia\\s+cl[ií]nica|HC|H\\.C\\.|N[°º]\\s*HC|Nro\\.?\\s*HC|N[uú]mero\\s+de\\s+historia\\s+cl[ií]nica)\\b\\s*(?:N[°º]|Nro\\.?|nro\\.?|n[uú]mero)?\\s*[:\\-]?)\\s*[A-Z0-9.\\-\\/]{2,30}/gi,\n    \"$1 <HC>\"\n  );\n\n  out = out.replace(\n    /((?:Fecha\\s+del\\s+procedimiento|Fecha\\s+de\\s+procedimiento|Fecha\\s+del\\s+estudio|Fecha\\s+de\\s+estudio|Fecha\\s+del\\s+examen|Fecha\\s+de\\s+examen|Fecha\\s+informe|Fecha)\\s*[:\\-]?)\\s*(\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4}|\\d{4}[\\/\\-]\\d{1,2}[\\/\\-]\\d{1,2})/gi,\n    \"$1 <FECHA_PROCEDIMIENTO>\"\n  );\n\n  // Exam ID / número de estudio.\n  // Importante: no debe capturar TIPO_ESTUDIO, FECHA_ESTUDIO ni textos similares con guion bajo.\n  out = out.replace(\n    /(^|[\\n\\r])\\s*((?:Examen|N[°º]\\s*Examen|Nro\\.?\\s*Examen|Estudio\\s*N[°º]|N[°º]\\s*estudio|Nro\\.?\\s*estudio|N[uú]mero\\s+de\\s+estudio|ID\\s*estudio|Protocolo|N[°º]\\s*Protocolo|Informe\\s*N[°º]|N[°º]\\s*Informe)\\s*(?:N[°ºro.]*)?\\s*[:\\-]?)\\s*[A-Z0-9.\\-\\/]{2,40}/gi,\n    \"$1$2 <EXAM_ID>\"\n  );\n\n  // Corrección nueva: ingresos/admisiones\n  out = out.replace(\n    /((?:Ingreso|N[°º]\\s*Ingreso|Nro\\.?\\s*Ingreso|N[°º]\\s*de\\s*Ingreso|Nro\\.?\\s*de\\s*Ingreso|N[uú]mero\\s+de\\s+Ingreso|ID\\s*Ingreso|Admisi[oó]n|N[°º]\\s*Admisi[oó]n)\\s*[:\\-]?)\\s*[A-Z0-9.\\-\\/]{3,40}/gi,\n    \"$1 <INGRESO>\"\n  );\n\n  // Corrección nueva: afiliado / número de obra social\n  // Incluye el caso en que ya haya quedado mal como N° OS: <DNI>\n  out = out.replace(\n    /((?:N[°º]\\s*OS|Nro\\.?\\s*OS|N[uú]mero\\s+OS|N[°º]\\s*Afiliado|Nro\\.?\\s*Afiliado|N[uú]mero\\s+de\\s+afiliado|Afiliado)\\s*[:\\-]?)\\s*(?:<DNI>|[A-Z0-9.\\-\\/\\s]{3,40})/gi,\n    \"$1 <AFILIADO>\"\n  );\n\n  // Corrección nueva: teléfonos/contactos\n  out = out.replace(\n    /((?:Tel[eé]fono|Celular|Contacto)\\s*[:\\-]?)\\s*[+()0-9\\s.\\-]{7,30}/gi,\n    \"$1 <TELEFONO>\"\n  );\n\n  // Corrección nueva: email\n  out = out.replace(\n    /[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi,\n    \"<EMAIL>\"\n  );\n\n  // Chequeo residual\n  for (const [label, value] of [\n    [\"nombre\", ident.paciente.nombre_completo],\n    [\"dni\", ident.paciente.numero_documento],\n    [\"hc\", ident.paciente.historia_clinica],\n    [\"fecha\", ident.fecha_procedimiento],\n    [\"exam_id\", ident.exam_id]\n  ]) {\n    const v = asText(value);\n    if (v && v.length >= 3 && out.toLowerCase().includes(v.toLowerCase())) {\n      warnings.push(`Posible ${label} residual tras anonimización.`);\n    }\n  }\n\n  // Chequeos residuales por patrón\n  const residualPatterns = [\n    {\n      label: \"ingreso\",\n      re: /(?:Ingreso|N[°º]\\s*de\\s*Ingreso|Nro\\.?\\s*de\\s*Ingreso|N[uú]mero\\s+de\\s+Ingreso|Admisi[oó]n)\\s*[:\\-]?\\s*(?!<INGRESO>)[A-Z0-9.\\-\\/]{3,40}/i\n    },\n    {\n      label: \"afiliado\",\n      re: /(?:N[°º]\\s*OS|Nro\\.?\\s*OS|N[uú]mero\\s+OS|N[°º]\\s*Afiliado|Nro\\.?\\s*Afiliado|N[uú]mero\\s+de\\s+afiliado|Afiliado)\\s*[:\\-]?\\s*(?!<AFILIADO>)[A-Z0-9.\\-\\/\\s]{3,40}/i\n    },\n    {\n      label: \"telefono\",\n      re: /(?:Tel[eé]fono|Celular|Contacto)\\s*[:\\-]?\\s*(?!<TELEFONO>)[+()0-9\\s.\\-]{7,30}/i\n    },\n    {\n      label: \"email\",\n      re: /[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i\n    }\n  ];\n\n  for (const p of residualPatterns) {\n    const m = out.match(p.re);\n    if (m) warnings.push(`Posible ${p.label} residual tras anonimización: ${m[0].slice(0, 120)}`);\n  }\n\n  return {\n    text: out,\n    ok: warnings.length === 0,\n    warnings,\n    pii\n  };\n}\nasync function findPaciente(paciente) {\n  const filters = [];\n  if (paciente.numero_documento) filters.push({ numero_documento: paciente.numero_documento });\n  if (paciente.historia_clinica) filters.push({ historia_clinica: paciente.historia_clinica });\n  if (paciente.nombre_completo) filters.push({ nombre_completo: paciente.nombre_completo });\n  for (const f of filters) {\n    const qs = { limit: 1 };\n    for (const [k,v] of Object.entries(f)) qs[`filter[${k}][_eq]`] = v;\n    const res = await api(\"GET\", \"/items/bd_pacientes\", undefined, qs);\n    const hit = Array.isArray(res?.data) ? res.data[0] : null;\n    if (hit?.id) return hit;\n  }\n  return null;\n}\nasync function createOrUpdatePaciente(paciente) {\n  const hasAny = paciente.nombre_completo || paciente.numero_documento || paciente.historia_clinica;\n  if (!hasAny) return { id: null, created: false };\n  const existing = await findPaciente(paciente);\n  if (existing?.id) {\n    const patch = { updated_at: nowIso() };\n    for (const [k,v] of Object.entries(paciente)) {\n      if ((existing[k] === null || existing[k] === undefined || existing[k] === \"\") && v !== \"\") patch[k] = v;\n    }\n    await patchItem(\"bd_pacientes\", existing.id, patch);\n    return { id: existing.id, created: false };\n  }\n  const created = await postItem(\"bd_pacientes\", paciente);\n  return { id: created?.data?.id ?? null, created: true };\n}\nfunction makeCode(ingestaId, index, seed) {\n  const rand = Math.random().toString(16).slice(2, 8).toUpperCase();\n  return `ANON_${ingestaId}_${String(index).padStart(3,\"0\")}_${hashText(seed).slice(0,6).toUpperCase()}_${rand}`;\n}\n\nconst input = $input.all()[0]?.json || {};\nconst rawText = String(input.document_text || \"\").trim();\nif (!rawText) throw new Error(\"No llegó document_text al nodo de anonimización.\");\nconst rawFileName = input.fileName || input.form?.client_filename || \"archivo_sin_nombre\";\nconst fileName = rawFileName; // Solo uso interno local para extraer identidad.\nconst safeFileName = sanitizeSourceFileName(rawFileName); // Este es el único nombre que sale del nodo/Directus.\nconst fileKind = input.fileKind || \"txt\";\nconst directusWarnings = [];\nconst filenameMeta = parseFilename(rawFileName);\nconst ident = extractIdentityAndIds(`${rawFileName}\\n${rawText.slice(0, 80000)}`, filenameMeta, input.form || {});\nconst pacienteRef = await createOrUpdatePaciente(ident.paciente);\n\n// Sitio de realización: viene desde index.html como lugar_codigo.\n// No se envía a DeepSeek. Se guarda en bd_ingestas y se hereda a bd_estudios.\nconst lugarResolved = await findLugarByCodigo(input.form?.lugar_codigo, directusWarnings);\nconst lugarEstudioId = lugarResolved.id ?? null;\nconst lugarCodigoNormalizado = lugarResolved.codigo || \"NO_INFORMADO\";\nconst lugarCodigoRequest = lugarResolved.requested_codigo || input.form?.lugar_codigo || \"\";\nconst lugarFuente = lugarResolved.fuente || \"no_informado\";\n\nconst ingestaPayload = {\n  source_file_name: safeFileName,\n  source_file_kind: sourceKindForBd(fileKind),\n  source_file_size: input.fileSize ?? null,\n  mime_type: input.mimeType || \"\",\n  lugar_estudio: lugarEstudioId,\n  lugar_codigo_request: lugarCodigoRequest || lugarCodigoNormalizado,\n  exam_id_request: ident.exam_id || input.form?.exam_id || \"\",\n  source_chars_total: rawText.length,\n  cantidad_estudios_detectados: 0,\n  // Compatibilidad con schema mínimo: estados seguros = recibido/procesado/error.\n  status: \"recibido\",\n  // No guardar filename_meta crudo: puede contener fecha, DNI y nombre del paciente.\n  metadata: {\n    original_file_kind: fileKind,\n    filename_meta_safe: safeFilenameMetaForMetadata(filenameMeta),\n    lugar: {\n      codigo_request: lugarCodigoRequest || \"\",\n      codigo_normalizado: lugarCodigoNormalizado,\n      fuente: lugarFuente,\n      resuelto: !!lugarEstudioId\n    },\n    pii_detectada_local: {\n      nombre: !!ident.paciente.nombre_completo,\n      dni: !!ident.paciente.numero_documento,\n      fecha_procedimiento: !!ident.fecha_procedimiento,\n      exam_id: !!ident.exam_id,\n      historia_clinica: !!ident.paciente.historia_clinica\n    },\n    prompt_version: cfg.PROMPT_VERSION\n  },\n  created_at: nowIso(),\n  updated_at: nowIso()\n};\nconst ingestaCreate = await postIngestaWithFallback(ingestaPayload, directusWarnings);\nconst ingesta = ingestaCreate.res;\nconst ingestaId = ingesta?.data?.id;\nif (!ingestaId) throw new Error(\"Directus no devolvió id al crear bd_ingestas. Respuesta: \" + safeJson(ingesta).slice(0, 1000));\n\nconst structuredSegments = fileKind === \"json\" ? structuredJsonSegments(rawText, filenameMeta.procedure_hint) : [];\nconst segments = structuredSegments.length ? structuredSegments : splitSegments(rawText, filenameMeta.procedure_hint);\nawait patchItemSafe(\"bd_ingestas\", ingestaId, { cantidad_estudios_detectados: segments.length, updated_at: nowIso() }, directusWarnings);\n\nconst output = [];\nfor (let i=0; i<segments.length; i++) {\n  const seg = segments[i];\n  const anon = anonymize(seg.text, ident);\n  const codigo = makeCode(ingestaId, i+1, `${safeFileName}:${i}:${ident.paciente.numero_documento}:${ident.exam_id}`);\n  output.push({ json: {\n    ingesta_id: ingestaId,\n    paciente_id: pacienteRef.id,\n    numero_en_archivo: i + 1,\n    codigo_anonimo: codigo,\n    ai_text: anon.text,\n    anonimizacion_ok: anon.ok,\n    anonimizacion_warnings: anon.warnings,\n    pii_detectada: anon.pii,\n    tipo_sugerido: seg.tipo_sugerido,\n    structured_json_source: seg.structured_json_source === true,\n    local_extract: seg.local_extract || null,\n    fecha_procedimiento_local: ident.fecha_procedimiento,\n    exam_id_local: ident.exam_id,\n    identidad_confianza: ident.confianza_identidad,\n    source_file_name: safeFileName,\n    source_file_name_sanitized: true,\n    source_file_kind: fileKind,\n    source_chars: seg.text.length,\n    directus_warnings: directusWarnings,\n    ingesta_payload_usado: ingestaCreate.usedLabel,\n    lugar_estudio_id: lugarEstudioId,\n    lugar_codigo: lugarCodigoNormalizado,\n    lugar_codigo_request: lugarCodigoRequest,\n    lugar_fuente: lugarFuente\n  }});\n}\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        21472,
+        14000
+      ],
+      "id": "69a3dcab-f63b-44c8-ac23-d97352b505ee",
+      "name": "Directus — ingesta paciente anonimizar"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "function getConfig() {\n  let cfg = {};\n  try { cfg = $items(\"CONFIG — BD Endoscopia v3\")[0]?.json || {}; } catch (e) {}\n  return cfg;\n}\nconst cfg = getConfig();\nconst model = String(cfg.DEEPSEEK_MODEL || \"deepseek-chat\");\nconst maxChars = Number(cfg.DEEPSEEK_MAX_CHARS || 60000);\nconst codigo = String($json.codigo_anonimo || \"\");\nconst aiText = String($json.ai_text || \"\").trim();\nif (!codigo) throw new Error(\"Falta codigo_anonimo.\");\nif (!aiText) throw new Error(\"Falta texto anonimizado para DeepSeek.\");\nconst clipped = aiText.length > maxChars ? aiText.slice(0, maxChars) + \"\\n\\n[TRUNCADO_POR_LONGITUD]\" : aiText;\n\nconst systemPrompt = \"Sos un extractor de datos clínicos para informes de endoscopia. Devolvés exclusivamente JSON válido. No des explicaciones. No uses markdown. No inventes datos. El texto ya fue anonimizado; no intentes reconstruir identidad.\";\nconst userPrompt = `Extraé variables mínimas de este informe endoscópico anonimizado.\n\nCÓDIGO ANÓNIMO RECIBIDO: ${codigo}\nTIPO SUGERIDO LOCALMENTE: ${$json.tipo_sugerido || \"INDETERMINADO\"}\nORIGEN_JSON_ESTRUCTURADO: ${$json.structured_json_source === true ? \"SI\" : \"NO\"}\n\nReglas de privacidad:\n- Devolvé exactamente el mismo codigo_anonimo.\n- No agregues nombre, DNI, historia clínica, fecha de procedimiento ni examen_id.\n- Si ves placeholders como <PACIENTE>, <DNI>, <HC>, <FECHA_PROCEDIMIENTO> o <EXAM_ID>, no los copies salvo que sea dentro de observaciones sin identificadores reales; preferí omitirlos.\n\nReglas clínicas:\n- procedure_type: \"VEDA\", \"VCC\" o \"INDETERMINADO\".\n- En VCC, valorar principalmente la descripción narrativa del avance del endoscopio, no una casilla CIEGO aislada.\n- Si dice que SOLO llegó hasta ángulo esplénico, colon descendente, sigmoides u otro segmento proximal al ciego, entubacion_cecal=false, aunque una casilla diga SI.\n- Si la intubación cecal NO se documenta y tampoco se documenta fracaso, entubacion_cecal=null, nunca false por omisión.\n- entubacion_cecal=true únicamente con evidencia positiva explícita de llegada al ciego o íleon; una mera mención de \"ciego\" no prueba intubación.\n- Si formulario y narrativa se contradicen, marcar requiere_revision=true y explicar brevemente la contradicción sin información identificatoria.\n- llego_a_ileon=true solo si menciona íleon o intubación ileal.\n- Boston derecho/transverso/izquierdo: enteros 0-3. Boston total: entero 0-9. Si no consta, null.\n- Si hay parciales pero no total, calculá el total.\n- Si es VEDA, Boston y entubación deben ser null (no aplica).\n- polipos=true solo si informa pólipo(s) o lesión polipoidea.\n- tipo_preparacion: uno de \"Ayuno\", \"Barex\", \"Barex kit\", \"Barex plus\", \"PEG\", \"Picoprep\", \"Piocprep\", \"Picosulfato\", \"Fosfato sódico\", \"Enema\", \"Otro\", \"No informado\". Si no consta, \"No informado\".\n- Si el segmento viene de JSON estructurado, priorizá los campos del propio segmento: PREPARACION_VCC, BOSTON_*, CIEGO, INFORME_VCC y DIAGNOSTICOS_VCC. No uses la preparación general/top-level si existe una preparación específica de VCC.\n- preparacion_texto: texto literal breve de preparación si aparece o si no encaja en la categoría.\n- requiere_revision=true si hay ambigüedad o dato fuera de rango.\n\nDevolvé SOLO esta estructura JSON exacta:\n{\n  \"codigo_anonimo\": \"${codigo}\",\n  \"procedure_type\": \"INDETERMINADO\",\n  \"entubacion_cecal\": null,\n  \"llego_a_ileon\": false,\n  \"boston_derecho\": null,\n  \"boston_transverso\": null,\n  \"boston_izquierdo\": null,\n  \"boston_total\": null,\n  \"polipos\": false,\n  \"tipo_preparacion\": \"No informado\",\n  \"preparacion_texto\": \"\",\n  \"requiere_revision\": false,\n  \"observaciones\": \"\"\n}\n\nTEXTO ANONIMIZADO:\n${clipped}`;\n\nreturn {\n  json: {\n    ...$json,\n    deepseekBody: {\n      model,\n      messages: [\n        { role: \"system\", content: systemPrompt },\n        { role: \"user\", content: userPrompt }\n      ],\n      temperature: 0,\n      stream: false,\n      response_format: { type: \"json_object\" },\n      max_tokens: 1800\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        21776,
+        14000
+      ],
+      "id": "955366ce-c419-4ad5-a65b-729630c581a1",
+      "name": "Build DeepSeek Request v3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.deepseek.com/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "deepSeekApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json.deepseekBody}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        22288,
+        14000
+      ],
+      "id": "37ac90ee-21dc-40a0-8af5-c8f2726f6f3d",
+      "name": "DeepSeek — Chat Completions",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "6yyVh1lvQ7SYShyC",
+          "name": "DeepSeek account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "function getConfig() {\n  let cfg = {};\n  try { cfg = $items(\"CONFIG — BD Endoscopia v3\")[0]?.json || {}; } catch (e) {}\n  const DIRECTUS_URL = String(cfg.DIRECTUS_URL || \"https://directus.drperez86.com\").replace(/\\/+$/, \"\");\n  const DIRECTUS_TOKEN = String(cfg.DIRECTUS_TOKEN || \"\");\n  if (!DIRECTUS_TOKEN) throw new Error(\"Falta DIRECTUS_TOKEN desde CONFIG.\");\n  return { ...cfg, DIRECTUS_URL, DIRECTUS_TOKEN };\n}\nconst cfg = getConfig();\nconst httpRequest = this.helpers.httpRequest.bind(this);\nconst headers = { Authorization: `Bearer ${cfg.DIRECTUS_TOKEN}`, Accept: \"application/json\", \"Content-Type\": \"application/json\" };\nconst fieldCache = {};\nfunction safeJson(v) { try { return typeof v === \"string\" ? v : JSON.stringify(v); } catch(e) { return String(v); } }\nasync function api(method, path, body = undefined, qs = undefined) {\n  const opts = { method, url: `${cfg.DIRECTUS_URL}${path}`, headers, json: true };\n  if (body !== undefined) opts.body = body;\n  if (qs !== undefined) opts.qs = qs;\n  try { return await httpRequest(opts); }\n  catch (err) {\n    const status = err?.response?.status ?? err?.statusCode ?? err?.status ?? \"sin_status\";\n    const data = err?.response?.data ?? err?.data ?? err?.message ?? err;\n    throw new Error(`Directus ${method} ${path} falló HTTP ${status}: ${safeJson(data).slice(0, 1500)}`);\n  }\n}\nasync function fields(collection) {\n  if (fieldCache[collection]) return fieldCache[collection];\n  const res = await api(\"GET\", `/fields/${collection}`);\n  const arr = Array.isArray(res?.data) ? res.data : [];\n  fieldCache[collection] = new Set(arr.map(f => f.field));\n  return fieldCache[collection];\n}\nasync function filterPayload(collection, obj) {\n  const fs = await fields(collection);\n  const out = {};\n  for (const [k,v] of Object.entries(obj)) {\n    if (!fs.has(k)) continue;\n    if (v === undefined) continue;\n    out[k] = v;\n  }\n  return out;\n}\nasync function postItem(collection, obj) { return await api(\"POST\", `/items/${collection}`, await filterPayload(collection, obj)); }\nasync function patchItem(collection, id, obj) { return await api(\"PATCH\", `/items/${collection}/${id}`, await filterPayload(collection, obj)); }\nfunction nowIso() { return new Date().toISOString(); }\nfunction stripFences(s) { return String(s || \"\").replace(/```(?:json)?/gi, \"\").replace(/```/g, \"\").trim(); }\nfunction firstJsonObject(raw) { raw = stripFences(raw); const start = raw.indexOf(\"{\"); const end = raw.lastIndexOf(\"}\"); if (start < 0 || end <= start) throw new Error(\"DeepSeek no devolvió objeto JSON reconocible.\"); return raw.slice(start, end+1).replace(/,\\s*([}\\]])/g, \"$1\"); }\nfunction cleanStr(v) { return v === null || v === undefined ? \"\" : String(v).trim(); }\nfunction bool(v) { return v === true || [\"true\",\"si\",\"sí\",\"1\",\"yes\",\"y\"].includes(String(v).toLowerCase()); }\nfunction maybeInt(v, min, max) {\n  if (v === null || v === undefined || v === \"\") return null;\n  const n = Number(v);\n  if (!Number.isInteger(n) || n < min || n > max) return null;\n  return n;\n}\nfunction prepValue(v) {\n  const raw = cleanStr(v);\n  const s = raw.toLowerCase().normalize(\"NFD\").replace(/[\\u0300-\\u036f]/g, \"\");\n  if (!s) return \"No informado\";\n  if (s.includes(\"barex\") && s.includes(\"plus\")) return \"Barex plus\";\n  if (s.includes(\"barex\") && s.includes(\"kit\")) return \"Barex kit\";\n  if (s.includes(\"barex\")) return \"Barex\";\n  if (s.includes(\"peg\") || s.includes(\"polietilenglicol\")) return \"PEG\";\n  if (s.includes(\"fosfato\")) return \"Fosfato sódico\";\n  if (s.includes(\"pico\") || s.includes(\"pioc\") || s.includes(\"picoprep\") || s.includes(\"picosulfato\")) return \"Picosulfato\";\n  if (s.includes(\"enema\")) return \"Enema\";\n  if (s.includes(\"ayuno\")) return \"Ayuno\";\n  if (s.includes(\"no informado\")) return \"No informado\";\n  if (s.includes(\"otro\")) return \"Otro\";\n  return raw || \"No informado\";\n}\nfunction normKey(s) { return String(s || \"\").toUpperCase().normalize(\"NFD\").replace(/[\\u0300-\\u036f]/g, \"\").replace(/[^A-Z0-9]+/g, \"_\").replace(/^_+|_+$/g, \"\"); }\n\n// CECAL_QC_V362_BEGIN — only clinical QC; no changes to OCR, webhook or Directus transport.\nfunction evaluarCecalV362(anonymousText, isStructured, local, ai) {\n  const normalize = value => String(value || \"\").normalize(\"NFD\").replace(/[\\u0300-\\u036f]/g, \"\").toLowerCase().replace(/\\s+/g,\" \").trim();\n  const all = normalize(anonymousText);\n  const m = isStructured ? all.match(/\\binforme_vcc\\s*:\\s*([\\s\\S]*?)(?=\\bdiagnosticos_vcc\\s*:|\\bbiopsias\\s*:|\\bterapeutica\\s*:|$)/) : null;\n  const narrative = (m ? m[1] : all).trim();\n  const formMatch = isStructured ? all.match(/\\bciego\\s*:\\s*(si|no|true|false|1|0)\\b/) : null;\n  const form = formMatch ? ([\"si\",\"true\",\"1\"].includes(formMatch[1]) ? true : false) : null;\n\n  // Anatomical locations count as maximum extent ONLY when the wording describes advancement or stopping.\n  const pointNames = [\n    [\"angulo_esplenico\", \"angulo\\\\s+esplenico\"], [\"angulo_hepatico\", \"angulo\\\\s+hepatico\"],\n    [\"descendente\", \"colon\\\\s+descendente|descendente\"], [\"transverso\", \"colon\\\\s+transverso|transverso\"],\n    [\"sigmoides\", \"colon\\\\s+sigmoide(?:s)?|sigmoide(?:s)?|sigma\"],\n    [\"ascendente\", \"colon\\\\s+ascendente|ascendente\"], [\"recto\", \"recto\"]\n  ];\n  let point = null, pointEvidence = \"\";\n  const approach = \"(?:\\\\b(?:hasta|solo\\\\s+hasta|unicamente\\\\s+hasta|punto\\\\s+maximo(?:\\\\s+alcanzado)?\\\\s*[:=]|se\\\\s+(?:llego|llega|avanzo|avanza|progreso|progresa|alcanzo|alcanza)\\\\s+(?:solo\\\\s+|solamente\\\\s+)?(?:hasta\\\\s+|a\\\\s+|al\\\\s+)|(?:no\\\\s+se\\\\s+)?(?:pudo|logro|puede)\\\\s+franquear\\\\s+(?:el\\\\s+|la\\\\s+)?|se\\\\s+(?:detuvo|detiene)\\\\s+en\\\\s+(?:el\\\\s+|la\\\\s+)?))\";\n  const hits = [];\n  for (const [name, anatomy] of pointNames) {\n    const reg = new RegExp(approach+\"(?:el\\\\s+|la\\\\s+|al\\\\s+)?(?:\"+anatomy+\")\\\\b\",\"g\");\n    for (const found of narrative.matchAll(reg)) {\n      const vicinity = narrative.slice(Math.max(0,found.index-35), found.index + found[0].length + 28);\n      if (!/\\bretirad[ao]|\\\\bretir[ao]|\\\\bextracc?ion/.test(vicinity)) hits.push({name, excerpt:found[0],pos:found.index});\n    }\n  }\n  if (hits.length) {\n    const last = hits.sort((a,b)=>a.pos-b.pos).at(-1);\n    point=last.name;pointEvidence=last.excerpt;\n  }\n  const explicitFailure = /\\b(?:no se (?:logro|pudo|consiguio|alcanzo|llego)(?:\\s+\\w+){0,5}\\s+(?:ciego|fondo cecal|valvula ileocecal)|no (?:se )?(?:alcanzo|llego|intubo)(?:\\s+\\w+){0,4}\\s+(?:ciego|fondo cecal)|(?:ciego|fondo cecal|valvula ileocecal)\\s+no\\s+(?:alcanzad[ao]|visualizad[ao]|intubad[ao])|(?:colonoscopia|vcc|estudio|procedimiento)\\s+incomplet[ao])\\b/.test(narrative);\n  const ileonEvidence = /\\b(?:se\\s+)?(?:intubo|intuba|ingreso|ingresa|avanzo|avanza|progreso|progresa|alcanzo|alcanza|llego|llega|exploro|explora)\\s+(?:hasta\\s+|al\\s+|a\\s+|el\\s+|en\\s+)?(?:ileon\\s+terminal|ileon)\\b|\\bileoscopia\\s+(?:realizada|completa)\\b/.test(narrative);\n  const cecumEvidence = /\\b(?:se\\s+)?(?:llego|llega|alcanzo|alcanza|progreso|progresa|avanzo|avanza|intubo|intuba)\\s+(?:hasta\\s+|al\\s+|a\\s+|el\\s+|fondo\\s+del?\\s+)?(?:ciego|fondo\\s+cecal)\\b|\\b(?:se\\s+)?(?:visualizo|visualiza|identifico|identifica)\\s+(?:la\\s+|el\\s+)?valvula\\s+ileocecal\\b|\\bintubacion\\s+cecal\\s+(?:lograda|exitosa|completa)\\b/.test(narrative);\n  const nearbyNegation = /\\b(?:no|sin)\\s+(?:se\\s+)?(?:llego|llega|alcanzo|alcanza|progreso|progresa|avanzo|avanza|intubo|intuba|visualizo|identifico)\\s+(?:hasta\\s+|al\\s+|a\\s+|el\\s+|la\\s+|fondo\\s+del?\\s+)?(?:ciego|fondo\\s+cecal|valvula\\s+ileocecal|ileon)\\b/.test(narrative);\n  const positive = (ileonEvidence || cecumEvidence) && !nearbyNegation;\n  const warnings = [];\n  let value=null, evidence=null, source=\"no_documentado\";\n  if (point && positive) {\n    // Contradictory claims INSIDE narrative: cannot safely choose a true or false.\n    warnings.push(\"La descripcion contiene llegada al ciego y un limite anatomico previo; revisar contradiccion.\");\n    source=\"contradiccion_narrativa\";evidence=pointEvidence;\n  } else if (point || explicitFailure || nearbyNegation) {\n    value=false;source=point?\"limite_anatomico_documentado\":\"incompleta_documentada\";evidence=pointEvidence || \"No se completo VCC\";\n  } else if (positive) {\n    value=true;source=\"llegada_cecal_narrativa\";evidence=ileonEvidence?\"Intubacion de ileon documentada\":\"Intubacion cecal documentada\";\n    point=ileonEvidence?\"ileon_terminal\":\"ciego\";\n  } else if (form===true) {\n    value=true;source=\"casilla_ciego_positiva\";evidence=\"Casilla CIEGO afirmativa sin evidencia narrativa\";\n    warnings.push(\"Llegada a ciego sustentada solo en casilla, sin confirmacion narrativa.\");\n  } else if (form===false) {\n    // Un NO puede ser el valor predeterminado de formularios; no equivale a una VCC fallida documentada.\n    source=\"casilla_ciego_negativa_sin_evidencia\";\n    warnings.push(\"Casilla CIEGO negativa sin informe que confirme incompletitud; dato no documentado.\");\n  } else {\n    warnings.push(\"Intubacion cecal no documentada: null, no computar como fracaso.\");\n  }\n  if (form!==null && value!==null && form!==value) warnings.push(\"Casilla CIEGO contradice la descripcion: prevalece descripcion clinica.\");\n  const localFlag = local?.entubacion_cecal;\n  if ((localFlag===true||localFlag===false) && value!==null && localFlag!==value)\n    warnings.push(\"Extraccion automatica local contradice el resultado clinico verificado.\");\n  if ((ai?.entubacion_cecal===true||ai?.entubacion_cecal===false) && value!==null && ai.entubacion_cecal!==value)\n    warnings.push(\"DeepSeek contradice la evidencia local de intubacion cecal.\");\n  if (value===null && (ai?.entubacion_cecal===true||ai?.entubacion_cecal===false))\n    warnings.push(\"Resultado de IA sin evidencia suficiente para resolver intubacion cecal.\");\n  const reason = value===false ? (\n    /\\bangulacion\\s+fija|angulo\\s+fijo|no\\s+franqueable/.test(narrative)?\"angulacion_fija\":\n    /\\b(?:mala|inadecuada)\\s+preparacion|heces\\s+abundantes/.test(narrative)?\"mala_preparacion\":\n    /\\b(?:estenosis|obstruccion)/.test(narrative)?\"estenosis_obstruccion\":\n    /\\b(?:dolor|intolerancia)/.test(narrative)?\"dolor_intolerancia\":\n    \"no_informado\"\n  ) : value===true?\"no_aplica\":null;\n  return { value, point:point||\"no_informado\", reason, source, evidence, warnings };\n}\n// CECAL_QC_V362_END\n\nconst inputMeta = $items(\"Build DeepSeek Request v3\")[$itemIndex]?.json || {};\nconst content = $json?.choices?.[0]?.message?.content ?? $json?.choices?.[0]?.text ?? $json?.message?.content ?? $json?.text ?? \"\";\nlet obj;\ntry { obj = JSON.parse(firstJsonObject(content)); }\ncatch (e) {\n  await patchItem(\"bd_ingestas\", inputMeta.ingesta_id, { status: \"error\", error_message: `JSON IA inválido: ${e.message}`, updated_at: nowIso() });\n  throw e;\n}\nif (obj.codigo_anonimo !== inputMeta.codigo_anonimo) {\n  throw new Error(\"Código anónimo no coincide entre n8n y DeepSeek. Se detuvo el guardado para evitar cruce incorrecto.\");\n}\n\nconst localExtract = (inputMeta.local_extract && typeof inputMeta.local_extract === \"object\") ? inputMeta.local_extract : {};\nfunction localHas(key) {\n  return Object.prototype.hasOwnProperty.call(localExtract, key) && localExtract[key] !== undefined && localExtract[key] !== \"\";\n}\nfunction preferLocal(key, aiValue) {\n  return localHas(key) ? localExtract[key] : aiValue;\n}\n\nlet procedure = [\"VEDA\", \"VCC\"].includes(preferLocal(\"procedure_type\", obj.procedure_type)) ? preferLocal(\"procedure_type\", obj.procedure_type) : null;\nif (!procedure && [\"VEDA\", \"VCC\"].includes(inputMeta.tipo_sugerido)) procedure = inputMeta.tipo_sugerido;\nif (!procedure) procedure = \"VEDA\"; // Directus schema mínimo suele aceptar solo VEDA/VCC; se marca revisión.\n\nlet bd = maybeInt(preferLocal(\"boston_derecho\", obj.boston_derecho), 0, 3);\nlet bt = maybeInt(preferLocal(\"boston_transverso\", obj.boston_transverso), 0, 3);\nlet bi = maybeInt(preferLocal(\"boston_izquierdo\", obj.boston_izquierdo), 0, 3);\nlet btotal = maybeInt(preferLocal(\"boston_total\", obj.boston_total), 0, 9);\nif (procedure === \"VCC\" && btotal === null && [bd,bt,bi].every(x => x !== null)) btotal = bd + bt + bi;\nif (procedure === \"VEDA\") { bd = null; bt = null; bi = null; btotal = null; }\n\nconst qcCecal = procedure === \"VCC\"\n  ? evaluarCecalV362(inputMeta.ai_text || \"\", inputMeta.structured_json_source === true, localExtract, obj)\n  : {value:null, point:\"no_informado\", reason:null, source:\"no_aplica_veda\", evidence:null, warnings:[]};\nconst entubacion = qcCecal.value;\nconst llegoIleonFinal = procedure === \"VCC\" && entubacion === true\n  ? bool(preferLocal(\"llego_a_ileon\", obj.llego_a_ileon)) : null;\nconst poliposFinal = procedure === \"VCC\" ? bool(preferLocal(\"polipos\", obj.polipos)) : false;\nconst tipoPreparacionFinal = prepValue(preferLocal(\"tipo_preparacion\", obj.tipo_preparacion));\nconst preparacionTextoFinal = cleanStr(preferLocal(\"preparacion_texto\", obj.preparacion_texto));\nconst warnings = [...(inputMeta.anonimizacion_warnings || []), ...qcCecal.warnings];\nif (!inputMeta.anonimizacion_ok) warnings.push(\"Anonimización requiere revisión.\");\nif (inputMeta.identidad_confianza !== \"alta\") warnings.push(\"Identidad extraída con confianza no alta.\");\nif (!inputMeta.fecha_procedimiento_local) warnings.push(\"Fecha de procedimiento no detectada localmente.\");\nif (!inputMeta.exam_id_local) warnings.push(\"exam_id no detectado localmente.\");\nif (!['VEDA','VCC'].includes(obj.procedure_type)) warnings.push(\"Tipo de estudio no definido por IA; se usó sugerencia local/default.\");\nif (bool(obj.requiere_revision)) warnings.push(\"IA marcó requiere_revision.\");\nif (inputMeta.structured_json_source === true) warnings.push(\"Fuente JSON estructurada: variables mínimas priorizadas localmente sobre IA.\");\n\nconst fs = await fields(\"bd_estudios\");\nconst cecalField = fs.has(\"entubacion_cecal\") ? \"entubacion_cecal\" : (fs.has(\"llego_a_ciego\") ? \"llego_a_ciego\" : \"entubacion_cecal\");\nconst payload = {\n  paciente: inputMeta.paciente_id || null,\n  ingesta: inputMeta.ingesta_id,\n  numero_en_archivo: inputMeta.numero_en_archivo,\n  exam_id: inputMeta.exam_id_local || \"\",\n  procedure_type: procedure,\n  fecha_estudio: inputMeta.fecha_procedimiento_local || null,\n  lugar_estudio: inputMeta.lugar_estudio_id || null,\n  lugar_fuente: inputMeta.lugar_fuente || (inputMeta.lugar_estudio_id ? \"heredado_ingesta\" : \"no_informado\"),\n  [cecalField]: entubacion,\n  llego_a_ileon: llegoIleonFinal,\n  ...(procedure === \"VCC\" ? {\n    punto_maximo_alcanzado: qcCecal.point,\n    ...(qcCecal.reason ? { motivo_incompleta: qcCecal.reason } : {})\n  } : {}),\n  boston_derecho: bd,\n  boston_transverso: bt,\n  boston_izquierdo: bi,\n  boston_total: btotal,\n  polipos: poliposFinal,\n  tipo_preparacion: tipoPreparacionFinal,\n  preparacion_texto: preparacionTextoFinal,\n  requiere_revision: warnings.length > 0,\n  observaciones: [cleanStr(obj.observaciones), ...warnings].filter(Boolean).join(\" | \"),\n  raw_ai_json: {\n    codigo_anonimo: inputMeta.codigo_anonimo,\n    prompt_version: cfg.PROMPT_VERSION,\n    ai: obj,\n    qc_cecal: { value: qcCecal.value, point: qcCecal.point,\n      reason: qcCecal.reason, source: qcCecal.source,\n      evidence: qcCecal.evidence, warnings: qcCecal.warnings },\n    local: {\n      fecha_procedimiento: inputMeta.fecha_procedimiento_local ? \"extraida_localmente_no_enviada_a_ia\" : \"no_detectada\",\n      exam_id: inputMeta.exam_id_local ? \"extraido_localmente_no_enviado_a_ia\" : \"no_detectado\",\n      pii_detectada: inputMeta.pii_detectada,\n      structured_json_source: inputMeta.structured_json_source === true,\n      local_extract: localExtract,\n      lugar_estudio: inputMeta.lugar_estudio_id ? \"heredado_de_ingesta_no_enviado_a_ia\" : \"no_informado\",\n      lugar_codigo: inputMeta.lugar_codigo || \"NO_INFORMADO\"\n    }\n  },\n  created_at: nowIso(),\n  updated_at: nowIso()\n};\nconst created = await postItem(\"bd_estudios\", payload);\nconst estudioId = created?.data?.id;\nif (!estudioId) throw new Error(\"Directus no devolvió id al crear bd_estudios.\");\n\nreturn { json: {\n  ok: true,\n  ingesta_id: inputMeta.ingesta_id,\n  paciente_id: inputMeta.paciente_id || null,\n  estudio_id: estudioId,\n  codigo_anonimo: inputMeta.codigo_anonimo,\n  procedure_type: procedure,\n  exam_id: inputMeta.exam_id_local || \"\",\n  fecha_estudio: inputMeta.fecha_procedimiento_local || \"\",\n  lugar_estudio_id: inputMeta.lugar_estudio_id || null,\n  lugar_codigo: inputMeta.lugar_codigo || \"NO_INFORMADO\",\n  lugar_fuente: inputMeta.lugar_fuente || \"no_informado\",\n  entubacion_cecal: entubacion,\n  boston_total: btotal,\n  polipos: poliposFinal,\n  tipo_preparacion: tipoPreparacionFinal,\n  boston_derecho: bd,\n  boston_transverso: bt,\n  boston_izquierdo: bi,\n  polipos: poliposFinal,\n  tipo_preparacion: tipoPreparacionFinal,\n  requiere_revision: warnings.length > 0,\n  warnings\n} };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        22576,
+        14000
+      ],
+      "id": "88b378c0-8f71-4e01-b332-878b05a920bc",
+      "name": "Directus — guardar estudio"
+    },
+    {
+      "parameters": {
+        "jsCode": "function getConfig() {\n  let cfg = {};\n  try { cfg = $items(\"CONFIG — BD Endoscopia v3\")[0]?.json || {}; } catch (e) {}\n  const DIRECTUS_URL = String(cfg.DIRECTUS_URL || \"https://directus.drperez86.com\").replace(/\\/+$/, \"\");\n  const DIRECTUS_TOKEN = String(cfg.DIRECTUS_TOKEN || \"\");\n  if (!DIRECTUS_TOKEN) throw new Error(\"Falta DIRECTUS_TOKEN desde CONFIG.\");\n  return { ...cfg, DIRECTUS_URL, DIRECTUS_TOKEN };\n}\nconst cfg = getConfig();\nconst httpRequest = this.helpers.httpRequest.bind(this);\nconst headers = { Authorization: `Bearer ${cfg.DIRECTUS_TOKEN}`, Accept: \"application/json\", \"Content-Type\": \"application/json\" };\nasync function api(method, path, body = undefined) {\n  return await httpRequest({ method, url: `${cfg.DIRECTUS_URL}${path}`, headers, body, json: true });\n}\nconst items = $input.all().map(i => i.json);\nconst ingestaIds = [...new Set(items.map(x => x.ingesta_id).filter(Boolean))];\nconst anyWarnings = items.some(x => x.requiere_revision || (Array.isArray(x.warnings) && x.warnings.length));\nfor (const id of ingestaIds) {\n  await api(\"PATCH\", `/items/bd_ingestas/${id}`, {\n    // Compatibilidad con schema mínimo: requiere_revision se guarda en bd_estudios, no en bd_ingestas.status.\n    status: \"procesado\",\n    processed_at: new Date().toISOString(),\n    updated_at: new Date().toISOString()\n  });\n}\nreturn [{ json: {\n  ok: true,\n  message: \"Procesado: texto extraído, PII separada en Directus, texto anonimizado enviado a DeepSeek y estudio guardado.\",\n  ingesta_ids: ingestaIds,\n  items_procesados: items.length,\n  requiere_revision: anyWarnings,\n  resultados: items\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        22880,
+        14000
+      ],
+      "id": "2264e1fe-6b02-4ebe-b3c1-90dff371cab4",
+      "name": "Directus — finalizar ingesta"
+    },
+    {
+      "parameters": {
+        "jsCode": "// AUDIT — bloquear PII antes de DeepSeek v3\n// Colocar entre \"Build DeepSeek Request v3\" y \"DeepSeek — Chat Completions\".\n// Corrige falso positivo tipo: \"Paciente: <PACIENTE>\".\n\nfunction asText(v) {\n  if (v === null || v === undefined) return \"\";\n  if (typeof v === \"string\") return v;\n  return JSON.stringify(v, null, 2);\n}\n\nfunction norm(s) {\n  return asText(s)\n    .toLowerCase()\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\");\n}\n\nfunction hasLiteral(text, value) {\n  value = asText(value).trim();\n  if (!value || value.length < 3) return false;\n  return norm(text).includes(norm(value));\n}\n\nfunction cleanValue(v) {\n  return asText(v)\n    .replace(/\\\\n/g, \"\\n\")\n    .replace(/\\\\r/g, \"\\r\")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}\n\nfunction startsWithAnyPlaceholder(value, placeholders) {\n  const v = cleanValue(value).toUpperCase();\n  return placeholders.some(p => v.startsWith(p.toUpperCase()));\n}\n\n// Texto anonimizado real que se manda dentro del prompt.\nconst aiText = asText($json.ai_text)\n  .replace(/\\\\n/g, \"\\n\")\n  .replace(/\\\\r/g, \"\\r\");\n\nconst deepseekBody = $json.deepseekBody || {};\nconst messages = Array.isArray(deepseekBody.messages) ? deepseekBody.messages : [];\nconst userContent = messages.map(m => asText(m.content)).join(\"\\n\");\n\nconst leaks = [];\nconst warnings = [];\n\n// 1) Datos locales que no deberían aparecer literales en el prompt.\n// Nota: esto audita userContent porque es el prompt real enviado a DeepSeek.\nconst exactChecks = [\n  [\"fecha_procedimiento_local\", $json.fecha_procedimiento_local],\n  [\"exam_id_local\", $json.exam_id_local],\n];\n\nfor (const [label, value] of exactChecks) {\n  if (hasLiteral(userContent, value)) {\n    leaks.push(`Leak exacto en prompt DeepSeek: ${label}=${value}`);\n  }\n}\n\n// 2) Auditoría por líneas, no por regex global.\n// Evita falsos positivos con \"Paciente: <PACIENTE>\".\nconst lineRules = [\n  {\n    label: \"nombre_paciente_no_anonimizado\",\n    keyRe: /^(?:Paciente|Nombre\\s+y\\s+Apellido|Apellido\\s+y\\s+Nombre|Nombre\\s+del\\s+paciente|Nombre)\\b\\s*[:\\-]\\s*(.*)$/i,\n    okPlaceholders: [\"<PACIENTE>\"],\n  },\n  {\n    label: \"dni_documento_no_anonimizado\",\n    // Requiere etiqueta real + ':' o '-'. Evita falsos positivos: DUodeno, LEsión, LEyendas.\n    keyRe: /^(?:DNI|Documento|DU|LC|LE|Pasaporte|C[eé]dula)\\b\\s*(?:N[°ºro.]*|nro\\.?|n[uú]mero)?\\s*[:\\-]\\s*(.*)$/i,\n    okPlaceholders: [\"<DNI>\"],\n  },\n  {\n    label: \"historia_clinica_no_anonimizada\",\n    // Requiere ':' o '-' para no interpretar palabras clínicas como etiqueta.\n    keyRe: /^(?:Historia\\s+cl[ií]nica|HC|H\\.C\\.|N[°º]\\s*HC|Nro\\.?\\s*HC|N[uú]mero\\s+de\\s+historia\\s+cl[ií]nica)\\b\\s*(?:N[°º]|Nro\\.?|nro\\.?|n[uú]mero)?\\s*[:\\-]\\s*(.*)$/i,\n    okPlaceholders: [\"<HC>\"],\n  },\n  {\n    label: \"fecha_procedimiento_no_anonimizada\",\n    // No debe capturar etiquetas internas/sintéticas como FECHA_ESTUDIO: <FECHA_PROCEDIMIENTO>.\n    // Solo audita etiquetas reales de fecha del informe y exige ':' o '-'.\n    keyRe: /^(?:Fecha\\s+del\\s+procedimiento|Fecha\\s+de\\s+procedimiento|Fecha\\s+del\\s+estudio|Fecha\\s+de\\s+estudio|Fecha\\s+del\\s+examen|Fecha\\s+de\\s+examen|Fecha\\s+informe|Fecha(?!_))\\b\\s*[:\\-]\\s*(.*)$/i,\n    okPlaceholders: [\"<FECHA_PROCEDIMIENTO>\"],\n  },\n  {\n    label: \"exam_id_no_anonimizado\",\n    // No captura TIPO_ESTUDIO/FECHA_ESTUDIO ni \"Estudio: VEDA\".\n    // Solo audita etiquetas que claramente son número/id de examen, protocolo o informe.\n    keyRe: /^(?:Examen\\s*(?:N[°ºro.]*|ID)|N[°º]\\s*Examen|Nro\\.?\\s*Examen|Estudio\\s*N[°º]|N[°º]\\s*estudio|Nro\\.?\\s*estudio|N[uú]mero\\s+de\\s+estudio|ID\\s*estudio|Protocolo|N[°º]\\s*Protocolo|Informe\\s*N[°º]|N[°º]\\s*Informe)\\b\\s*[:\\-]\\s*(.*)$/i,\n    okPlaceholders: [\"<EXAM_ID>\"],\n  },\n  {\n    label: \"ingreso_admision_no_anonimizado\",\n    keyRe: /^(?:Ingreso|N[°º]\\s*Ingreso|Nro\\.?\\s*Ingreso|N[°º]\\s*de\\s*Ingreso|Nro\\.?\\s*de\\s*Ingreso|N[uú]mero\\s+de\\s+Ingreso|ID\\s*Ingreso|Admisi[oó]n|N[°º]\\s*Admisi[oó]n)\\b\\s*[:\\-]\\s*(.*)$/i,\n    okPlaceholders: [\"<INGRESO>\"],\n  },\n  {\n    label: \"afiliado_os_no_anonimizado\",\n    keyRe: /^(?:N[°º]\\s*OS|Nro\\.?\\s*OS|N[uú]mero\\s+OS|N[°º]\\s*Afiliado|Nro\\.?\\s*Afiliado|N[uú]mero\\s+de\\s+afiliado|Afiliado)\\b\\s*[:\\-]\\s*(.*)$/i,\n    okPlaceholders: [\"<AFILIADO>\", \"<DNI>\"],\n  },\n  {\n    label: \"telefono_no_anonimizado\",\n    keyRe: /^(?:Tel[eé]fono|Celular|Contacto)\\b\\s*[:\\-]\\s*(.*)$/i,\n    okPlaceholders: [\"<TELEFONO>\"],\n  },\n];\n\nconst lines = aiText\n  .split(/\\n+/)\n  .map(x => x.trim())\n  .filter(Boolean);\n\nfor (const line of lines) {\n  for (const rule of lineRules) {\n    const m = line.match(rule.keyRe);\n    if (!m) continue;\n\n    const value = cleanValue(m[1]);\n\n    // Sin valor: no bloquea.\n    if (!value) continue;\n\n    // Placeholder correcto: no bloquea.\n    if (startsWithAnyPlaceholder(value, rule.okPlaceholders)) continue;\n\n    // Si tiene placeholders y no queda nada sospechoso después, no bloquea.\n    const withoutPlaceholders = value\n      .replace(/<PACIENTE>/gi, \"\")\n      .replace(/<DNI>/gi, \"\")\n      .replace(/<HC>/gi, \"\")\n      .replace(/<FECHA_PROCEDIMIENTO>/gi, \"\")\n      .replace(/<EXAM_ID>/gi, \"\")\n      .replace(/<INGRESO>/gi, \"\")\n      .replace(/<AFILIADO>/gi, \"\")\n      .replace(/<TELEFONO>/gi, \"\")\n      .replace(/<EMAIL>/gi, \"\")\n      .trim();\n\n    if (!withoutPlaceholders) continue;\n\n    leaks.push(`${rule.label}: ${line.slice(0, 180)}`);\n  }\n}\n\n// 3) Patrones globales peligrosos aunque no estén etiquetados.\nconst globalBlockingPatterns = [\n  {\n    label: \"email_no_anonimizado\",\n    re: /[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i,\n  },\n  {\n    label: \"dni_suelto_con_formato\",\n    re: /\\b\\d{1,2}\\.\\d{3}\\.\\d{3}\\b/,\n  },\n  {\n    label: \"fecha_nacimiento_no_anonimizada\",\n    re: /(?:Fecha\\s+de\\s+nacimiento|F\\.\\s*Nac\\.?|Fec\\.?\\s*Nac\\.?|Nacimiento)\\s*[:\\-]?\\s*(?!<FECHA_NACIMIENTO>)(\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4}|\\d{4}[\\/\\-]\\d{1,2}[\\/\\-]\\d{1,2})/i,\n  },\n];\n\nfor (const p of globalBlockingPatterns) {\n  const m = aiText.match(p.re);\n  if (m) {\n    leaks.push(`${p.label}: ${m[0].slice(0, 160)}`);\n  }\n}\n\n// 4) Números largos sueltos: warning, no bloqueo automático.\nconst looseLongNumbers = aiText.match(/\\b\\d{7,12}\\b/g) || [];\nif (looseLongNumbers.length) {\n  warnings.push(\n    `Números largos sueltos detectados, revisar si son identificadores: ${[...new Set(looseLongNumbers)].join(\", \")}`\n  );\n}\n\n// 5) Placeholders encontrados.\nconst expectedPlaceholders = [\n  \"<PACIENTE>\",\n  \"<DNI>\",\n  \"<HC>\",\n  \"<FECHA_PROCEDIMIENTO>\",\n  \"<EXAM_ID>\",\n  \"<INGRESO>\",\n  \"<AFILIADO>\",\n  \"<TELEFONO>\",\n  \"<EMAIL>\",\n];\n\nconst placeholdersFound = expectedPlaceholders.filter(x => aiText.includes(x));\n\nconst audit = {\n  checked_at: new Date().toISOString(),\n  ok: leaks.length === 0,\n  leaks,\n  warnings,\n  placeholders_found: placeholdersFound,\n  anonimizacion_ok_previa: $json.anonimizacion_ok === true,\n  anonimizacion_warnings_previas: $json.anonimizacion_warnings || [],\n  pii_detectada_previa: $json.pii_detectada || {},\n};\n\nif (!audit.ok) {\n  throw new Error(\n    \"AUDITORÍA PII FALLÓ. No se envió a DeepSeek. Hallazgos: \" +\n    JSON.stringify(audit, null, 2)\n  );\n}\n\nreturn {\n  json: {\n    ...$json,\n    anon_audit: audit,\n  },\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        21984,
+        14000
+      ],
+      "id": "190abaac-be82-4427-b318-333cf6b84af4",
+      "name": "AUDIT — bloquear PII antes de DeepSeek"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook — endodb index.html": {
+      "main": [
+        [
+          {
+            "node": "CONFIG — BD Endoscopia v3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CONFIG — BD Endoscopia v3": {
+      "main": [
+        [
+          {
+            "node": "Entrada — detectar archivo y texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entrada — detectar archivo y texto": {
+      "main": [
+        [
+          {
+            "node": "IF PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF PDF": {
+      "main": [
+        [
+          {
+            "node": "OCR — preparar rutas PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Texto directo TXT JSON CSS FOTO-OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF text": {
+      "main": [
+        [
+          {
+            "node": "Texto desde PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto desde PDF": {
+      "main": [
+        [
+          {
+            "node": "Directus — ingesta paciente anonimizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto directo TXT JSON CSS FOTO-OCR": {
+      "main": [
+        [
+          {
+            "node": "Directus — ingesta paciente anonimizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Directus — ingesta paciente anonimizar": {
+      "main": [
+        [
+          {
+            "node": "Build DeepSeek Request v3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build DeepSeek Request v3": {
+      "main": [
+        [
+          {
+            "node": "AUDIT — bloquear PII antes de DeepSeek",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek — Chat Completions": {
+      "main": [
+        [
+          {
+            "node": "Directus — guardar estudio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Directus — guardar estudio": {
+      "main": [
+        [
+          {
+            "node": "Directus — finalizar ingesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCR — preparar rutas PDF": {
+      "main": [
+        [
+          {
+            "node": "Write Binary File — PDF entrada OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Binary File — PDF entrada OCR": {
+      "main": [
+        [
+          {
+            "node": "SSH — OCRmyPDF Ubuntu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SSH — OCRmyPDF Ubuntu": {
+      "main": [
+        [
+          {
+            "node": "Read Binary File — PDF OCRizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Binary File — PDF OCRizado": {
+      "main": [
+        [
+          {
+            "node": "OCR — restaurar metadata PDF OCRizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCR — restaurar metadata PDF OCRizado": {
+      "main": [
+        [
+          {
+            "node": "Extract PDF text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AUDIT — bloquear PII antes de DeepSeek": {
+      "main": [
+        [
+          {
+            "node": "DeepSeek — Chat Completions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "43778cdc-02b6-4fb2-939d-21275f68b77c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f5ab76d63d8ae6d398f5fe370f7add8a2ac9adfc254ffcf64f24e1feb3a985d7"
+  },
+  "id": "Xy8ued9FtXa65SA9O4QZV",
+  "tags": []
+}
